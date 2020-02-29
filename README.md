@@ -5,7 +5,7 @@ Lattice Boltzmann Methods for Porous Media
 
 A Slim Version of OPM-LBPM <https://github.com/OPM/LBPM>
 
-For full preproseccing and post processing capability, see the full version
+For full preprocessing and post processing capability, see the full version
 
 ========
 
@@ -22,16 +22,19 @@ Features:
 Single Phase Flow:
 
 LBM-SRT
+
 LBM-MRT
 
 Two Phase Flow:
 
 Colour Gradient LBM-MRT
+
 Morphologically Coupled LBM
 
 Convection-Diffusion:
 
 Single Phase Thermal-LBM-SRT
+
 Single Phase Thermal-LBM-TRT (WIP)
 
 
