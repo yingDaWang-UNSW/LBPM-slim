@@ -3,32 +3,35 @@ LBPM
 
 Lattice Boltzmann Methods for Porous Media
 
+A Slim Version of OPM-LBPM <https://github.com/OPM/LBPM>
+
+For full preproseccing and post processing capability, see the full version
+
 ========
 
 Notes on installation
 
 * example configure scripts for cmake are in the sample_scripts directory
-* required dependencies - MPI, HDF5, SILO, C++14
-* optional dependencies - NetCDF, CUDA, TimerUtility
+
+* for a CPU installation, cmake, gcc, and MPI are the only requirements
+
+* for a GPU installation, MPI should be CUDA-aware, and CUDA itself is required
+
+Features:
+
+Single Phase Flow:
+
+LBM-SRT
+LBM-MRT
+
+Two Phase Flow:
+
+Colour Gradient LBM-MRT
+Morphologically Coupled LBM
+
+Convection-Diffusion:
+
+Single Phase Thermal-LBM-SRT
+Single Phase Thermal-LBM-TRT (WIP)
 
 
-Build dependencies (zlib, hdf5, silo) OR point to an existing installation
-
-Configure, build & install procedure
-* create an empty directory to install (do not build in source!)
-
-   `mkdir /path/to/my/install`
-
-   `cd /path/to/my/install`
-
-* edit configure script from sample_scripts directory and configure (e.g.)
-
-   `/path/to/LBPM-WIA/sample_scripts/configure_desktop`
-
-* compile and install
-
-   `make -j4 && make install`
-
-* run the unit tests to make sure it works
-
-   `ctest`
