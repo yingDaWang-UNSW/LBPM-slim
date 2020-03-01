@@ -259,6 +259,8 @@ void ScaLBL_MRTModel::Initialize(){
         if (rank==0)    printf ("Initializing cq distribution and initial velocity field \n");
         ScaLBL_D3Q19_Init(cq, Np);
 		ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity (does velocity exist in odd time?)
+		// add option to read velocity fields in directly instead of from fq format
+		// add option to read in cq file or concentration file
     }
 }
 
@@ -286,8 +288,9 @@ void ScaLBL_MRTModel::Run(){
 	timestep=0;
 	while (timestep < timestepMax) {
 		//************************************************************************/
-		timestep++;
-		if (thermalFlag) { //run thermal flag before odd collision, and update vel fields every 2 steps
+		//ODD TIMESTEP************************************************************
+		timestep++;// odd timesteps need to be solved interior then exterior because of neighbouring hocus pocus
+		if (thermalFlag) { //run thermal flag update vel fields every 2 steps
 			ScaLBL_Comm->SendD3Q19AA(cq); //read overlapping boundary info from neighbouring blocks
 	        ScaLBL_D3Q19_AAodd_ThermalBGK(NeighborList, Velocity, cq,  ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np, omega, Fx, Fy, Fz);		
 		    ScaLBL_Comm->RecvD3Q19AA(cq); //write boundary info to neighbouring blocks
@@ -295,7 +298,7 @@ void ScaLBL_MRTModel::Run(){
 		    // Set BCs
 		    ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, cq, 1.1, timestep);
 		    ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, cq, 1.0, timestep);
-	        ScaLBL_D3Q19_AAodd_ThermalBGK(NeighborList, Velocity, cq, 0, ScaLBL_Comm->LastExterior(), Np, omega, Fx, Fy, Fz); //solve at the overlapping boundary
+	        ScaLBL_D3Q19_AAodd_ThermalBGK(NeighborList, Velocity, cq, 0, ScaLBL_Comm->LastExterior(), Np, omega, Fx, Fy, Fz); //exteriors after BCs enforced
 		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 		}
 		ScaLBL_Comm->SendD3Q19AA(fq); //read overlapping boundary info from neighbouring blocks
@@ -316,22 +319,16 @@ void ScaLBL_MRTModel::Run(){
 			ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, fq, dout, timestep);
 		}
 		if (bgkFlag) {
-		    ScaLBL_D3Q19_AAodd_BGK(NeighborList, fq, 0, ScaLBL_Comm->LastExterior(), Np, rlx_setA, Fx, Fy, Fz); //solve system at the overlapping boundary
+		    ScaLBL_D3Q19_AAodd_BGK(NeighborList, fq, 0, ScaLBL_Comm->LastExterior(), Np, rlx_setA, Fx, Fy, Fz); //exteriors after BCs enforced
 		} else {
 		    ScaLBL_D3Q19_AAodd_MRT(NeighborList, fq, 0, ScaLBL_Comm->LastExterior(), Np, rlx_setA, rlx_setB, Fx, Fy, Fz); 
 		}
 		ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 		
-
-		
+		//EVEN TIMESTEP************************************************************
 		timestep++;
-		
+		// even timesteps can be solved in a single pass
 		ScaLBL_Comm->SendD3Q19AA(fq); //READ FORM NORMAL
-		if (bgkFlag) {
-		    ScaLBL_D3Q19_AAeven_BGK(fq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np, rlx_setA, Fx, Fy, Fz);
-		} else {
-		    ScaLBL_D3Q19_AAeven_MRT(fq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
-		}
 		ScaLBL_Comm->RecvD3Q19AA(fq); //WRITE INTO OPPOSITE
 		ScaLBL_DeviceBarrier();
 		// Set BCs
@@ -344,21 +341,20 @@ void ScaLBL_MRTModel::Run(){
 			ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, fq, dout, timestep);
 		}
 		if (bgkFlag) {
-		    ScaLBL_D3Q19_AAeven_BGK(fq, 0, ScaLBL_Comm->LastExterior(), Np, rlx_setA, Fx, Fy, Fz);
+		    ScaLBL_D3Q19_AAeven_BGK(fq, 0, ScaLBL_Comm->LastInterior(), Np, rlx_setA, Fx, Fy, Fz);
 		} else {
-		    ScaLBL_D3Q19_AAeven_MRT(fq, 0, ScaLBL_Comm->LastExterior(), Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
+		    ScaLBL_D3Q19_AAeven_MRT(fq, 0, ScaLBL_Comm->LastInterior(), Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
 		}
 		ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
-		if (thermalFlag) {
+		if (thermalFlag) { //whether thermal should be solved ABAB or ABBA or BAAB is uncertain yet....
 			ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity
 			ScaLBL_Comm->SendD3Q19AA(cq); //read overlapping boundary info from neighbouring blocks
-	        ScaLBL_D3Q19_AAeven_ThermalBGK(Velocity, cq,  ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np, omega, Fx, Fy, Fz);		
 		    ScaLBL_Comm->RecvD3Q19AA(cq); //write boundary info to neighbouring blocks
 		    ScaLBL_DeviceBarrier();
 		    // Set BCs
 		    ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, cq, 1.1, timestep);
 		    ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, cq, 1.0, timestep);
-	        ScaLBL_D3Q19_AAeven_ThermalBGK(Velocity, cq, 0, ScaLBL_Comm->LastExterior(), Np, omega, Fx, Fy, Fz); //solve system at the overlapping boundary
+	        ScaLBL_D3Q19_AAeven_ThermalBGK(Velocity, cq, 0, ScaLBL_Comm->LastInterior(), Np, omega, Fx, Fy, Fz); 
 		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 		}
 		//************************************************************************/
@@ -456,18 +452,20 @@ void ScaLBL_MRTModel::Run(){
 			//Morphology.PrintAll();
 			double mu = (tau-0.5)/3.f; //this is the kimematic viscosity, so use momentum in v to cancel out
 			double h = voxelSize;
-			double gradP=sqrt(Fx*Fx+Fy*Fy+Fz*Fz)+(din-dout)/(Nz*nprocz)/3;
+			double gradP=sqrt(Fx*Fx+Fy*Fy+Fz*Fz)+(din-dout)/((Nz-2)*nprocz)/3;
 			double absperm = h*h*mu*sqrt(vax*vax+vay*vay+vaz*vaz)/gradP;
 			double abspermZ = h*h*mu*vaz/gradP;
 			double convRate = fabs((absperm-Kold)/Kold)*100;
+            double MLUPSGlob;
+        	stoptime = MPI_Wtime();
+    		cputime = (stoptime - starttime);
+			double MLUPS =  double(Np)*timestep/cputime/1000000;
+			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {
-            	stoptime = MPI_Wtime();
-        		cputime = (stoptime - starttime);
-				printf("Timestep: %d,    %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt (%) = %0.4f, deltaP: %0.4e, fluxBar: %0.4e\n",timestep, absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/(Nz*nprocz));
+				printf("Timestep: %d, MLUPS: %f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt (%) = %0.4f, deltaP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/(Nz*nprocz));
 				FILE * log_file = fopen("Permeability.csv","a");
 				fprintf(log_file,"%i %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g\n",timestep, Fx, Fy, Fz, din, dout, mu, vax,vay,vaz, absperm);
 				fclose(log_file);
-
 			}
 			Kold=absperm;
 			tol = convRate/100;
@@ -484,19 +482,21 @@ void ScaLBL_MRTModel::Run(){
 	}
 	//************************************************************************/
 	stoptime = MPI_Wtime();
-	if (rank==0) printf("-------------------------------------------------------------------\n");
+	if (rank==0)
 	// Compute the walltime per timestep
 	cputime = (stoptime - starttime)/timestep;
 	// Performance obtained from each node
 	double MLUPS = double(Np)/cputime/1000000;
-
-	if (rank==0) printf("********************************************************\n");
-	if (rank==0) printf("CPU time = %f \n", cputime);
-	if (rank==0) printf("Lattice update rate (per core)= %f MLUPS \n", MLUPS);
-	MLUPS *= nprocs;
-	if (rank==0) printf("Lattice update rate (total)= %f MLUPS \n", MLUPS);
-	if (rank==0) printf("********************************************************\n");
-
+    double MLUPSGlob;
+	MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
+	if (rank==0) {
+	    printf("--------------------------------------------------------\n");
+        printf("********************************************************\n");
+        printf("CPU time per step = %f \n", cputime);
+        printf("Lattice update rate (per core)= %f MLUPS \n", MLUPS);
+        printf("Lattice update rate (total)= %f MLUPS \n", MLUPSGlob);
+        printf("********************************************************\n");
+    }
 }
 
 void ScaLBL_MRTModel::fqField(){
