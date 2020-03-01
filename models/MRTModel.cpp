@@ -481,22 +481,6 @@ void ScaLBL_MRTModel::Run(){
 		}
 	}
 	//************************************************************************/
-	stoptime = MPI_Wtime();
-	if (rank==0)
-	// Compute the walltime per timestep
-	cputime = (stoptime - starttime)/timestep;
-	// Performance obtained from each node
-	double MLUPS = double(Np)/cputime/1000000;
-    double MLUPSGlob;
-	MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-	if (rank==0) {
-	    printf("--------------------------------------------------------\n");
-        printf("********************************************************\n");
-        printf("CPU time per step = %f \n", cputime);
-        printf("Lattice update rate (per core)= %f MLUPS \n", MLUPS);
-        printf("Lattice update rate (total)= %f MLUPS \n", MLUPSGlob);
-        printf("********************************************************\n");
-    }
 }
 
 void ScaLBL_MRTModel::fqField(){
