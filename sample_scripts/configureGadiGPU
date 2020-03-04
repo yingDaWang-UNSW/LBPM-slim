@@ -1,0 +1,27 @@
+#load the module for cmake
+
+module purge
+module load cmake/3.16.2
+module load gcc/system openmpi/4.0.1 # hdf5/1.10.2 silo/4.10.2
+module load cuda/10.1
+
+export LBPM_SOURCE="/home/561/yw5484/LBPMYDW/LBPM-slim/"
+export LBPM_DIR="/home/561/yw5484/LBPMYDW/lbpmSlimGPUBuild"
+
+cd $LBPM_DIR
+# configure
+rm -rf CMake*
+cmake                                    \
+    -D CMAKE_BUILD_TYPE:STRING=Release    \
+    -D CMAKE_CXX_COMPILER:PATH=mpicxx        \
+    -D CMAKE_C_FLAGS="-fPIC"            \
+    -D CMAKE_CXX_FLAGS="-fPIC"          \
+    -D USE_MPI=1            \
+    -D USE_CUDA=1                           \
+    -D CMAKE_CUDA_FLAGS="-arch sm_70" \
+    -D CMAKE_CUDA_HOST_COMPILER="/usr/bin/gcc" \
+    $LBPM_SOURCE
+
+make -j32 && make install && ctest
+
+
