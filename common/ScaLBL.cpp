@@ -92,6 +92,7 @@ ScaLBL_Communicator::ScaLBL_Communicator(std::shared_ptr <Domain> Dm){
 	nprocx = Dm->nprocx();
 	nprocy = Dm->nprocy();
 	nprocz = Dm->nprocz();
+	nprocs=nprocx*nprocy*nprocz;
 	BoundaryCondition = Dm->BoundaryCondition;
 	//......................................................................................
 
@@ -865,7 +866,7 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 }
 
 void ScaLBL_Communicator::SendD3Q19AA(double *dist){
-
+    if (nprocs>1) {
 	// NOTE: the center distribution f0 must NOT be at the start of feven, provide offset to start of f2
 	if (Lock==true){
 		ERROR("ScaLBL Error (SendD3Q19): ScaLBL_Communicator is locked -- did you forget to match Send/Recv calls?");
@@ -982,11 +983,11 @@ void ScaLBL_Communicator::SendD3Q19AA(double *dist){
 	MPI_Isend(sendbuf_YZ, sendCount_YZ,MPI_DOUBLE,rank_YZ,sendtag,MPI_COMM_SCALBL,&req1[15]);
 	MPI_Irecv(recvbuf_yz, recvCount_yz,MPI_DOUBLE,rank_yz,recvtag,MPI_COMM_SCALBL,&req2[15]);
 	//...................................................................................
-
+    }
 }
 
 void ScaLBL_Communicator::RecvD3Q19AA(double *dist){
-
+    if (nprocs>1) {
 	// NOTE: the center distribution f0 must NOT be at the start of feven, provide offset to start of f2
 	//...................................................................................
 	// Wait for completion of D3Q19 communication
@@ -1066,11 +1067,11 @@ void ScaLBL_Communicator::RecvD3Q19AA(double *dist){
 	//...................................................................................
 	Lock=false; // unlock the communicator after communications complete
 	//...................................................................................
-
+    }
 }
 
 void ScaLBL_Communicator::RecvGrad(double *phi, double *grad){
-
+    if (nprocs>1) {
 	// Recieves halo and incorporates into D3Q19 based stencil gradient computation
 	//...................................................................................
 	// Wait for completion of D3Q19 communication
@@ -1148,11 +1149,11 @@ void ScaLBL_Communicator::RecvGrad(double *phi, double *grad){
 	//...................................................................................
 	Lock=false; // unlock the communicator after communications complete
 	//...................................................................................
-
+    }
 }
 
 void ScaLBL_Communicator::BiSendD3Q7AA(double *Aq, double *Bq){
-
+    if (nprocs>1) {
 	// NOTE: the center distribution f0 must NOT be at the start of feven, provide offset to start of f2
 	if (Lock==true){
 		ERROR("ScaLBL Error (SendD3Q19): ScaLBL_Communicator is locked -- did you forget to match Send/Recv calls?");
@@ -1207,12 +1208,12 @@ void ScaLBL_Communicator::BiSendD3Q7AA(double *Aq, double *Bq){
 	// Send all the distributions
 	MPI_Isend(sendbuf_Z, 2*sendCount_Z,MPI_DOUBLE,rank_Z,sendtag,MPI_COMM_SCALBL,&req1[5]);
 	MPI_Irecv(recvbuf_z, 2*recvCount_z,MPI_DOUBLE,rank_z,recvtag,MPI_COMM_SCALBL,&req2[5]);
-
+    }
 }
 
 
 void ScaLBL_Communicator::BiRecvD3Q7AA(double *Aq, double *Bq){
-
+    if (nprocs>1) {
 	// NOTE: the center distribution f0 must NOT be at the start of feven, provide offset to start of f2
 	//...................................................................................
 	// Wait for completion of D3Q19 communication
@@ -1265,11 +1266,11 @@ void ScaLBL_Communicator::BiRecvD3Q7AA(double *Aq, double *Bq){
 	//...................................................................................
 	Lock=false; // unlock the communicator after communications complete
 	//...................................................................................
-
+    }
 }
 
 void ScaLBL_Communicator::TriSendD3Q7AA(double *Aq, double *Bq, double *Cq){
-
+    if (nprocs>1) {
 	// NOTE: the center distribution f0 must NOT be at the start of feven, provide offset to start of f2
 	if (Lock==true){
 		ERROR("ScaLBL Error (SendD3Q19): ScaLBL_Communicator is locked -- did you forget to match Send/Recv calls?");
@@ -1320,12 +1321,12 @@ void ScaLBL_Communicator::TriSendD3Q7AA(double *Aq, double *Bq, double *Cq){
 	MPI_Irecv(recvbuf_Z, 3*recvCount_Z,MPI_DOUBLE,rank_Z,recvtag,MPI_COMM_SCALBL,&req2[4]);
 	MPI_Isend(sendbuf_Z, 3*sendCount_Z,MPI_DOUBLE,rank_Z,sendtag,MPI_COMM_SCALBL,&req1[5]);
 	MPI_Irecv(recvbuf_z, 3*recvCount_z,MPI_DOUBLE,rank_z,recvtag,MPI_COMM_SCALBL,&req2[5]);
-
+    }
 }
 
 
 void ScaLBL_Communicator::TriRecvD3Q7AA(double *Aq, double *Bq, double *Cq){
-
+    if (nprocs>1) {
 	// NOTE: the center distribution f0 must NOT be at the start of feven, provide offset to start of f2
 	//...................................................................................
 	// Wait for completion of D3Q19 communication
@@ -1386,11 +1387,12 @@ void ScaLBL_Communicator::TriRecvD3Q7AA(double *Aq, double *Bq, double *Cq){
 	//...................................................................................
 	Lock=false; // unlock the communicator after communications complete
 	//...................................................................................
-
+    }
 }
 
 
 void ScaLBL_Communicator::SendHalo(double *data){
+    if (nprocs>1) {
 	//...................................................................................
 	if (Lock==true){
 		ERROR("ScaLBL Error (SendHalo): ScaLBL_Communicator is locked -- did you forget to match Send/Recv calls?");
@@ -1461,9 +1463,10 @@ void ScaLBL_Communicator::SendHalo(double *data){
 	MPI_Isend(sendbuf_yZ, sendCount_yZ,MPI_DOUBLE,rank_yZ,sendtag,MPI_COMM_SCALBL,&req1[17]);
 	MPI_Irecv(recvbuf_Yz, recvCount_Yz,MPI_DOUBLE,rank_Yz,recvtag,MPI_COMM_SCALBL,&req2[17]);
 	//...................................................................................
+    }
 }
 void ScaLBL_Communicator::RecvHalo(double *data){
-
+    if (nprocs>1) {
 	//...................................................................................
 	MPI_Waitall(18,req1,stat1);
 	MPI_Waitall(18,req2,stat2);
@@ -1491,6 +1494,7 @@ void ScaLBL_Communicator::RecvHalo(double *data){
 	//...................................................................................
 	Lock=false; // unlock the communicator after communications complete
 	//...................................................................................
+	}
 }
 
 void ScaLBL_Communicator::RegularLayout(IntArray map, const double *data, DoubleArray &regdata){

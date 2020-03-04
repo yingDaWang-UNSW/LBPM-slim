@@ -222,7 +222,7 @@ private:
 	int i,j,k,n;
 
 	int iproc,jproc,kproc;
-	int nprocx,nprocy,nprocz;
+	int nprocx,nprocy,nprocz,nprocs;
 	int sendtag,recvtag;
 	// Give the object it's own MPI communicator
 	RankInfoStruct rank_info;
