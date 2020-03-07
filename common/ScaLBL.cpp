@@ -396,7 +396,7 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 	//printf("Exterior... \n");
 
 	// ********* Exterior **********
-	// Step 1/2: Index the outer walls of the grid only
+	// Step 1/2: Index the outer walls of the grid, exclude the ghost cells
 	idx=0;	next=0;
 	for (k=1; k<Nz-1; k++){
 		for (j=1; j<Ny-1; j++){
@@ -464,8 +464,8 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 					//         {0,1,-1},{0,-1,1}};
 					int neighbor;    // cycle through the neighbors of lattice site idx
 					neighbor=Map(i-1,j,k);
-					if (neighbor<0)	   neighborList[idx]=idx + 2*Np;
-					else		       neighborList[idx]=neighbor + 1*Np;
+					if (neighbor<0)	   neighborList[idx]=idx + 2*Np; //save the same vector id if wall
+					else		       neighborList[idx]=neighbor + 1*Np; // save the opposite vector if open
 
 					neighbor=Map(i+1,j,k);
 					if (neighbor<0)	   neighborList[Np+idx] = idx + 1*Np;
@@ -698,8 +698,164 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 		TempBuffer[i]=idx;
 	}
 	ScaLBL_CopyToDevice(dvcSendList_YZ,TempBuffer,sendCount_YZ*sizeof(int));
+	
+	//==========================================================================
+	// reindex the recv lists
+	
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_x,recvCount_x*sizeof(int));
+	for (i=0; i<recvCount_x; i++){
+		n = TempBuffer[i];
+		//if (rank==0) printf("s: n=%d ",n);
+		idx=Map(n);
+		//if (rank == 0) printf("s: mapped n=%d\n",idx);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_x,TempBuffer,recvCount_x*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_y,recvCount_y*sizeof(int));
+	for (i=0; i<recvCount_y; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_y,TempBuffer,recvCount_y*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_z,recvCount_z*sizeof(int));
+	for (i=0; i<recvCount_z; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_z,TempBuffer,recvCount_z*sizeof(int));
+
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_X,recvCount_X*sizeof(int));
+	for (i=0; i<recvCount_X; i++){
+		n = TempBuffer[i];
+		//if (rank==0) printf("r: n=%d ",n);
+		idx=Map(n);
+		//if (rank == 0) printf("r: mapped n=%d\n",idx);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_X,TempBuffer,recvCount_X*sizeof(int));
+
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_Y,recvCount_Y*sizeof(int));
+	for (i=0; i<recvCount_Y; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_Y,TempBuffer,recvCount_Y*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_Z,recvCount_Z*sizeof(int));
+	for (i=0; i<recvCount_Z; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_Z,TempBuffer,recvCount_Z*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_xy,recvCount_xy*sizeof(int));
+	for (i=0; i<recvCount_xy; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_xy,TempBuffer,recvCount_xy*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_xY,recvCount_xY*sizeof(int));
+	for (i=0; i<recvCount_xY; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_xY,TempBuffer,recvCount_xY*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_Xy,recvCount_Xy*sizeof(int));
+	for (i=0; i<recvCount_Xy; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_Xy,TempBuffer,recvCount_Xy*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_XY,recvCount_XY*sizeof(int));
+	for (i=0; i<recvCount_XY; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_XY,TempBuffer,recvCount_XY*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_xz,recvCount_xz*sizeof(int));
+	for (i=0; i<recvCount_xz; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_xz,TempBuffer,recvCount_xz*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_xZ,recvCount_xZ*sizeof(int));
+	for (i=0; i<recvCount_xZ; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_xZ,TempBuffer,recvCount_xZ*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_Xz,recvCount_Xz*sizeof(int));
+	for (i=0; i<recvCount_Xz; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_Xz,TempBuffer,recvCount_Xz*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_XZ,recvCount_XZ*sizeof(int));
+	for (i=0; i<recvCount_XZ; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_XZ,TempBuffer,recvCount_XZ*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_yz,recvCount_yz*sizeof(int));
+	for (i=0; i<recvCount_yz; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_yz,TempBuffer,recvCount_yz*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_Yz,recvCount_Yz*sizeof(int));
+	for (i=0; i<recvCount_Yz; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_Yz,TempBuffer,recvCount_Yz*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_yZ,recvCount_yZ*sizeof(int));
+	for (i=0; i<recvCount_yZ; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_yZ,TempBuffer,recvCount_yZ*sizeof(int));
+
+	ScaLBL_CopyToHost(TempBuffer,dvcRecvList_YZ,recvCount_YZ*sizeof(int));
+	for (i=0; i<recvCount_YZ; i++){
+		n = TempBuffer[i];
+		idx=Map(n);
+		TempBuffer[i]=idx;
+	}
+	ScaLBL_CopyToDevice(dvcRecvList_YZ,TempBuffer,recvCount_YZ*sizeof(int));
+	
+	
+	
 	//.......................................................................
-	// Re-index the recieve lists for the D3Q19 distributions
+	// Re-index the recieve dists for the D3Q19 distributions
 	ScaLBL_CopyToHost(TempBuffer,dvcRecvDist_x,5*recvCount_x*sizeof(int));
 	for (i=0; i<5*recvCount_x; i++){
 		n = TempBuffer[i];

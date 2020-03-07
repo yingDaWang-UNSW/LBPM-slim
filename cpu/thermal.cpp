@@ -14,7 +14,7 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// LBM Thermal BGK
+// LBM Thermal BGK and thermal FDM
 
 /*
   Copyright 2013--2018 James E. McClure, Virginia Polytechnic & State University
@@ -31,7 +31,16 @@
   You should have received a copy of the GNU General Public License
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
-extern "C" void ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz){
+
+extern "C" void ScaLBL_FDM_Init(double *dist, int Np)
+{
+	int n;
+	for (n=0; n<Np; n++){
+		dist[n] = 1.0;
+	}
+}
+
+extern "C" void ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, int start, int finish, int Np, double rlx){
 	int n;
 	// conserved momemnts
 	double rho,ux,uy,uz,uu;
@@ -67,83 +76,83 @@ extern "C" void ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, i
 		uu = 1.5*(ux*ux+uy*uy+uz*uz);
 
 		// q=0
-		dist[n] = f0*(1.0-rlx)+rlx*0.3333333333333333*rho;
+		dist[n] = f0*(1.0-rlx)+rlx*0.3333333333333333*rho*(1.0-uu);
 
 		// q = 1
-		dist[1*Np+n] = f1*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 + 3.0*ux);
+		dist[1*Np+n] = f1*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 + 3.0*ux + 4.5*ux*ux - uu);
 
 		// q=2
-		dist[2*Np+n] = f2*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 - 3.0*ux);
+		dist[2*Np+n] = f2*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 - 3.0*ux + 4.5*ux*ux - uu);
 
 		// q = 3
 		dist[3*Np+n] = f3*(1.0-rlx) +
-				rlx*0.05555555555555555*rho*(1.0 + 3.0*uy);
+				rlx*0.05555555555555555*rho*(1.0 + 3.0*uy + 4.5*uy*uy - uu);
 
 		// q = 4
 		dist[4*Np+n] = f4*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 - 3.0*uy);
+				rlx*0.05555555555555555*rho*(1.0 - 3.0*uy + 4.5*uy*uy - uu);
 
 		// q = 5
 		dist[5*Np+n] = f5*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 + 3.0*uz);
+				rlx*0.05555555555555555*rho*(1.0 + 3.0*uz + 4.5*uz*uz - uu);
 
 		// q = 6
 		dist[6*Np+n] = f6*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 - 3.0*uz);
+				rlx*0.05555555555555555*rho*(1.0 - 3.0*uz + 4.5*uz*uz - uu);
 
 		// q = 7
 		dist[7*Np+n] = f7*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uy));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uy) + 4.5*(ux+uy)*(ux+uy) - uu);
 
 		// q = 8
 		dist[8*Np+n] = f8*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uy));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uy) + 4.5*(ux+uy)*(ux+uy) - uu);
 
 		// q = 9
 		dist[9*Np+n] = f9*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uy));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uy) + 4.5*(ux-uy)*(ux-uy) - uu);
 
 		// q = 10
 		dist[10*Np+n] = f10*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uy));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uy) + 4.5*(ux-uy)*(ux-uy) - uu);
 
 		// q = 11
 		dist[11*Np+n] = f11*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uz) + 4.5*(ux+uz)*(ux+uz) - uu);
 
 		// q = 12
 		dist[12*Np+n] = f12*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uz) + 4.5*(ux+uz)*(ux+uz) - uu);
 
 		// q = 13
 		dist[13*Np+n] = f13*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uz) + 4.5*(ux-uz)*(ux-uz) - uu);
 
 		// q= 14
 		dist[14*Np+n] = f14*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uz) + 4.5*(ux-uz)*(ux-uz) - uu);
 
 		// q = 15
 		dist[15*Np+n] = f15*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy+uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy+uz) + 4.5*(uy+uz)*(uy+uz) - uu);
 
 		// q = 16
 		dist[16*Np+n] = f16*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy+uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy+uz) + 4.5*(uy+uz)*(uy+uz) - uu);
 
 		// q = 17
 		dist[17*Np+n] = f17*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy-uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy-uz) + 4.5*(uy-uz)*(uy-uz) - uu);
 
 		// q = 18
 		dist[18*Np+n] = f18*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy-uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy-uz) + 4.5*(uy-uz)*(uy-uz) - uu);
 
 		//........................................................................
 	}
 }
 
-extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz){
+extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx){
 	int n;
 	// conserved momemnts
 	double rho,ux,uy,uz,uu;
@@ -235,78 +244,151 @@ extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocit
 		uu = 1.5*(ux*ux+uy*uy+uz*uz);
 
 		// q=0
-		dist[n] = f0*(1.0-rlx)+rlx*0.3333333333333333*rho;
+		dist[n] = f0*(1.0-rlx)+rlx*0.3333333333333333*rho*(1.0-uu);
 
 		// q = 1
-		dist[nr2] = f1*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 + 3.0*ux);
+		dist[nr2] = f1*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 + 3.0*ux + 4.5*ux*ux - uu);
 
 		// q=2
-		dist[nr1] = f2*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 - 3.0*ux);
+		dist[nr1] = f2*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 - 3.0*ux + 4.5*ux*ux - uu);
 
 		// q = 3
 		dist[nr4] = f3*(1.0-rlx) +
-				rlx*0.05555555555555555*rho*(1.0 + 3.0*uy);
+				rlx*0.05555555555555555*rho*(1.0 + 3.0*uy + 4.5*uy*uy - uu);
 
 		// q = 4
 		dist[nr3] = f4*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 - 3.0*uy);
+				rlx*0.05555555555555555*rho*(1.0 - 3.0*uy + 4.5*uy*uy - uu);
 
 		// q = 5
 		dist[nr6] = f5*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 + 3.0*uz);
+				rlx*0.05555555555555555*rho*(1.0 + 3.0*uz + 4.5*uz*uz - uu);
 
 		// q = 6
 		dist[nr5] = f6*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 - 3.0*uz);
+				rlx*0.05555555555555555*rho*(1.0 - 3.0*uz + 4.5*uz*uz - uu);
 
 		// q = 7
 		dist[nr8] = f7*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uy));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uy) + 4.5*(ux+uy)*(ux+uy) - uu);
 
 		// q = 8
 		dist[nr7] = f8*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uy));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uy) + 4.5*(ux+uy)*(ux+uy) - uu);
 
 		// q = 9
 		dist[nr10] = f9*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uy));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uy) + 4.5*(ux-uy)*(ux-uy) - uu);
 
 		// q = 10
 		dist[nr9] = f10*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uy));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uy) + 4.5*(ux-uy)*(ux-uy) - uu);
 
 		// q = 11
 		dist[nr12] = f11*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uz) + 4.5*(ux+uz)*(ux+uz) - uu);
 
 		// q = 12
 		dist[nr11] = f12*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uz) + 4.5*(ux+uz)*(ux+uz) - uu);
 
 		// q = 13
 		dist[nr14] = f13*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uz) + 4.5*(ux-uz)*(ux-uz) - uu);
 
 		// q= 14
 		dist[nr13] = f14*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uz) + 4.5*(ux-uz)*(ux-uz) - uu);
 
 		// q = 15
 		dist[nr16] = f15*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy+uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy+uz) + 4.5*(uy+uz)*(uy+uz) - uu);
 
 		// q = 16
 		dist[nr15] = f16*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy+uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy+uz) + 4.5*(uy+uz)*(uy+uz) - uu);
 
 		// q = 17
 		dist[nr18] = f17*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy-uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy-uz) + 4.5*(uy-uz)*(uy-uz) - uu);
 
 		// q = 18
 		dist[nr17] = f18*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy-uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy-uz) + 4.5*(uy-uz)*(uy-uz) - uu);
 
 	}
 }
 
+extern "C" void ScaLBL_FDM_ConvectionDiffusion(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double dt) {
+    // dist holds C, and the neighbour list from 0-6 holds the FDM neighbour values
+    // the neighbour list is 18 Np long, for each index n, the 18 neighbour indices are saved 
+	// store the idx associated with each neighbor
+	// store idx for self if neighbor is in solid or out of domain
+	//D3Q19 = {{1,0,0},{-1,0,0}
+	//         {0,1,0},{0,-1,0}
+	//         {0,0,1},{0,0,-1},
+	//	       {1,1,0},{-1,-1,0},
+	//         {1,-1,0},{-1,1,0},
+	//         {1,0,1},{-1,0,-1},
+	//         {1,0,-1},{-1,0,1},
+	//	       {0,1,1},{0,-1,-1},
+	//         {0,1,-1},{0,-1,1}};
+    // in this version, D is rlx, which is isotropic
+	int n;
+    // cellwise repeated variables
+	double ux,uy,uz,gradC,divDgradC,cFace,divVelC;
+	double c0,c1,c2,c3,c4,c5,c6;
+	int nr1,nr2,nr3,nr4,nr5,nr6;
+	for (int n=start; n<finish; n++){
+		// q=0
+		c0 = dist[n]; // get the current concentration
+
+		nr1 = neighborList[n]; // get the 1st neightbour, x-1
+		nr1 = nr1%Np; // get the 0th index, since this is FD, we dont care about dist vectors
+		c1 = dist[nr1]; // read the neighbouring value
+
+		nr2 = neighborList[n+Np]; // neighbor x+1
+		nr2 = nr2%Np;
+		c2 = dist[nr2];  
+
+		// q=3
+		nr3 = neighborList[n+2*Np]; // neighbor y-1
+		nr3 = nr3%Np;
+		c3 = dist[nr3];
+
+		// q = 4
+		nr4 = neighborList[n+3*Np]; // neighbor y+1
+		nr4 = nr4%Np;
+		c4 = dist[nr4];
+
+		// q=5
+		nr5 = neighborList[n+4*Np]; //z-1
+		nr5 = nr5%Np;
+		c5 = dist[nr5];
+
+		// q = 6
+		nr6 = neighborList[n+5*Np]; //z+1
+		nr6 = nr6%Np;
+		c6 = dist[nr6];
+		
+		// calculate gradc
+		
+		// calculate divDgradC
+		
+
+
+        // get harmonic face velocities
+		ux = Velocity[n];
+		uy = Velocity[Np+n];
+		uz = Velocity[2*Np+n];
+        
+        // get upwinded cfaces
+        
+        // calculate divVelC
+
+        // solve FDE for this cell
+        
+		//........................................................................
+	}
+
+}

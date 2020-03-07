@@ -23,6 +23,7 @@ int fqInterval = 1e10;
 bool restartFq = false;
 bool bgkFlag = false;
 bool thermalFlag = false;
+bool FDThermalFlag = false;
 double tol=1e6;
 double permTolerance = 1e-5;
 bool visTolerance = true;
@@ -206,6 +207,9 @@ void ScaLBL_MRTModel::Create(){
     	ScaLBL_AllocateDeviceMemory((void **) &cq, 19*dist_mem_size);  
 		ScaLBL_AllocateDeviceMemory((void **) &Concentration, sizeof(double)*Np);  
 	}
+	if (FDThermalFlag) {
+    	ScaLBL_AllocateDeviceMemory((void **) &cq, dist_mem_size);  
+	}
 	//...........................................................................
 	// Update GPU data structures
 	if (rank==0)    printf ("Setting up device map and neighbor list \n");
@@ -256,8 +260,15 @@ void ScaLBL_MRTModel::Initialize(){
 	    MPI_Barrier(comm);
     }
     if (thermalFlag) {
-        if (rank==0)    printf ("Initializing cq distribution and initial velocity field \n");
+        if (rank==0)    printf ("Initializing Lattice Boltzmann cq distribution and initial velocity field \n");
         ScaLBL_D3Q19_Init(cq, Np);
+		ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity (does velocity exist in odd time?)
+		// add option to read velocity fields in directly instead of from fq format
+		// add option to read in cq file or concentration file
+    }
+    if (FDThermalFlag) {
+        if (rank==0)    printf ("Initializing Finite Difference cq distribution and initial velocity field \n");
+        ScaLBL_FDM_Init(cq, Np);
 		ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity (does velocity exist in odd time?)
 		// add option to read velocity fields in directly instead of from fq format
 		// add option to read in cq file or concentration file
@@ -292,13 +303,13 @@ void ScaLBL_MRTModel::Run(){
 		timestep++;// odd timesteps need to be solved interior then exterior because of neighbouring hocus pocus
 		if (thermalFlag) { //run thermal flag update vel fields every 2 steps
 			ScaLBL_Comm->SendD3Q19AA(cq); //read overlapping boundary info from neighbouring blocks
-	        ScaLBL_D3Q19_AAodd_ThermalBGK(NeighborList, Velocity, cq,  ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np, omega, Fx, Fy, Fz);		
+	        ScaLBL_D3Q19_AAodd_ThermalBGK(NeighborList, Velocity, cq,  ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np, omega);		
 		    ScaLBL_Comm->RecvD3Q19AA(cq); //write boundary info to neighbouring blocks
 		    ScaLBL_DeviceBarrier();
 		    // Set BCs
 		    ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, cq, 1.1, timestep);
 		    ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, cq, 1.0, timestep);
-	        ScaLBL_D3Q19_AAodd_ThermalBGK(NeighborList, Velocity, cq, 0, ScaLBL_Comm->LastExterior(), Np, omega, Fx, Fy, Fz); //exteriors after BCs enforced
+	        ScaLBL_D3Q19_AAodd_ThermalBGK(NeighborList, Velocity, cq, 0, ScaLBL_Comm->LastExterior(), Np, omega); //exteriors after BCs enforced
 		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 		}
 		ScaLBL_Comm->SendD3Q19AA(fq); //read overlapping boundary info from neighbouring blocks
@@ -354,66 +365,24 @@ void ScaLBL_MRTModel::Run(){
 		    // Set BCs
 		    ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, cq, 1.1, timestep);
 		    ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, cq, 1.0, timestep);
-	        ScaLBL_D3Q19_AAeven_ThermalBGK(Velocity, cq, 0, ScaLBL_Comm->LastInterior(), Np, omega, Fx, Fy, Fz); 
+	        ScaLBL_D3Q19_AAeven_ThermalBGK(Velocity, cq, 0, ScaLBL_Comm->LastInterior(), Np, omega); 
+		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
+		}
+		if (FDThermalFlag) {
+			ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity
+			ScaLBL_Comm->SendHalo(cq); //read overlapping boundary info from neighbouring blocks
+		    ScaLBL_Comm->RecvHalo(cq); //write boundary info to neighbouring blocks
+		    ScaLBL_DeviceBarrier();
+		    // Set BCs
+		    ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, cq, 1.1, timestep);
+		    ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, cq, 1.0, timestep);
+	        ScaLBL_D3Q19_AAeven_ThermalBGK(Velocity, cq, 0, ScaLBL_Comm->LastInterior(), Np, omega); 
 		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 		}
 		//************************************************************************/
 		if (timestep%analysis_interval==0){
 			ScaLBL_D3Q19_Momentum(fq,Velocity,Np);
-		    if (thermalFlag) {// get concentration
-    			ScaLBL_D3Q19_Pressure(cq,Concentration,Np);
-				ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
-			    ScaLBL_Comm->RegularLayout(Map,&Concentration[0],ConcentrationCart);
 
-
-
-	char LocalRankFoldername[100];
-	if (rank==0) {
-		sprintf(LocalRankFoldername,"./rawVisConcentration%d",timestep); 
-	    mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    }
-	MPI_Barrier(comm);
-	//create the file
-	FILE *OUTFILE;
-	char LocalRankFilename[100];
-	sprintf(LocalRankFilename,"rawVisConcentration%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-	OUTFILE = fopen(LocalRankFilename,"w");
-    int idx;
-    for (int k=0; k<Nz; k++){
-	    for (int j=0; j<Ny; j++){
-		    for (int i=0; i<Nx; i++){
-				idx=Map(i,j,k);
-		        //if (idx<0) ConcentrationCart(i, j, k)=69420;
-                //fqTensor(i,j,k,d)=fqField(i,j,k);
-			    fprintf(OUTFILE,"%f\n",ConcentrationCart(i, j, k));
-		    }
-	    }
-    }
-	fclose(OUTFILE);
-	MPI_Barrier(comm);
-
-
-
-
-			    double meanCLoc=0.0;
-			    double meanCGlob=0.0;
-    			double count_loc=0;
-			    double count;
-			    for (int k=1; k<Nz-1; k++){
-				    for (int j=1; j<Ny-1; j++){
-					    for (int i=1; i<Nx-1; i++){
-						    count_loc+=1.0;
-						    if (Geom(i,j,k) > 0){
-							    meanCLoc += ConcentrationCart(i,j,k);
-						    }
-					    }
-				    }
-			    }
-			    MPI_Allreduce(&meanCLoc,&meanCGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			    MPI_Allreduce(&count_loc,&count,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			    meanCGlob /= count;
-		        if (rank==0) printf("Mean concentration in domain: %0.4f\n",meanCGlob);
-		    }
 		    
 			ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[0],Velocity_x);
@@ -447,19 +416,79 @@ void ScaLBL_MRTModel::Run(){
 			vay /= count;
 			vaz /= count;
 			
+		    if (thermalFlag) {// get concentration
+    			ScaLBL_D3Q19_Pressure(cq,Concentration,Np);
+				ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
+			    ScaLBL_Comm->RegularLayout(Map,&Concentration[0],ConcentrationCart);
+
+                //some stupid bs is preventing me from functionalising this
+		        if (timestep%fqInterval==0) {
+	                char LocalRankFoldername[100];
+	                if (rank==0) {
+		                sprintf(LocalRankFoldername,"./rawVisConcentration%d",timestep); 
+	                    mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+                    }
+	                MPI_Barrier(comm);
+	                //create the file
+	                FILE *OUTFILE;
+	                char LocalRankFilename[100];
+	                sprintf(LocalRankFilename,"rawVisConcentration%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+	                OUTFILE = fopen(LocalRankFilename,"w");
+                    int idx;
+                    for (int k=0; k<Nz; k++){
+	                    for (int j=0; j<Ny; j++){
+		                    for (int i=0; i<Nx; i++){
+				                idx=Map(i,j,k);
+		                        //if (idx<0) ConcentrationCart(i, j, k)=69420;
+                                //fqTensor(i,j,k,d)=fqField(i,j,k);
+			                    fprintf(OUTFILE,"%f\n",ConcentrationCart(i, j, k));
+		                    }
+	                    }
+                    }
+	                fclose(OUTFILE);
+	                MPI_Barrier(comm);
+                }
+
+
+			    double meanCLoc=0.0;
+			    double meanCGlob=0.0;
+    			double count_loc=0;
+			    double count;
+			    for (int k=1; k<Nz-1; k++){
+				    for (int j=1; j<Ny-1; j++){
+					    for (int i=1; i<Nx-1; i++){
+						    count_loc+=1.0;
+						    if (Geom(i,j,k) > 0){
+							    meanCLoc += ConcentrationCart(i,j,k);
+						    }
+					    }
+				    }
+			    }
+			    MPI_Allreduce(&meanCLoc,&meanCGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
+			    MPI_Allreduce(&count_loc,&count,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
+			    meanCGlob /= count;
+			    double NPe = sqrt(vax*vax+vay*vay+vaz*vaz)/DiffCoeff;
+		        if (rank==0) printf("Mean Peclet Number: %0.4e, Mean concentration in domain: %0.4f\n",NPe,meanCGlob);
+		    }
+			
+			
 			//if (rank==0) printf("Computing Minkowski functionals \n");
 			//Morphology.ComputeScalar(Geom,0.f);
 			//Morphology.PrintAll();
 			double mu = (tau-0.5)/3.f; //this is the kimematic viscosity, so use momentum in v to cancel out
-			double h = voxelSize;
 			double gradP=sqrt(Fx*Fx+Fy*Fy+Fz*Fz)+(din-dout)/((Nz-2)*nprocz)/3;
-			double absperm = h*h*mu*sqrt(vax*vax+vay*vay+vaz*vaz)/gradP;
-			double abspermZ = h*h*mu*vaz/gradP;
+			double absperm = voxelSize*voxelSize*mu*sqrt(vax*vax+vay*vay+vaz*vaz)/gradP;
+			double abspermZ = voxelSize*voxelSize*mu*vaz/gradP;
 			double convRate = fabs((absperm-Kold)/Kold)*100;
             double MLUPSGlob;
+            double MLUPS;
         	stoptime = MPI_Wtime();
     		cputime = (stoptime - starttime);
-			double MLUPS =  double(Np)*timestep/cputime/1000000;
+    		if (thermalFlag) {
+			    MLUPS =  double(Np)*2*timestep/cputime/1000000;
+			} else {
+			    MLUPS =  double(Np)*timestep/cputime/1000000;
+			}
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {
 				printf("Timestep: %d, MLUPS: %f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt (%) = %0.4f, deltaP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/(Nz*nprocz));

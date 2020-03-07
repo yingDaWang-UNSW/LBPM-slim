@@ -25,7 +25,7 @@
 #ifndef ScalLBL_H
 #define ScalLBL_H
 #include "common/Domain.h"
-
+// utilities
 extern "C" int ScaLBL_SetDevice(int rank);
 
 extern "C" void ScaLBL_AllocateDeviceMemory(void** address, size_t size);
@@ -59,22 +59,34 @@ extern "C" void ScaLBL_PackDenD3Q7(int *list, int count, double *sendbuf, int nu
 
 extern "C" void ScaLBL_UnpackDenD3Q7(int *list, int count, double *recvbuf, int number, double *Data, int N);
 
-extern "C" void ScaLBL_D3Q19_Init(double *Dist, int Np);
+extern "C" void ScaLBL_D3Q19_Init(double *dist, int Np);
 
 extern "C" void ScaLBL_D3Q19_Momentum(double *dist, double *vel, int Np);
 
 extern "C" void ScaLBL_D3Q19_Pressure(double *dist, double *press, int Np);
 
+extern "C" void ScaLBL_FDM_Init(double *dist, int Np);
+
 // BGK MODEL
 extern "C" void ScaLBL_D3Q19_AAeven_BGK(double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz);
 
 extern "C" void ScaLBL_D3Q19_AAodd_BGK(int *neighborList, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz);
+// TRT MODEL
+
 // Thermal BGK
-extern "C" void ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz);
+extern "C" void ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, int start, int finish, int Np, double rlx);
 
-extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz);
+extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx);
 
-//extern "C" void ScaLBL_FDM_ConvectionDiffusion(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz);
+// Thermal TRT
+
+
+
+
+// FDM MODEL
+extern "C" void ScaLBL_FDM_ConvectionDiffusion(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double dt); 
+
+
 // MRT MODEL
 extern "C" void ScaLBL_D3Q19_AAeven_MRT(double *dist, int start, int finish, int Np, double rlx_setA, double rlx_setB, double Fx,
 		double Fy, double Fz);

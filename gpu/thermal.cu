@@ -35,7 +35,7 @@
 
 #define NBLOCKS 1024
 #define NTHREADS 256
-__global__ void dvc_ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz){
+__global__ void dvc_ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, int start, int finish, int Np, double rlx){
 	int n;
 	// conserved momemnts
 	double rho,ux,uy,uz,uu;
@@ -76,84 +76,83 @@ __global__ void dvc_ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dis
 		uu = 1.5*(ux*ux+uy*uy+uz*uz);
 
 		// q=0
-		dist[n] = f0*(1.0-rlx)+rlx*0.3333333333333333*rho;
+		dist[n] = f0*(1.0-rlx)+rlx*0.3333333333333333*rho*(1.0-uu);
 
 		// q = 1
-		dist[1*Np+n] = f1*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 + 3.0*ux);
+		dist[1*Np+n] = f1*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 + 3.0*ux + 4.5*ux*ux - uu);
 
 		// q=2
-		dist[2*Np+n] = f2*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 - 3.0*ux);
+		dist[2*Np+n] = f2*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 - 3.0*ux + 4.5*ux*ux - uu);
 
 		// q = 3
 		dist[3*Np+n] = f3*(1.0-rlx) +
-				rlx*0.05555555555555555*rho*(1.0 + 3.0*uy);
+				rlx*0.05555555555555555*rho*(1.0 + 3.0*uy + 4.5*uy*uy - uu);
 
 		// q = 4
 		dist[4*Np+n] = f4*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 - 3.0*uy);
+				rlx*0.05555555555555555*rho*(1.0 - 3.0*uy + 4.5*uy*uy - uu);
 
 		// q = 5
 		dist[5*Np+n] = f5*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 + 3.0*uz);
+				rlx*0.05555555555555555*rho*(1.0 + 3.0*uz + 4.5*uz*uz - uu);
 
 		// q = 6
 		dist[6*Np+n] = f6*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 - 3.0*uz);
+				rlx*0.05555555555555555*rho*(1.0 - 3.0*uz + 4.5*uz*uz - uu);
 
 		// q = 7
 		dist[7*Np+n] = f7*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uy));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uy) + 4.5*(ux+uy)*(ux+uy) - uu);
 
 		// q = 8
 		dist[8*Np+n] = f8*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uy));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uy) + 4.5*(ux+uy)*(ux+uy) - uu);
 
 		// q = 9
 		dist[9*Np+n] = f9*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uy));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uy) + 4.5*(ux-uy)*(ux-uy) - uu);
 
 		// q = 10
 		dist[10*Np+n] = f10*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uy));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uy) + 4.5*(ux-uy)*(ux-uy) - uu);
 
 		// q = 11
 		dist[11*Np+n] = f11*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uz) + 4.5*(ux+uz)*(ux+uz) - uu);
 
 		// q = 12
 		dist[12*Np+n] = f12*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uz) + 4.5*(ux+uz)*(ux+uz) - uu);
 
 		// q = 13
 		dist[13*Np+n] = f13*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uz) + 4.5*(ux-uz)*(ux-uz) - uu);
 
 		// q= 14
 		dist[14*Np+n] = f14*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uz) + 4.5*(ux-uz)*(ux-uz) - uu);
 
 		// q = 15
 		dist[15*Np+n] = f15*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy+uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy+uz) + 4.5*(uy+uz)*(uy+uz) - uu);
 
 		// q = 16
 		dist[16*Np+n] = f16*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy+uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy+uz) + 4.5*(uy+uz)*(uy+uz) - uu);
 
 		// q = 17
 		dist[17*Np+n] = f17*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy-uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy-uz) + 4.5*(uy-uz)*(uy-uz) - uu);
 
 		// q = 18
 		dist[18*Np+n] = f18*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy-uz));
-
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy-uz) + 4.5*(uy-uz)*(uy-uz) - uu);
 		//........................................................................
 	}
 	}
 }
 
-__global__ void dvc_ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz){
+__global__ void dvc_ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx){
 	int n;
 	// conserved momemnts
 	double rho,ux,uy,uz,uu;
@@ -249,84 +248,84 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Vel
 		uu = 1.5*(ux*ux+uy*uy+uz*uz);
 
 		// q=0
-		dist[n] = f0*(1.0-rlx)+rlx*0.3333333333333333*rho;
+		dist[n] = f0*(1.0-rlx)+rlx*0.3333333333333333*rho*(1.0-uu);
 
 		// q = 1
-		dist[nr2] = f1*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 + 3.0*ux);
+		dist[nr2] = f1*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 + 3.0*ux + 4.5*ux*ux - uu);
 
 		// q=2
-		dist[nr1] = f2*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 - 3.0*ux);
+		dist[nr1] = f2*(1.0-rlx) + rlx*0.05555555555555555*rho*(1.0 - 3.0*ux + 4.5*ux*ux - uu);
 
 		// q = 3
 		dist[nr4] = f3*(1.0-rlx) +
-				rlx*0.05555555555555555*rho*(1.0 + 3.0*uy);
+				rlx*0.05555555555555555*rho*(1.0 + 3.0*uy + 4.5*uy*uy - uu);
 
 		// q = 4
 		dist[nr3] = f4*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 - 3.0*uy);
+				rlx*0.05555555555555555*rho*(1.0 - 3.0*uy + 4.5*uy*uy - uu);
 
 		// q = 5
 		dist[nr6] = f5*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 + 3.0*uz);
+				rlx*0.05555555555555555*rho*(1.0 + 3.0*uz + 4.5*uz*uz - uu);
 
 		// q = 6
 		dist[nr5] = f6*(1.0-rlx) + 
-				rlx*0.05555555555555555*rho*(1.0 - 3.0*uz);
+				rlx*0.05555555555555555*rho*(1.0 - 3.0*uz + 4.5*uz*uz - uu);
 
 		// q = 7
 		dist[nr8] = f7*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uy));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uy) + 4.5*(ux+uy)*(ux+uy) - uu);
 
 		// q = 8
 		dist[nr7] = f8*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uy));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uy) + 4.5*(ux+uy)*(ux+uy) - uu);
 
 		// q = 9
 		dist[nr10] = f9*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uy));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uy) + 4.5*(ux-uy)*(ux-uy) - uu);
 
 		// q = 10
 		dist[nr9] = f10*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uy));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uy) + 4.5*(ux-uy)*(ux-uy) - uu);
 
 		// q = 11
 		dist[nr12] = f11*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux+uz) + 4.5*(ux+uz)*(ux+uz) - uu);
 
 		// q = 12
 		dist[nr11] = f12*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux+uz) + 4.5*(ux+uz)*(ux+uz) - uu);
 
 		// q = 13
 		dist[nr14] = f13*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(ux-uz) + 4.5*(ux-uz)*(ux-uz) - uu);
 
 		// q= 14
 		dist[nr13] = f14*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(ux-uz) + 4.5*(ux-uz)*(ux-uz) - uu);
 
 		// q = 15
 		dist[nr16] = f15*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy+uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy+uz) + 4.5*(uy+uz)*(uy+uz) - uu);
 
 		// q = 16
 		dist[nr15] = f16*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy+uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy+uz) + 4.5*(uy+uz)*(uy+uz) - uu);
 
 		// q = 17
 		dist[nr18] = f17*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy-uz));
+				rlx*0.02777777777777778*rho*(1.0 + 3.0*(uy-uz) + 4.5*(uy-uz)*(uy-uz) - uu);
 
 		// q = 18
 		dist[nr17] = f18*(1.0-rlx) + 
-				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy-uz));
+				rlx*0.02777777777777778*rho*(1.0 - 3.0*(uy-uz) + 4.5*(uy-uz)*(uy-uz) - uu);
 }
 	}
 }
 
-extern "C" void ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz){
+extern "C" void ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, int start, int finish, int Np, double rlx){
 	
-    dvc_ScaLBL_D3Q19_AAeven_ThermalBGK<<<NBLOCKS,NTHREADS >>>(Velocity,dist,start,finish,Np,rlx,Fx,Fy,Fz);
+    dvc_ScaLBL_D3Q19_AAeven_ThermalBGK<<<NBLOCKS,NTHREADS >>>(Velocity,dist,start,finish,Np,rlx);
 
     cudaError_t err = cudaGetLastError();
 	if (cudaSuccess != err){
@@ -334,8 +333,8 @@ extern "C" void ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, i
 	}
 }
 
-extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz){
-    dvc_ScaLBL_D3Q19_AAodd_ThermalBGK<<<NBLOCKS,NTHREADS >>>(neighborList,Velocity,dist,start,finish,Np,rlx,Fx,Fy,Fz);
+extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx){
+    dvc_ScaLBL_D3Q19_AAodd_ThermalBGK<<<NBLOCKS,NTHREADS >>>(neighborList,Velocity,dist,start,finish,Np,rlx);
 
     cudaError_t err = cudaGetLastError();
 	if (cudaSuccess != err){
