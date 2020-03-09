@@ -20,10 +20,11 @@
 
 double voxelSize = 0.0;
 int fqInterval = 1e10;
+bool fqFlag = false;
 bool restartFq = false;
 bool bgkFlag = false;
 bool thermalFlag = false;
-bool FDThermalFlag = false;
+//bool FDThermalFlag = false;
 double tol=1e6;
 double permTolerance = 1e-5;
 bool visTolerance = true;
@@ -80,6 +81,9 @@ void ScaLBL_MRTModel::ReadParams(string filename){
 
 	if (mrt_db->keyExists( "fqInterval" )){
 		fqInterval = mrt_db->getScalar<int>( "fqInterval" );
+	}
+	if (mrt_db->keyExists( "fqFlag" )){
+		fqFlag = mrt_db->getScalar<bool>( "fqFlag" );
 	}
 	if (mrt_db->keyExists( "restartFq" )){
 		restartFq = mrt_db->getScalar<bool>( "restartFq" );
@@ -183,10 +187,10 @@ void ScaLBL_MRTModel::Create(){
 	// ScaLBL_Communicator ScaLBL_Comm(Mask); // original
 	ScaLBL_Comm  = std::shared_ptr<ScaLBL_Communicator>(new ScaLBL_Communicator(Mask));
 	Np=Mask->PoreCount();
-	int Npad=(Np/16 + 2)*16;
+	int Npad=(Np/16 + 2)*16; // the fuck is this
 	if (rank==0)    printf ("Set up memory efficient layout \n");
 	Map.resize(Nx,Ny,Nz);       
-	Map.fill(-2);
+	//Map.fill(-2);
 	auto neighborList= new int[18*Npad];
 	Np = ScaLBL_Comm->MemoryOptimizedLayoutAA(Map,neighborList,Mask->id,Np);
 	MPI_Barrier(comm);
@@ -207,9 +211,9 @@ void ScaLBL_MRTModel::Create(){
     	ScaLBL_AllocateDeviceMemory((void **) &cq, 19*dist_mem_size);  
 		ScaLBL_AllocateDeviceMemory((void **) &Concentration, sizeof(double)*Np);  
 	}
-	if (FDThermalFlag) {
-    	ScaLBL_AllocateDeviceMemory((void **) &cq, dist_mem_size);  
-	}
+//	if (FDThermalFlag) {
+//    	ScaLBL_AllocateDeviceMemory((void **) &cq, dist_mem_size);  
+//	}
 	//...........................................................................
 	// Update GPU data structures
 	if (rank==0)    printf ("Setting up device map and neighbor list \n");
@@ -266,13 +270,13 @@ void ScaLBL_MRTModel::Initialize(){
 		// add option to read velocity fields in directly instead of from fq format
 		// add option to read in cq file or concentration file
     }
-    if (FDThermalFlag) {
-        if (rank==0)    printf ("Initializing Finite Difference cq distribution and initial velocity field \n");
-        ScaLBL_FDM_Init(cq, Np);
-		ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity (does velocity exist in odd time?)
-		// add option to read velocity fields in directly instead of from fq format
-		// add option to read in cq file or concentration file
-    }
+//    if (FDThermalFlag) {
+//        if (rank==0)    printf ("Initializing Finite Difference cq distribution and initial velocity field \n");
+//        ScaLBL_FDM_Init(cq, Np);
+//		ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity (does velocity exist in odd time?)
+//		// add option to read velocity fields in directly instead of from fq format
+//		// add option to read in cq file or concentration file
+//    }
 }
 
 void ScaLBL_MRTModel::Run(){
@@ -300,7 +304,7 @@ void ScaLBL_MRTModel::Run(){
 	while (timestep < timestepMax) {
 		//************************************************************************/
 		//ODD TIMESTEP************************************************************
-		timestep++;// odd timesteps need to be solved interior then exterior because of neighbouring hocus pocus
+		timestep++;// odd timesteps need to be solved interior then exterior
 		if (thermalFlag) { //run thermal flag update vel fields every 2 steps
 			ScaLBL_Comm->SendD3Q19AA(cq); //read overlapping boundary info from neighbouring blocks
 	        ScaLBL_D3Q19_AAodd_ThermalBGK(NeighborList, Velocity, cq,  ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np, omega);		
@@ -312,15 +316,15 @@ void ScaLBL_MRTModel::Run(){
 	        ScaLBL_D3Q19_AAodd_ThermalBGK(NeighborList, Velocity, cq, 0, ScaLBL_Comm->LastExterior(), Np, omega); //exteriors after BCs enforced
 		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 		}
-		ScaLBL_Comm->SendD3Q19AA(fq); //read overlapping boundary info from neighbouring blocks
-		if (bgkFlag) {
+		ScaLBL_Comm->SendD3Q19AA(fq); //send exteriors to other ranks, acts as a streaming step
+		if (bgkFlag) { //  collide neighbours, stream to opposite neighbour in the interior
 		    ScaLBL_D3Q19_AAodd_BGK(NeighborList, fq,  ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np, rlx_setA, Fx, Fy, Fz);		
 	    } else {
 		    ScaLBL_D3Q19_AAodd_MRT(NeighborList, fq,  ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
 		}
-		ScaLBL_Comm->RecvD3Q19AA(fq); //write boundary info to neighbouring blocks
+		ScaLBL_Comm->RecvD3Q19AA(fq); //receive exterior info, pre-streamed
 		ScaLBL_DeviceBarrier();
-		// Set BCs
+		// Set BCs at exteriors
 		if (BoundaryCondition == 3){
 			ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, fq, din, timestep);
 			ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, fq, dout, timestep);
@@ -329,7 +333,7 @@ void ScaLBL_MRTModel::Run(){
 			din = ScaLBL_Comm->D3Q19_Flux_BC_z(NeighborList, fq, flux, timestep);
 			ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, fq, dout, timestep);
 		}
-		if (bgkFlag) {
+		if (bgkFlag) { //stream and collide the exteriors, since scaLBL handled offrank streaming, neighbours to offrank cells are walled off
 		    ScaLBL_D3Q19_AAodd_BGK(NeighborList, fq, 0, ScaLBL_Comm->LastExterior(), Np, rlx_setA, Fx, Fy, Fz); //exteriors after BCs enforced
 		} else {
 		    ScaLBL_D3Q19_AAodd_MRT(NeighborList, fq, 0, ScaLBL_Comm->LastExterior(), Np, rlx_setA, rlx_setB, Fx, Fy, Fz); 
@@ -338,9 +342,9 @@ void ScaLBL_MRTModel::Run(){
 		
 		//EVEN TIMESTEP************************************************************
 		timestep++;
-		// even timesteps can be solved in a single pass
-		ScaLBL_Comm->SendD3Q19AA(fq); //READ FORM NORMAL
-		ScaLBL_Comm->RecvD3Q19AA(fq); //WRITE INTO OPPOSITE
+		// even timesteps are collision only, and can be solved in a single pass
+		ScaLBL_Comm->SendD3Q19AA(fq); //stream out exteriors
+		ScaLBL_Comm->RecvD3Q19AA(fq); //stream in in offrank exteriors
 		ScaLBL_DeviceBarrier();
 		// Set BCs
 		if (BoundaryCondition == 3){
@@ -368,27 +372,25 @@ void ScaLBL_MRTModel::Run(){
 	        ScaLBL_D3Q19_AAeven_ThermalBGK(Velocity, cq, 0, ScaLBL_Comm->LastInterior(), Np, omega); 
 		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 		}
-		if (FDThermalFlag) {
-			ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity
-			ScaLBL_Comm->SendHalo(cq); //read overlapping boundary info from neighbouring blocks
-		    ScaLBL_Comm->RecvHalo(cq); //write boundary info to neighbouring blocks
-		    ScaLBL_DeviceBarrier();
-		    // Set BCs
-		    ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, cq, 1.1, timestep);
-		    ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, cq, 1.0, timestep);
-	        ScaLBL_D3Q19_AAeven_ThermalBGK(Velocity, cq, 0, ScaLBL_Comm->LastInterior(), Np, omega); 
-		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
-		}
+//		if (FDThermalFlag) {
+//			ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity
+//		    ScaLBL_Comm->FDM_Concentration_BC_z(NeighborList, cq, 2.0);
+//			ScaLBL_Comm->SendHalo(cq); //read overlapping boundary info from neighbouring blocks
+//		    ScaLBL_Comm->RecvHalo(cq); //write boundary info to neighbouring blocks
+//		    ScaLBL_DeviceBarrier();
+//            //explicit FDM using ghost cells doesnt need BC updating
+//            ScaLBL_FDM_ConvectionDiffusion(NeighborList, Velocity, cq, 0, ScaLBL_Comm->LastInterior(), Np, DiffCoeff, 2.0);
+//		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
+//		}
 		//************************************************************************/
 		if (timestep%analysis_interval==0){
 			ScaLBL_D3Q19_Momentum(fq,Velocity,Np);
-
+			ScaLBL_D3Q19_Pressure(fq,Pressure,Np);
 		    
 			ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[0],Velocity_x);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],Velocity_y);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],Velocity_z);
-			
 			double count_loc=0;
 			double count;
 			double vax,vay,vaz;
@@ -421,7 +423,7 @@ void ScaLBL_MRTModel::Run(){
 				ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 			    ScaLBL_Comm->RegularLayout(Map,&Concentration[0],ConcentrationCart);
 
-                //some stupid bs is preventing me from functionalising this
+                //some stupid bs is preventing me from functionalising this, probably the bool init
 		        if (timestep%fqInterval==0) {
 	                char LocalRankFoldername[100];
 	                if (rank==0) {
@@ -500,13 +502,17 @@ void ScaLBL_MRTModel::Run(){
 			tol = convRate/100;
 			if (tol<permTolerance) {
 			    if (rank==0) printf("Convergence criteria reached, stopping early\n");
-			    if (visTolerance) fqField();
+			    if (visTolerance) {
+			        if (fqFlag) fqField();//
+			        else velPField();//
+			    }
 			    break;
 			}
 		}
 
 		if (timestep%fqInterval==0) {
-			fqField();
+	        if (fqFlag) fqField();//
+	        else velPField();//
 		}
 	}
 	//************************************************************************/
@@ -526,14 +532,6 @@ void ScaLBL_MRTModel::fqField(){
 	sprintf(LocalRankFilename,"rawVisFq%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
 	OUTFILE = fopen(LocalRankFilename,"w");
 	
-	// distributions
-	// initialise the fq tensor
-	// DoubleArray fqTensor(Nx, Ny, Nz, 19);
-    //td::fstream ofs(LocalRankFilename, std::ios::out | std::ios::binary );
-    // copy the fq data
-    //double *fqArray;
-	//ScaLBL_CopyToHost(&fqArray[0], &fq[0], sizeof(double)*Np*19);//copy fq to the array
-    int idx;
     for (int d=0; d<19; d++) {
 	    // copy to regular layout
         DoubleArray fqField(Nx, Ny, Nz);
@@ -541,14 +539,64 @@ void ScaLBL_MRTModel::fqField(){
 	    for (int k=0; k<Nz; k++){
 		    for (int j=0; j<Ny; j++){
 			    for (int i=0; i<Nx; i++){
-    				idx=Map(i,j,k);
-			        if (idx<0) fqField(i, j, k)=69420;
-                    //fqTensor(i,j,k,d)=fqField(i,j,k);
     			    fprintf(OUTFILE,"%f\n",fqField(i, j, k));
 			    }
 		    }
 	    }
 	}
+	fclose(OUTFILE);
+	MPI_Barrier(comm);
+}
+
+void ScaLBL_MRTModel::velPField(){
+    	//create the folder
+	char LocalRankFoldername[100];
+	if (rank==0) {
+		sprintf(LocalRankFoldername,"./rawVisVelP%d",timestep); 
+	    mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    }
+	MPI_Barrier(comm);
+	//create the file
+	FILE *OUTFILE;
+	char LocalRankFilename[100];
+	sprintf(LocalRankFilename,"rawVisVelP%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+	OUTFILE = fopen(LocalRankFilename,"w");
+    DoubleArray vx(Nx, Ny, Nz);
+    DoubleArray vy(Nx, Ny, Nz);
+    DoubleArray vz(Nx, Ny, Nz);
+    DoubleArray P(Nx, Ny, Nz);
+	ScaLBL_Comm->RegularLayout(Map,&Velocity[0],vx);
+	ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],vy);
+	ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],vz);
+    ScaLBL_Comm->RegularLayout(Map,&Pressure[0],P);
+    for (int k=0; k<Nz; k++){
+	    for (int j=0; j<Ny; j++){
+		    for (int i=0; i<Nx; i++){
+			    fprintf(OUTFILE,"%f\n",vx(i, j, k));
+		    }
+	    }
+    }
+    for (int k=0; k<Nz; k++){
+	    for (int j=0; j<Ny; j++){
+		    for (int i=0; i<Nx; i++){
+			    fprintf(OUTFILE,"%f\n",vy(i, j, k));
+		    }
+	    }
+    }
+    for (int k=0; k<Nz; k++){
+	    for (int j=0; j<Ny; j++){
+		    for (int i=0; i<Nx; i++){
+			    fprintf(OUTFILE,"%f\n",vz(i, j, k));
+		    }
+	    }
+    }
+    for (int k=0; k<Nz; k++){
+	    for (int j=0; j<Ny; j++){
+		    for (int i=0; i<Nx; i++){
+			    fprintf(OUTFILE,"%f\n",P(i, j, k));
+		    }
+	    }
+    }
 	fclose(OUTFILE);
 	MPI_Barrier(comm);
 }

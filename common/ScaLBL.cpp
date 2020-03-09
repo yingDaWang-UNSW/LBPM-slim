@@ -49,7 +49,7 @@ ScaLBL_Communicator::ScaLBL_Communicator(std::shared_ptr <Domain> Dm){
 	rank_YZ=Dm->rank_YZ();
 	rank_yZ=Dm->rank_yZ();
 	rank_Yz=Dm->rank_Yz();
-	sendCount_x=Dm->sendCount_x;
+	sendCount_x=Dm->sendCount_x; //from domain, get the ghost cell counts and indexes
 	sendCount_y=Dm->sendCount_y;
 	sendCount_z=Dm->sendCount_z;
 	sendCount_X=Dm->sendCount_X;
@@ -95,7 +95,7 @@ ScaLBL_Communicator::ScaLBL_Communicator(std::shared_ptr <Domain> Dm){
 	nprocs=nprocx*nprocy*nprocz;
 	BoundaryCondition = Dm->BoundaryCondition;
 	//......................................................................................
-
+    // allocate memory for variables to be stored alongside the ghost cell locations
 	ScaLBL_AllocateZeroCopy((void **) &sendbuf_x, 5*sendCount_x*sizeof(double));	// Allocate device memory
 	ScaLBL_AllocateZeroCopy((void **) &sendbuf_X, 5*sendCount_X*sizeof(double));	// Allocate device memory
 	ScaLBL_AllocateZeroCopy((void **) &sendbuf_y, 5*sendCount_y*sizeof(double));	// Allocate device memory
@@ -153,6 +153,7 @@ ScaLBL_Communicator::ScaLBL_Communicator(std::shared_ptr <Domain> Dm){
 	ScaLBL_AllocateZeroCopy((void **) &dvcSendList_Yz, sendCount_Yz*sizeof(int));	// Allocate device memory
 	ScaLBL_AllocateZeroCopy((void **) &dvcSendList_YZ, sendCount_YZ*sizeof(int));	// Allocate device memory
 	//......................................................................................
+
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvList_x, recvCount_x*sizeof(int));	// Allocate device memory
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvList_X, recvCount_X*sizeof(int));	// Allocate device memory
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvList_y, recvCount_y*sizeof(int));	// Allocate device memory
@@ -172,6 +173,7 @@ ScaLBL_Communicator::ScaLBL_Communicator(std::shared_ptr <Domain> Dm){
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvList_Yz, recvCount_Yz*sizeof(int));	// Allocate device memory
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvList_YZ, recvCount_YZ*sizeof(int));	// Allocate device memory
 	//......................................................................................
+	// the principal axis faces need 5 counts because there are 5 positive non-orthogonal vectors
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvDist_x, 5*recvCount_x*sizeof(int));	// Allocate device memory
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvDist_X, 5*recvCount_X*sizeof(int));	// Allocate device memory
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvDist_y, 5*recvCount_y*sizeof(int));	// Allocate device memory
@@ -191,7 +193,7 @@ ScaLBL_Communicator::ScaLBL_Communicator(std::shared_ptr <Domain> Dm){
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvDist_Yz, recvCount_Yz*sizeof(int));	// Allocate device memory
 	ScaLBL_AllocateZeroCopy((void **) &dvcRecvDist_YZ, recvCount_YZ*sizeof(int));	// Allocate device memory
 	//......................................................................................
-
+    // transfer the domain ghost cell indexes into scaLBL variables
 	ScaLBL_CopyToZeroCopy(dvcSendList_x,Dm->sendList_x,sendCount_x*sizeof(int));
 	ScaLBL_CopyToZeroCopy(dvcSendList_X,Dm->sendList_X,sendCount_X*sizeof(int));
 	ScaLBL_CopyToZeroCopy(dvcSendList_y,Dm->sendList_y,sendCount_y*sizeof(int));
@@ -211,6 +213,7 @@ ScaLBL_Communicator::ScaLBL_Communicator(std::shared_ptr <Domain> Dm){
 	ScaLBL_CopyToZeroCopy(dvcSendList_yZ,Dm->sendList_yZ,sendCount_yZ*sizeof(int));
 	ScaLBL_CopyToZeroCopy(dvcSendList_Yz,Dm->sendList_Yz,sendCount_Yz*sizeof(int));
 	//......................................................................................
+	// the recieve lists are useful for scalar fields
 	ScaLBL_CopyToZeroCopy(dvcRecvList_x,Dm->recvList_x,recvCount_x*sizeof(int));
 	ScaLBL_CopyToZeroCopy(dvcRecvList_X,Dm->recvList_X,recvCount_X*sizeof(int));
 	ScaLBL_CopyToZeroCopy(dvcRecvList_y,Dm->recvList_y,recvCount_y*sizeof(int));
@@ -234,7 +237,7 @@ ScaLBL_Communicator::ScaLBL_Communicator(std::shared_ptr <Domain> Dm){
 	MPI_Barrier(MPI_COMM_SCALBL);
 
 	//...................................................................................
-	// Set up the recieve distribution lists
+	// Set up the recieve distribution lists for vector fields
 	//...................................................................................
 	//...Map recieve list for the X face: q=2,8,10,12,14 .................................
 	D3Q19_MapRecv(-1,0,0,Dm->recvList_X,0,recvCount_X,dvcRecvDist_X);
@@ -384,7 +387,7 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 	if (Map.size(0) != Nx)
 		ERROR("ScaLBL_Communicator::MemoryOptimizedLayout: Map array dimensions do not match! \n");
 
-	// Initialize Map
+	// Initialize Map, including ghost cells
 	for (k=0;k<Nz;k++){
 		for (j=0;j<Ny;j++){
 			for (i=0;i<Nx;i++){
@@ -396,7 +399,8 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 	//printf("Exterior... \n");
 
 	// ********* Exterior **********
-	// Step 1/2: Index the outer walls of the grid, exclude the ghost cells
+	// Step 1/2: Index the outer walls of the grid, exclude the ghost cells.
+	// solid is -1, and pores are seqientially indexed
 	idx=0;	next=0;
 	for (k=1; k<Nz-1; k++){
 		for (j=1; j<Ny-1; j++){
@@ -423,7 +427,7 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 	
 	// ********* Interior **********
 	// align the next read
-	first_interior=(next/16 + 1)*16;
+	first_interior=(next/16 + 1)*16; //what the hell is this
 	idx = first_interior;
 	// Step 2/2: Next loop over the domain interior in block-cyclic fashion
 	for (k=2; k<Nz-2; k++){
@@ -1022,7 +1026,7 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 }
 
 void ScaLBL_Communicator::SendD3Q19AA(double *dist){
-    if (nprocs>1) {
+    if (nprocs>1) { // setting this will dsiable periodic boundary conditions if nproc=1. 
 	// NOTE: the center distribution f0 must NOT be at the start of feven, provide offset to start of f2
 	if (Lock==true){
 		ERROR("ScaLBL Error (SendD3Q19): ScaLBL_Communicator is locked -- did you forget to match Send/Recv calls?");
@@ -1788,3 +1792,11 @@ void ScaLBL_Communicator::PrintD3Q19(){
 	delete [] TempBuffer;
 }
 
+
+//void ScaLBL_Communicator::FDM_Concentration_BC_z(int *neighborList, double *cq, double cin) {
+//	if (kproc == 0) {
+//		// Set the concentration at the z inlet and also modify the ghost cells
+//		ScaLBL_FDM_Concentration_BC_z(dvcSendList_z, cq, cin, sendCount_z, N);
+//		//ScaLBL_SetSlice_z(Phi,Value,Nx,Ny,Nz,0);
+//	}
+//}

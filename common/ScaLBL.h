@@ -65,7 +65,7 @@ extern "C" void ScaLBL_D3Q19_Momentum(double *dist, double *vel, int Np);
 
 extern "C" void ScaLBL_D3Q19_Pressure(double *dist, double *press, int Np);
 
-extern "C" void ScaLBL_FDM_Init(double *dist, int Np);
+//extern "C" void ScaLBL_FDM_Init(double *dist, int Np);
 
 // BGK MODEL
 extern "C" void ScaLBL_D3Q19_AAeven_BGK(double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz);
@@ -84,7 +84,7 @@ extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocit
 
 
 // FDM MODEL
-extern "C" void ScaLBL_FDM_ConvectionDiffusion(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double dt); 
+//extern "C" void ScaLBL_FDM_ConvectionDiffusion(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double dt); 
 
 
 // MRT MODEL
@@ -158,6 +158,7 @@ extern "C" void ScaLBL_Color_BC_Z(int *list, int *Map, double *Phi, double *Den,
 
 extern "C" void ScaLBL_SetSlice_z(double *Phi, double value, int Nx, int Ny, int Nz, int Slice);
 
+//extern "C" void ScaLBL_FDM_Concentration_BC_z(int *list, double *cq, double cin, int count, int Np);
 class ScaLBL_Communicator{
 public:
 	//......................................................................................
@@ -218,7 +219,7 @@ public:
 	void D3Q19_Pressure_BC_z(int *neighborList, double *fq, double din, int time);
 	void D3Q19_Pressure_BC_Z(int *neighborList, double *fq, double dout, int time);
 	double D3Q19_Flux_BC_z(int *neighborList, double *fq, double flux, int time);
-
+    //void FDM_Concentration_BC_z(int *neighborList, double *cq, double cin);
 //	void TestSendD3Q19(double *f_even, double *f_odd);
 //	void TestRecvD3Q19(double *f_even, double *f_odd);
 

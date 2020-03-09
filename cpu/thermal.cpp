@@ -32,13 +32,6 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-extern "C" void ScaLBL_FDM_Init(double *dist, int Np)
-{
-	int n;
-	for (n=0; n<Np; n++){
-		dist[n] = 1.0;
-	}
-}
 
 extern "C" void ScaLBL_D3Q19_AAeven_ThermalBGK(double *Velocity, double *dist, int start, int finish, int Np, double rlx){
 	int n;
@@ -319,76 +312,91 @@ extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocit
 	}
 }
 
-extern "C" void ScaLBL_FDM_ConvectionDiffusion(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double dt) {
-    // dist holds C, and the neighbour list from 0-6 holds the FDM neighbour values
-    // the neighbour list is 18 Np long, for each index n, the 18 neighbour indices are saved 
-	// store the idx associated with each neighbor
-	// store idx for self if neighbor is in solid or out of domain
-	//D3Q19 = {{1,0,0},{-1,0,0}
-	//         {0,1,0},{0,-1,0}
-	//         {0,0,1},{0,0,-1},
-	//	       {1,1,0},{-1,-1,0},
-	//         {1,-1,0},{-1,1,0},
-	//         {1,0,1},{-1,0,-1},
-	//         {1,0,-1},{-1,0,1},
-	//	       {0,1,1},{0,-1,-1},
-	//         {0,1,-1},{0,-1,1}};
-    // in this version, D is rlx, which is isotropic
-	int n;
-    // cellwise repeated variables
-	double ux,uy,uz,gradC,divDgradC,cFace,divVelC;
-	double c0,c1,c2,c3,c4,c5,c6;
-	int nr1,nr2,nr3,nr4,nr5,nr6;
-	for (int n=start; n<finish; n++){
-		// q=0
-		c0 = dist[n]; // get the current concentration
+//extern "C" void ScaLBL_FDM_ConvectionDiffusion(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double dt) {
+//    // dist holds C, and the neighbour list from 0-6 holds the FDM neighbour values
+//    // the neighbour list is 18 Np long, for each index n, the 18 neighbour indices are saved 
+//	// store the idx associated with each neighbor
+//	// store idx for self if neighbor is in solid or out of domain
+//	//D3Q19 = {{1,0,0},{-1,0,0}
+//	//         {0,1,0},{0,-1,0}
+//	//         {0,0,1},{0,0,-1},
+//	//	       {1,1,0},{-1,-1,0},
+//	//         {1,-1,0},{-1,1,0},
+//	//         {1,0,1},{-1,0,-1},
+//	//         {1,0,-1},{-1,0,1},
+//	//	       {0,1,1},{0,-1,-1},
+//	//         {0,1,-1},{0,-1,1}};
+//    // in this version, D is rlx, which is isotropic
+//	int n;
+//    // cellwise repeated variables
+//	double ux,uy,uz,gradC,divDgradC,cFace,divVelC;
+//	double c0,c1,c2,c3,c4,c5,c6;
+//	int nr1,nr2,nr3,nr4,nr5,nr6;
+//	for (int n=start; n<finish; n++){
+//		// q=0
+//		c0 = dist[n]; // get the current concentration
 
-		nr1 = neighborList[n]; // get the 1st neightbour, x-1
-		nr1 = nr1%Np; // get the 0th index, since this is FD, we dont care about dist vectors
-		c1 = dist[nr1]; // read the neighbouring value
+//		nr1 = neighborList[n]; // get the 1st neightbour, x-1
+//		nr1 = nr1%Np; // get the 0th index, since this is FD, we dont care about dist vectors
+//		c1 = dist[nr1]; // read the neighbouring value
 
-		nr2 = neighborList[n+Np]; // neighbor x+1
-		nr2 = nr2%Np;
-		c2 = dist[nr2];  
+//		nr2 = neighborList[n+Np]; // neighbor x+1
+//		nr2 = nr2%Np;
+//		c2 = dist[nr2];  
 
-		// q=3
-		nr3 = neighborList[n+2*Np]; // neighbor y-1
-		nr3 = nr3%Np;
-		c3 = dist[nr3];
+//		// q=3
+//		nr3 = neighborList[n+2*Np]; // neighbor y-1
+//		nr3 = nr3%Np;
+//		c3 = dist[nr3];
 
-		// q = 4
-		nr4 = neighborList[n+3*Np]; // neighbor y+1
-		nr4 = nr4%Np;
-		c4 = dist[nr4];
+//		// q = 4
+//		nr4 = neighborList[n+3*Np]; // neighbor y+1
+//		nr4 = nr4%Np;
+//		c4 = dist[nr4];
 
-		// q=5
-		nr5 = neighborList[n+4*Np]; //z-1
-		nr5 = nr5%Np;
-		c5 = dist[nr5];
+//		// q=5
+//		nr5 = neighborList[n+4*Np]; //z-1
+//		nr5 = nr5%Np;
+//		c5 = dist[nr5];
 
-		// q = 6
-		nr6 = neighborList[n+5*Np]; //z+1
-		nr6 = nr6%Np;
-		c6 = dist[nr6];
-		
-		// calculate gradc
-		
-		// calculate divDgradC
-		
+//		// q = 6
+//		nr6 = neighborList[n+5*Np]; //z+1
+//		nr6 = nr6%Np;
+//		c6 = dist[nr6];
+//		
+//		// calculate gradc
+//		
+//		// calculate divDgradC
+//		
 
 
-        // get harmonic face velocities
-		ux = Velocity[n];
-		uy = Velocity[Np+n];
-		uz = Velocity[2*Np+n];
-        
-        // get upwinded cfaces
-        
-        // calculate divVelC
+//        // get harmonic face velocities
+//		ux = Velocity[n];
+//		uy = Velocity[Np+n];
+//		uz = Velocity[2*Np+n];
+//        
+//        // get upwinded cfaces
+//        
+//        // calculate divVelC
 
-        // solve FDE for this cell
-        
-		//........................................................................
-	}
+//        // solve FDE for this cell
+//        
+//		//........................................................................
+//	}
 
-}
+//}
+
+//extern "C" void ScaLBL_FDM_Init(double *dist, int Np)
+//{
+//	int n;
+//	for (n=0; n<Np; n++){
+//		dist[n] = 1.0;
+//	}
+//}
+
+//extern "C" void ScaLBL_FDM_Concentration_BC_z(int *list, double *cq, double cin, int count, int Np)
+//{
+
+//}
+
+

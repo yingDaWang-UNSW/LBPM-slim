@@ -124,7 +124,7 @@ public: // Public variables (need to create accessors instead)
 
     double Lx,Ly,Lz,Volume;
     int Nx,Ny,Nz,N;
-    RankInfoStruct rank_info;
+    RankInfoStruct rank_info; // call from communication cpp
 
     MPI_Comm Comm;        // MPI Communicator for this domain
 
@@ -186,7 +186,7 @@ public: // Public variables (need to create accessors instead)
     char *id;
 
     void ReadIDs();
-    void CommunicateMeshHalo(DoubleArray &Mesh);
+    //void CommunicateMeshHalo(DoubleArray &Mesh);
     void CommInit(); 
     int PoreCount();
 
@@ -251,10 +251,10 @@ private:
 
 };
 
-void WriteCheckpoint(const char *FILENAME, const double *cDen, const double *cfq, int Np);
+/*void WriteCheckpoint(const char *FILENAME, const double *cDen, const double *cfq, int Np);*/
 
-void ReadCheckpoint(char *FILENAME, double *cDen, double *cfq, int Np);
+/*void ReadCheckpoint(char *FILENAME, double *cDen, double *cfq, int Np);*/
 
-void ReadBinaryFile(char *FILENAME, double *Data, int N);
+/*void ReadBinaryFile(char *FILENAME, double *Data, int N);*/
 
 #endif

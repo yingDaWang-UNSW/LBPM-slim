@@ -43,10 +43,11 @@ public:
 	void Create();
 	void Initialize();
 	void Run();
-	void VelocityField();
+	//void VelocityField();
 //	void writeConcentration();
 	void fqField();
-
+    void velPField();
+    
 	bool Restart,pBC;
 	int timestep,timestepMax;
 	int BoundaryCondition;
@@ -76,7 +77,8 @@ public:
     double *Pressure;
     double *Concentration;
     //Minkowski Morphology;
-		
+	
+	DoubleArray PressureCart;
     DoubleArray Velocity_x;
     DoubleArray Velocity_y;
     DoubleArray Velocity_z;

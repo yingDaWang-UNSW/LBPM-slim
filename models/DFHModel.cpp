@@ -123,13 +123,13 @@ void ScaLBL_DFHModel::ReadInput(){
 	sprintf(LocalRankFilename,"%s%s","ID.",LocalRankString);
 	sprintf(LocalRestartFile,"%s%s","Restart.",LocalRankString);
 
-	// .......... READ THE INPUT FILE .......................................
-	//...........................................................................
-	if (rank == 0) cout << "Reading in signed distance function..." << endl;
-	//.......................................................................
-	sprintf(LocalRankString,"%05d",rank);
-	sprintf(LocalRankFilename,"%s%s","SignDist.",LocalRankString);
-	ReadBinaryFile(LocalRankFilename, Distance.data(), N);
+//	// .......... READ THE INPUT FILE .......................................
+//	//...........................................................................
+//	if (rank == 0) cout << "Reading in signed distance function..." << endl;
+//	//.......................................................................
+//	sprintf(LocalRankString,"%05d",rank);
+//	sprintf(LocalRankFilename,"%s%s","SignDist.",LocalRankString);
+//	ReadBinaryFile(LocalRankFilename, Distance.data(), N);
 	MPI_Barrier(comm);
 	if (rank == 0) cout << "Domain set." << endl;
 }
