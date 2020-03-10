@@ -443,7 +443,9 @@ void ScaLBL_MRTModel::Run(){
 				                idx=Map(i,j,k);
 		                        //if (idx<0) ConcentrationCart(i, j, k)=69420;
                                 //fqTensor(i,j,k,d)=fqField(i,j,k);
-			                    fprintf(OUTFILE,"%f\n",ConcentrationCart(i, j, k));
+			                    //fprintf(OUTFILE,"%f\n",ConcentrationCart(i, j, k));
+			                    double temp = ConcentrationCart(i,j,k);
+	                            fwrite(&temp,sizeof(double),1,OUTFILE);
 		                    }
 	                    }
                     }
@@ -539,7 +541,9 @@ void ScaLBL_MRTModel::fqField(){
 	    for (int k=0; k<Nz; k++){
 		    for (int j=0; j<Ny; j++){
 			    for (int i=0; i<Nx; i++){
-    			    fprintf(OUTFILE,"%f\n",fqField(i, j, k));
+    			    //fprintf(OUTFILE,"%f\n",fqField(i, j, k));
+			        double temp = fqField(i,j,k);
+	                fwrite(&temp,sizeof(double),1,OUTFILE);
 			    }
 		    }
 	    }
@@ -560,7 +564,7 @@ void ScaLBL_MRTModel::velPField(){
 	FILE *OUTFILE;
 	char LocalRankFilename[100];
 	sprintf(LocalRankFilename,"rawVisVelP%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-	OUTFILE = fopen(LocalRankFilename,"w");
+	OUTFILE = fopen(LocalRankFilename,"wb");
     DoubleArray vx(Nx, Ny, Nz);
     DoubleArray vy(Nx, Ny, Nz);
     DoubleArray vz(Nx, Ny, Nz);
@@ -569,31 +573,43 @@ void ScaLBL_MRTModel::velPField(){
 	ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],vy);
 	ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],vz);
     ScaLBL_Comm->RegularLayout(Map,&Pressure[0],P);
+//	fwrite(vx.data(),sizeof(double),N,OUTFILE);
+//	fwrite(vy.data(),sizeof(double),N,OUTFILE);
+//	fwrite(vz.data(),sizeof(double),N,OUTFILE);
+//	fwrite(P.data(),sizeof(double),N,OUTFILE);
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			    //fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			    double temp = vx(i,j,k);
+	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
 	    }
     }
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    fprintf(OUTFILE,"%f\n",vy(i, j, k));
+			    double temp = vy(i,j,k);
+			    //fprintf(OUTFILE,"%f\n",vy(i, j, k));
+	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
 	    }
     }
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    fprintf(OUTFILE,"%f\n",vz(i, j, k));
+			    double temp = vz(i,j,k);
+			    //fprintf(OUTFILE,"%f\n",vz(i, j, k));
+	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
 	    }
     }
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    fprintf(OUTFILE,"%f\n",P(i, j, k));
+			    double temp = P(i,j,k);
+			    //fprintf(OUTFILE,"%f\n",P(i, j, k));
+	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
 	    }
     }
