@@ -411,18 +411,18 @@ void ScaLBL_ColorModel::Initialize(){
 	ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, 0, ScaLBL_Comm->LastExterior(), Np);
 	ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
 
-	if (BoundaryCondition > 0 ){
-		if (Dm->kproc()==0){
-			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,0);
-			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,1);
-			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,2);
-		}
-		if (Dm->kproc() == nprocz-1){
-			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-1);
-			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-2);
-			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-3);
-		}
-	}
+//	if (BoundaryCondition > 0 ){
+//		if (Dm->kproc()==0){
+//			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,0);
+//			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,1);
+//			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,2);
+//		}
+//		if (Dm->kproc() == nprocz-1){
+//			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-1);
+//			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-2);
+//			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-3);
+//		}
+//	}
 
 }
 // the flux reversal should work both ways as a vector input
@@ -596,7 +596,7 @@ void ScaLBL_ColorModel::Run(){
 		ScaLBL_DeviceBarrier();
 		ScaLBL_D3Q7_AAodd_PhaseField(NeighborList, dvcMap, Aq, Bq, Den, Phi, 0, ScaLBL_Comm->LastExterior(), Np);
 
-		if (BoundaryCondition > 0){
+		if (inletA+inletB+outletA+outletB > 0){
 			ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
 			ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
 		}
@@ -633,7 +633,7 @@ void ScaLBL_ColorModel::Run(){
 		ScaLBL_D3Q7_AAeven_PhaseField(dvcMap, Aq, Bq, Den, Phi, 0, ScaLBL_Comm->LastExterior(), Np);
 
 		// Halo exchange for phase field boundary conditions
-		if (BoundaryCondition > 0){
+		if (inletA+inletB+outletA+outletB > 0){
 			ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
 			ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
 		}
@@ -733,7 +733,7 @@ void ScaLBL_ColorModel::Run(){
             double flow_rate_A = sqrt(vA_x*vA_x + vA_y*vA_y + vA_z*vA_z);
             double flow_rate_B = sqrt(vB_x*vB_x + vB_y*vB_y + vB_z*vB_z);
             double force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
-            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double(Nx*Ny*Nz*nprocs));
+            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(5.796*alpha*double(Nx*Ny*Nz*nprocs));
             //double Ca = fabs((1-current_saturation)*muA*flow_rate_A + current_saturation*muB*flow_rate_B)/(5.796*alpha);
 			double gradP=force_magnitude+(din-dout)/(Nz*nprocz)/3;
 			double absperm1 = muA*flow_rate_A*9.87e11*voxelSize*voxelSize/gradP;
@@ -825,18 +825,18 @@ void ScaLBL_ColorModel::Run(){
 	            // 7. Re-initialize phase field and density
 	            ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, 0, ScaLBL_Comm->LastExterior(), Np);
 	            ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
-	            if (BoundaryCondition > 0 ){
-		            if (Dm->kproc()==0){
-			            ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,0);
-			            ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,1);
-			            ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,2);
-		            }
-		            if (Dm->kproc() == nprocz-1){
-			            ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-1);
-			            ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-2);
-			            ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-3);
-		            }
-	            }
+//	            if (BoundaryCondition > 0 ){
+//		            if (Dm->kproc()==0){
+//			            ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,0);
+//			            ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,1);
+//			            ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,2);
+//		            }
+//		            if (Dm->kproc() == nprocz-1){
+//			            ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-1);
+//			            ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-2);
+//			            ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-3);
+//		            }
+//	            }
             }
             
             
@@ -870,8 +870,8 @@ void ScaLBL_ColorModel::Run(){
             }
 
             // adjust the force if capillary number is set
-            if (rank == 0) printf("Current Params: Sat = %f, flux = %f, Force = %e, Nca = %e, setPar = %e\n",current_saturation, flux, force_magnitude, Ca, settlingParam);
-			if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag){ // activate if capillary number is specified, and during morph, only after acceleration is done
+            if (rank == 0) printf("Current Params: Sat = %f, flux = %e, Force = %e, Nca = %e, setPar = %e\n",current_saturation, flux, force_magnitude, Ca, settlingParam);
+			if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag && timestep > ramp_timesteps){ // activate if capillary number is specified, and during morph, only after acceleration is done
 			    // at each analysis step, 
                 if (Ca>0.f){
                     Fx *= capillary_number / Ca;
@@ -891,8 +891,9 @@ void ScaLBL_ColorModel::Run(){
                         Fz *= 1e-6/force_magnitude;
                     }
                     
-                    flux *= capillary_number / Ca;
-                    if (rank == 0) printf("Adjusting force by factor %f, Nca = %e, Target: %e \n ",capillary_number / Ca, Ca, capillary_number);
+                    
+                    flux *= min(max(0.5, capillary_number / Ca), 2.0); //much more concise than if else bounding
+                    if (rank == 0) printf("Adjusting force by factor %f, Nca = %e, Target: %e \n ",min(max(0.5, capillary_number / Ca), 2.0), Ca, capillary_number);
                     //Averages->SetParams(rhoA,rhoB,tauA,tauB,Fx,Fy,Fz,alpha);
             	}
 			}
@@ -933,28 +934,28 @@ void ScaLBL_ColorModel::Run(){
 			}
             //AUTOMORPH routine
 			if (timestep > ramp_timesteps && autoMorphFlag){
-			    if (current_saturation*((injectionType-1)*2-1)<satInit*((injectionType-1)*2-1) && satInit > 0.0){
-			        // initially, use flux conditions to push the system along
-				    if (rank==0) printf("[AUTOMORPH]: Initial Flux injection to target %f (current: %f) \n", satInit, current_saturation);
-                    flux = 0.01*double((Nx-2)*(Ny-2)*(Nz-2)*nprocs)*poro/accelerationRate;
-                    BoundaryCondition = 4;
-			        if (injectionType==1){ //flux morph will temporarily activate flux boundary conditions
-                        inletA=1.0; //a is nwp
-                        inletB=0.0;
-                        outletA=0.0;
-                        outletB=1.0;
-	                } else if (injectionType==2){
-                        inletA=0.0; //a is nwp
-                        inletB=1.0;
-                        outletA=1.0;
-                        outletB=0.0;
-	                }
-	                stabilityCounter = -10*analysis_interval;
-	                accelerationCounter = -analysis_interval;
-			    } else {
-			        BoundaryCondition = 0;
-			        flux = 0;
-			    }
+//			    if (current_saturation*((injectionType-1)*2-1)<satInit*((injectionType-1)*2-1) && satInit > 0.0){
+//			        // initially, use flux conditions to push the system along
+//				    if (rank==0) printf("[AUTOMORPH]: Initial Flux injection to target %f (current: %f) \n", satInit, current_saturation);
+//                    flux = 0.01*double((Nx-2)*(Ny-2)*(Nz-2)*nprocs)*poro/accelerationRate;
+//                    BoundaryCondition = 4;
+//			        if (injectionType==1){ //flux morph will temporarily activate flux boundary conditions
+//                        inletA=1.0; //a is nwp
+//                        inletB=0.0;
+//                        outletA=0.0;
+//                        outletB=1.0;
+//	                } else if (injectionType==2){
+//                        inletA=0.0; //a is nwp
+//                        inletB=1.0;
+//                        outletA=1.0;
+//                        outletB=0.0;
+//	                }
+//	                stabilityCounter = -10*analysis_interval;
+//	                accelerationCounter = -analysis_interval;
+//			    } else {
+//			        BoundaryCondition = 0;
+//			        flux = 0;
+//			    }
                 // once rampup and init flux are done, run morph
 			    if (!autoMorphAdapt && stabilityCounter >= stabilisationRate){//if acceleration is currently off, (stabilisation is active)
 				    if (rank==0) printf("[AUTOMORPH]: Seeking Nca stabilisation. Ca = %e, (previous = %e), Saturation = %f \n",Ca,Ca_previous, current_saturation);
@@ -993,8 +994,8 @@ void ScaLBL_ColorModel::Run(){
 		                autoMorphAdapt = false;
     					if (rank==0) printf("********* Target reached, beginning stabilisation\n");
 				        stabilityCounter = max(-stabilisationRate,-10*analysis_interval); //give some time to readjust the capillary number
-                        BoundaryCondition = 0;
-                        flux = 0;
+//                        BoundaryCondition = 0;
+//                        flux = 0;
                         
 	                } else {
     					if (rank==0 && !fluxMorphFlag) printf("********* Automorph executing, beginning interim relaxation\n");
@@ -1151,18 +1152,18 @@ double ScaLBL_ColorModel::SpinoInit(const double delta_sw){
 	ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
 	
 	//compatibility with color boundary conditions, though we should be using the proper inlet outlet values here...
-	if (BoundaryCondition > 0){
-		if (Dm->kproc()==0){
-			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,0);
-			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,1);
-			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,2);
-		}
-		if (Dm->kproc() == nprocz-1){
-			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-1);
-			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-2);
-			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-3);
-		}
-	}
+//	if (BoundaryCondition > 0){
+//		if (Dm->kproc()==0){
+//			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,0);
+//			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,1);
+//			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,2);
+//		}
+//		if (Dm->kproc() == nprocz-1){
+//			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-1);
+//			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-2);
+//			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-3);
+//		}
+//	}
 	
 	return delta_volume;
 }
@@ -1258,8 +1259,8 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 	} else {// YDW modification: use a simpler and more aggresive method for drainage
 	    for (int k=0; k<Nz; k++){
 		    for (int j=0; j<Ny; j++){
-			    for (int i=0; i<Nx; i++){ // if the distance from the largest blob is within the morph delta,
-				    if (phase_distance(i,j,k) < morph_delta && phase_distance(i,j,k) > -morph_delta && Distance(i,j,k) > 0.f){
+			    for (int i=0; i<Nx; i++){ // if the distance from the largest blob is within the morph delta, and the wall distance is larger than 1
+				    if (phase_distance(i,j,k) < morph_delta && phase_distance(i,j,k) > -morph_delta && Distance(i,j,k) > 1.f){
 					    phase(i,j,k) = 1.0*fabs(morph_delta)/morph_delta ; // relax and flip the value	
 				    }
 													    
@@ -1290,18 +1291,18 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 	ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
 	
 	//compatibility with color boundary conditions, though we should be using the proper inlet outlet values here...
-	if (BoundaryCondition >0 ){
-		if (Dm->kproc()==0){
-			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,0);
-			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,1);
-			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,2);
-		}
-		if (Dm->kproc() == nprocz-1){
-			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-1);
-			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-2);
-			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-3);
-		}
-	}
+//	if (BoundaryCondition >0 ){
+//		if (Dm->kproc()==0){
+//			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,0);
+//			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,1);
+//			ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,2);
+//		}
+//		if (Dm->kproc() == nprocz-1){
+//			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-1);
+//			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-2);
+//			ScaLBL_SetSlice_z(Phi,-1.0,Nx,Ny,Nz,Nz-3);
+//		}
+//	}
 	
 	return delta_volume;
 }

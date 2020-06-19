@@ -19,7 +19,7 @@
 #include "models/MRTModel.h"
 
 double voxelSize = 0.0;
-int fqInterval = 1e10;
+int visInterval = 1e10;
 bool fqFlag = false;
 bool restartFq = false;
 bool bgkFlag = false;
@@ -31,6 +31,7 @@ bool visTolerance = true;
 double DiffCoeff = 0.1;
 //int toleranceInterval = 10000;
 int analysis_interval = 1000;
+double fluxAccelerationRatio = 10.0;
 ScaLBL_MRTModel::ScaLBL_MRTModel(int RANK, int NP, MPI_Comm COMM):
 rank(RANK), nprocs(NP), Restart(0),timestep(0),timestepMax(0),tau(0),
 Fx(0),Fy(0),Fz(0),flux(0),din(0),dout(0),mu(0),
@@ -54,7 +55,7 @@ void ScaLBL_MRTModel::ReadParams(string filename){
 	}
 	if (rank==0) {
         if (bgkFlag) printf("LBM Implementation is SRT\n");
-        else printf("LBM Implementation is MRT (TRT)\n");
+        else printf("LBM Implementation is MRT\n");
     }
 	if (mrt_db->keyExists( "thermalFlag" )){
 		thermalFlag = mrt_db->getScalar<bool>( "thermalFlag" );
@@ -79,8 +80,8 @@ void ScaLBL_MRTModel::ReadParams(string filename){
 	dout = mrt_db->getScalar<double>( "dout" );
 	flux = mrt_db->getScalar<double>( "flux" );
 
-	if (mrt_db->keyExists( "fqInterval" )){
-		fqInterval = mrt_db->getScalar<int>( "fqInterval" );
+	if (mrt_db->keyExists( "visInterval" )){
+		visInterval = mrt_db->getScalar<int>( "visInterval" );
 	}
 	if (mrt_db->keyExists( "fqFlag" )){
 		fqFlag = mrt_db->getScalar<bool>( "fqFlag" );
@@ -243,12 +244,13 @@ void ScaLBL_MRTModel::Initialize(){
         mrtDist = new double[19*Np];
         // scan the file in regular
         for (int d=0; d<19; d++) {
-            float locFq = 0.0;
+            double locFq = 0.0;
             int idx=0;
 	        for (int k=0; k<Nz; k++){
 		        for (int j=0; j<Ny; j++){
 			        for (int i=0; i<Nx; i++){
-                        fscanf(OUTFILE,"%f\n",&locFq); //scan the value
+                        //fscanf(OUTFILE,"%f\n",&locFq); //scan the value
+        	            fread(&locFq,sizeof(double),1,OUTFILE);
                         idx = Map(i,j,k);
                         if (idx >= 0) {
                             // if in Np, save the value into dist
@@ -298,7 +300,6 @@ void ScaLBL_MRTModel::Run(){
 	starttime = MPI_Wtime();
 	
 	if (rank==0) printf("No. of timesteps: %i , Boundary Condition: %i \n", timestepMax, BoundaryCondition);
-	
 	if (rank==0) printf("********************************************************\n");
 	timestep=0;
 	while (timestep < timestepMax) {
@@ -383,7 +384,7 @@ void ScaLBL_MRTModel::Run(){
 //		    ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 //		}
 		//************************************************************************/
-		if (timestep%analysis_interval==0){
+		if (timestep%analysis_interval==0 || timestep == 2){
 			ScaLBL_D3Q19_Momentum(fq,Velocity,Np);
 			ScaLBL_D3Q19_Pressure(fq,Pressure,Np);
 		    
@@ -424,7 +425,7 @@ void ScaLBL_MRTModel::Run(){
 			    ScaLBL_Comm->RegularLayout(Map,&Concentration[0],ConcentrationCart);
 
                 //some stupid bs is preventing me from functionalising this, probably the bool init
-		        if (timestep%fqInterval==0) {
+		        if (timestep%visInterval==0) {
 	                char LocalRankFoldername[100];
 	                if (rank==0) {
 		                sprintf(LocalRankFoldername,"./rawVisConcentration%d",timestep); 
@@ -495,7 +496,7 @@ void ScaLBL_MRTModel::Run(){
 			}
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {
-				printf("Timestep: %d, MLUPS: %f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt (%) = %0.4f, deltaP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/(Nz*nprocz));
+				printf("Timestep: %d, MLUPS: %f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt (%) = %0.4f, gradP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/((Nz-2)*nprocz));
 				FILE * log_file = fopen("Permeability.csv","a");
 				fprintf(log_file,"%i %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g\n",timestep, Fx, Fy, Fz, din, dout, mu, vax,vay,vaz, absperm);
 				fclose(log_file);
@@ -511,8 +512,14 @@ void ScaLBL_MRTModel::Run(){
 			    break;
 			}
 		}
-
-		if (timestep%fqInterval==0) {
+//		if (timestep==2 ||timestep==10 || timestep==100) { //temporary lines to dump early fields
+//			ScaLBL_D3Q19_Momentum(fq,Velocity,Np);
+//			ScaLBL_D3Q19_Pressure(fq,Pressure,Np);	    
+//			ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
+//	        if (fqFlag) fqField();//
+//	        else velPField();//
+//		}
+		if (timestep%visInterval==0) {
 	        if (fqFlag) fqField();//
 	        else velPField();//
 		}
@@ -533,7 +540,7 @@ void ScaLBL_MRTModel::fqField(){
 	char LocalRankFilename[100];
 	sprintf(LocalRankFilename,"rawVisFq%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
 	OUTFILE = fopen(LocalRankFilename,"w");
-	
+    double temp = 0.0;	
     for (int d=0; d<19; d++) {
 	    // copy to regular layout
         DoubleArray fqField(Nx, Ny, Nz);
@@ -542,7 +549,7 @@ void ScaLBL_MRTModel::fqField(){
 		    for (int j=0; j<Ny; j++){
 			    for (int i=0; i<Nx; i++){
     			    //fprintf(OUTFILE,"%f\n",fqField(i, j, k));
-			        double temp = fqField(i,j,k);
+			        temp = fqField(i,j,k);
 	                fwrite(&temp,sizeof(double),1,OUTFILE);
 			    }
 		    }
@@ -577,11 +584,12 @@ void ScaLBL_MRTModel::velPField(){
 //	fwrite(vy.data(),sizeof(double),N,OUTFILE);
 //	fwrite(vz.data(),sizeof(double),N,OUTFILE);
 //	fwrite(P.data(),sizeof(double),N,OUTFILE);
+    double temp = 0.0;
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
 			    //fprintf(OUTFILE,"%f\n",vx(i, j, k));
-			    double temp = vx(i,j,k);
+			    temp = vx(i,j,k);
 	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
 	    }
@@ -589,7 +597,7 @@ void ScaLBL_MRTModel::velPField(){
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    double temp = vy(i,j,k);
+			    temp = vy(i,j,k);
 			    //fprintf(OUTFILE,"%f\n",vy(i, j, k));
 	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
@@ -598,7 +606,7 @@ void ScaLBL_MRTModel::velPField(){
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    double temp = vz(i,j,k);
+			    temp = vz(i,j,k);
 			    //fprintf(OUTFILE,"%f\n",vz(i, j, k));
 	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
@@ -607,7 +615,7 @@ void ScaLBL_MRTModel::velPField(){
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    double temp = P(i,j,k);
+			    temp = P(i,j,k);
 			    //fprintf(OUTFILE,"%f\n",P(i, j, k));
 	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
