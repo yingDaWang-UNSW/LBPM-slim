@@ -9,6 +9,9 @@ def runLBPMTwoPhase(domain, targetdir, npx, npy, npz,
                     inputIDs, readIDs, solidIDs, contactAngles,
                     restart, visInterval, analysisInterval, permTolerance, terminal, HPCFlag):
     
+    LBPM_CPU_Install = "/mnt/c/Users/THOMAS/Documents/Projects/Uni/LBPM-CPU"
+    LBPM_GPU_Install = "/mnt/c/Users/THOMAS/Documents/Projects/Uni/LBPM-GPU"
+    
     if(not os.path.exists(targetdir)):
         os.mkdir(targetdir)
     os.chdir(targetdir)
@@ -146,14 +149,14 @@ def runLBPMTwoPhase(domain, targetdir, npx, npy, npz,
     else:
         if gpuIDs:
             runfile=('#!/bin/bash', '\n',
-                     'export LBPM_DIR="/home/user/LBPMYDW/lbpmSlimBuild"', '\n',
+                     'export LBPM_DIR="',LBPM_CPU_Install,'"', '\n',
                      'export NUMPROCS=',str(npx*npy*npz), '\n',
                      'mpirun -np 1 $LBPM_DIR/bin/lbpm_serial_decomp inputFile.db', '\n',
                      'mpirun -np $NUMPROCS $LBPM_DIR/bin/',model,' inputFile.db', '\n'
                      )
         else:
             runfile=('#!/bin/bash', '\n',
-                     'export LBPM_DIR="/home/user/LBPMYDW/lbpmSlimGPUBuild"', '\n',
+                     'export LBPM_DIR="',LBPM_GPU_Install,'"', '\n',
                      'export NUMPROCS=',str(npx*npy*npz), '\n',
                      'mpirun -np 1 $LBPM_DIR/bin/lbpm_serial_decomp inputFile.db', '\n',
                      'CUDA_VISIBLE_DEVICES=', gpuIDs,' mpirun -np $NUMPROCS $LBPM_DIR/bin/',model,' inputFile.db', '\n'
