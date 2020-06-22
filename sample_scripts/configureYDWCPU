@@ -5,8 +5,8 @@ module purge
 module load cmake/3.12.2
 module load gcc/6.2.0 cuda/10.0 openmpi/3.1.3 # hdf5/1.10.2 silo/4.10.2
 
-export LBPM_SOURCE="/home/user/LBPMYDW/LBPM-slim/"
-export LBPM_DIR="/home/user/LBPMYDW/lbpmSlimBuild"
+export LBPM_SOURCE="/mnt/c/Users/THOMAS/Documents/Projects/Uni/LBPM-slim"
+export LBPM_DIR="/mnt/c/Users/THOMAS/Documents/Projects/Uni/LBPM-CPU"
 
 cd $LBPM_DIR
 # configure
