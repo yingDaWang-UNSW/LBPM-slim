@@ -5,11 +5,11 @@ from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QIntValidator
 
 class IntLineEdit(QLineEdit):
-    def __init__(self, maxLength=2):
+    def __init__(self, maxLength=3):
         QLineEdit.__init__(self)
         self.setValidator(QIntValidator())
         self.setMaxLength(maxLength)
-        self.setFixedWidth(20)
+        self.setFixedWidth(40)
 
 class LBPMWindow(QMainWindow):
     def __init__(self):

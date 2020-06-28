@@ -15,7 +15,7 @@ def runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize,
     thermalFlag = 'false';
     visTolerance='true';
     fqFlag = 'false';
-    DiffCoeff=1e-1;
+    DiffCoeff=1;
     if(not os.path.exists(targetdir)):
         os.mkdir(targetdir)
     os.chdir(targetdir)

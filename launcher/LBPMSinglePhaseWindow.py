@@ -1,6 +1,7 @@
 import scipy.io
 import numpy as np
 import os
+import os.path as Path
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout
@@ -17,6 +18,7 @@ class SinglePhaseWindow(LBPMWindow):
         LBPMWindow.__init__(self)
         self.backWindow = backWindow
         
+
          
     def openWindow(self):
         centralWidget = QWidget(self)          
@@ -29,111 +31,109 @@ class SinglePhaseWindow(LBPMWindow):
         mainLayout.addLayout(form)
         
         domfs = QHBoxLayout()
-        fsfn = QLineEdit()
-        fsfn.setReadOnly(True)
+        self.fsfn = QLineEdit()
+        self.fsfn.setReadOnly(True)
         fsbtn = QPushButton("Select File")
-        domfs.addWidget(fsfn)
+        def onfsbtnpush():
+            path = os.path.dirname(self.fsfn.text())
+            if not path:
+                path = "~"
+
+            dialog = QtWidgets.QFileDialog(self)
+            dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
+            dialog.setDirectory(path)
+            dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile)
+            if dialog.exec_() == QtWidgets.QFileDialog.Accepted:
+                self.fsfn.setText(dialog.selectedFiles()[0])
+        
+        fsbtn.clicked.connect(onfsbtnpush)
+        domfs.addWidget(self.fsfn)
         domfs.addWidget(fsbtn)
         form.addRow("Domain File", domfs)
         
-        viif = IntLineEdit(10)
-        form.addRow("visInterval", viif)
+        self.viif = IntLineEdit(10)
+        self.viif.setText('100000')
+        self.viif.setFixedWidth(100)
+        form.addRow("Visualisation Interval", self.viif)
+                
+        self.aniif = IntLineEdit(10)
+        self.aniif.setText('1000')
+        self.aniif.setFixedWidth(100)
+        form.addRow("Analysis Interval", self.aniif)
         
-        rfqcbx = QCheckBox()
-        form.addRow("RestartFq", rfqcbx)
+        self.ptif = QLineEdit()
+        self.ptif.setValidator(QDoubleValidator())
+        self.ptif.setFixedWidth(100)
+        self.ptif.setText(str(1e-5))
+        form.addRow("Perm Tolerance", self.ptif)
         
-        aniif = IntLineEdit(10)
-        form.addRow("Analysis Interval", aniif)
+        self.tsif = IntLineEdit(10)
+        self.tsif.setFixedWidth(100)
+        self.tsif.setText('1000000')
+        form.addRow("Timesteps", self.tsif)
         
-        ptif = QLineEdit()
-        ptif.setValidator(QDoubleValidator())
-        ptif.setFixedWidth(120)
-        form.addRow("Perm Tolerance", ptif)
-        
-        tsif = IntLineEdit(10)
-        tsif.setFixedWidth(120)
-        form.addRow("Timesteps", tsif)
-        
-        form.addRow("Num Processors", None)
-        npxif = IntLineEdit()
-        npyif = IntLineEdit()
-        npzif = IntLineEdit()
-        form.addRow("x:", npxif)
-        form.addRow("y:", npyif)
-        form.addRow("z:", npzif)
-        form.addRow(None, None)
+        self.npif = IntLineEdit()
+        form.addRow("Number of Processors", self.npif)
         
         outfs = QHBoxLayout()
-        ofsfn = QLineEdit()
-        ofsfn.setReadOnly(True)
+        self.ofsfn = QLineEdit()
+        self.ofsfn.setReadOnly(True)
         ofsbtn = QPushButton("Select Folder")
-        outfs.addWidget(ofsfn)
+        def onofsbtnpush():
+            path = os.path.dirname(self.ofsfn.text())
+            if not path:
+                path = "~"
+            dialog = QtWidgets.QFileDialog(self)
+            dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
+            dialog.setDirectory(path)
+            dialog.setFileMode(QtWidgets.QFileDialog.Directory)
+            dialog.setOption(QtWidgets.QFileDialog.ShowDirsOnly, True)
+            if dialog.exec_() == QtWidgets.QFileDialog.Accepted:
+                self.ofsfn.setText(dialog.selectedFiles()[0])
+        
+        ofsbtn.clicked.connect(onofsbtnpush)
+        outfs.addWidget(self.ofsfn)
         outfs.addWidget(ofsbtn)
         form.addRow("Output Location", outfs)
         
-        vxsif = IntLineEdit()
-        form.addRow("Voxel Size", vxsif)
+        self.vxsif = QLineEdit()
+        self.vxsif.setValidator(QDoubleValidator())
+        self.vxsif.setFixedWidth(100)
+        form.addRow("Voxel Size (microns)", self.vxsif)
         
-        muif = QLineEdit()
-        muif.setValidator(QDoubleValidator())
-        muif.setFixedWidth(120)
-        form.addRow("Mu", muif)
+        self.muif = QLineEdit()
+        self.muif.setValidator(QDoubleValidator())
+        self.muif.setFixedWidth(100)
+        form.addRow("Viscosity", self.muif)
         
-        fxif = IntLineEdit()
-        fyif = IntLineEdit()
-        fzif = IntLineEdit()
-        form.addRow("Fx", fxif)
-        form.addRow("Fy", fyif)
-        form.addRow("Fz", fzif)
+        form.addRow("Periodic Pressure Gradient", None)
+        self.fxif = IntLineEdit()
+        self.fyif = IntLineEdit()
+        self.fzif = IntLineEdit()
+        form.addRow("x:", self.fxif)
+        form.addRow("y:", self.fyif)
+        form.addRow("z:", self.fzif)
        
-        fluxif = IntLineEdit(10)
-        fluxif.setFixedWidth(120)
-        form.addRow("Flux", fluxif)
+        self.fluxif = IntLineEdit(10)
+        self.fluxif.setFixedWidth(100)
+        form.addRow("Injection Rate (voxels/timestamp)", self.fluxif)
         
-        pinif = QLineEdit()
-        pinif.setValidator(QDoubleValidator())
-        pinif.setFixedWidth(120)
-        poutif = QLineEdit()
-        poutif.setValidator(QDoubleValidator())
-        poutif.setFixedWidth(120)
-        form.addRow("Pin", pinif)
-        form.addRow("Pout", poutif)
-        
-        rform = QFormLayout()
-        mainLayout.addLayout(rform)
-        
-        bgkcbx = QCheckBox()
-        rform.addRow("BGK Flag", bgkcbx)
-        thermalcbx = QCheckBox()
-        rform.addRow("Thermal", thermalcbx)
-        vstcbx = QCheckBox()
-        rform.addRow("Vis Tolerance", vstcbx)
-        dfcif = QLineEdit()
-        dfcif.setValidator(QDoubleValidator())
-        dfcif.setFixedWidth(120)
-        rform.addRow("Diff Coefficient", dfcif)
-        
-        Lif = QLineEdit()
-        rform.addRow("L", Lif)
-        
-        rtif = QLineEdit()
-        rform.addRow("ReadType", rtif)
-        
-        rvif = QLineEdit()
-        rform.addRow("ReadValues", rvif)
-        
-        wvif = QLineEdit()
-        rform.addRow("WriteValues", wvif)
-        
-        rstcbx = QCheckBox()
-        rform.addRow("Restart", rstcbx)
-        
+        self.pinif = QLineEdit()
+        self.pinif.setValidator(QDoubleValidator())
+        self.pinif.setFixedWidth(100)
+        self.poutif = QLineEdit()
+        self.poutif.setValidator(QDoubleValidator())
+        self.poutif.setFixedWidth(100)
+        form.addRow("Inlet Pressure", self.pinif)
+        form.addRow("Outlet Pressure", self.poutif)
+          
         btnlayout = QHBoxLayout()
         runbtn = QPushButton("Run Solver")
         def on_run_clicked():
             self.hide()
             self.backWindow.hide()
-            SinglePhase()
+            self.saveValues()
+            SinglePhase(self)
             QtWidgets.QApplication.quit()
             
         runbtn.clicked.connect(on_run_clicked)
@@ -147,46 +147,73 @@ class SinglePhaseWindow(LBPMWindow):
         btnlayout.addWidget(backbtn)
         fullLayout.addLayout(btnlayout)
         
-def SinglePhase():
-    mat = scipy.io.loadmat("bentheimer.mat")
-    
-    image = mat['bentheimer'][:200,:200,:200]
+
+    def saveValues(self):
+        self.domainPath = self.fsfn.text()
+        self.visInterval = int(self.viif.text())
+        self.analysisInterval = int(self.aniif.text())
+        self.permTolerance = float(self.ptif.text())
+        self.timesteps = int(self.tsif.text())
+        numproc = int(self.npif.text())
+        self.npx = 1
+        self.npy = 1
+        self.npz = numproc
+        self.outpath = self.ofsfn.text()
+        self.voxelSize = float(self.vxsif.text())
+        self.mu = float(self.muif.text())
+        self.fx = int(self.fxif.text())
+        self.fy = int(self.fyif.text())
+        self.fz = int(self.fzif.text())
+        self.flux = int(self.fluxif.text())
+        self.pin = float(self.pinif.text())
+        self.pout = float(self.poutif.text())
+        
+        
+def SinglePhase(window):
+    mat = scipy.io.loadmat(window.domainPath)
+    keyname = ''
+    for key in list(mat.keys()):
+        if(not key.startswith('__') and not key.endswith('__')):
+            keyname = key
+            break
+        
+    image = mat[keyname]#[:200,:200,:200]
     image = np.array(image).astype(bool)
     
     domain = rd.removeDisconnections(image)
     
     #simulation parameters
-    visInterval=1e4; 
+    visInterval=window.visInterval 
     restartFq=False;
-    analysisInterval = 1e3;
-    permTolerance = 1e-5;
-    terminal = False;
-    timesteps = 1e6;
+    analysisInterval = window.analysisInterval;
+    permTolerance = window.permTolerance;
+    terminal = True;
+    timesteps = window.timesteps;
     gpuIDs=[];
-    npx=3;
-    npy=2;
-    npz=4;
+    npx=window.npx;
+    npy=window.npy;
+    npz=window.npz;
     
-    targetdir = '/mnt/c/Users/THOMAS/Documents/Projects/Uni/lbpm-test'
+    targetdir = window.outpath
     if(not os.path.exists(targetdir)):
         os.mkdir(targetdir)
     os.chdir(targetdir)
     
     #physical parameters
-    voxelSize=1e-6;
+    voxelSize=window.voxelSize;
     domain[0,:,:] = True
     domain[-1,:,:] = True
     domain[:,0,:] = True
     domain[:,-1,:] = True
     
     
-    mu=1/15; 
-    Fx = 0;
-    Fy = 0;
-    Fz = 0;
-    flux = 100;
-    Pin = 0;
-    Pout = 1/3;
+    mu=window.mu; 
+    Fx = window.fx;
+    Fy = window.fy;
+    Fz = window.fz;
+    flux = window.flux;
+    Pin = window.pin;
+    Pout = window.pout;
     
     rls.runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize, timesteps, gpuIDs, Fx, Fy, Fz, flux, Pin, Pout, mu, restartFq, visInterval, analysisInterval, permTolerance, terminal)
  

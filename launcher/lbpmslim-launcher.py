@@ -14,7 +14,6 @@ class MainWindow(LBPMWindow):
     def __init__(self):
         LBPMWindow.__init__(self)
  
-       
         centralWidget = QWidget(self)          
         self.setCentralWidget(centralWidget)   
  

@@ -7,7 +7,7 @@ def runLBPMTwoPhase(domain, targetdir, npx, npy, npz,
                     voxelSize, timesteps, gpuIDs, simType,
                     Fx, Fy, Fz, flux, Pin, Pout, muA, muB, rhoA, rhoB, alpha, beta,
                     inputIDs, readIDs, solidIDs, contactAngles,
-                    restart, visInterval, analysisInterval, permTolerance, terminal, HPCFlag):
+                    restart, visInterval, analysisInterval, permTolerance, terminal, HPCFlag, setCapillaryNumber):
     
     LBPM_CPU_Install = "/mnt/c/Users/THOMAS/Documents/Projects/Uni/LBPM-CPU"
     LBPM_GPU_Install = "/mnt/c/Users/THOMAS/Documents/Projects/Uni/LBPM-GPU"
@@ -17,7 +17,6 @@ def runLBPMTwoPhase(domain, targetdir, npx, npy, npz,
     os.chdir(targetdir)
     
     fileName= 'geopack';
-    setCapillaryNumber = False;
     if not setCapillaryNumber:
         tag='//';
     else:
