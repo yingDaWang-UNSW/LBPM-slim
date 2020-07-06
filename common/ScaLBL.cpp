@@ -29,7 +29,6 @@ ScaLBL_Communicator::ScaLBL_Communicator(std::shared_ptr <Domain> Dm){
 	Ny = Dm->Ny;
 	Nz = Dm->Nz;
 	N = Nx*Ny*Nz;
-	next=0;
 	rank=Dm->rank();
 	rank_x=Dm->rank_x();
 	rank_y=Dm->rank_y();
@@ -331,7 +330,7 @@ ScaLBL_Communicator::~ScaLBL_Communicator(){
 	// -- note that there needs to be a way to free memory allocated on the device!!!
 }
 int ScaLBL_Communicator::LastExterior(){
-	return next;
+	return last_exterior;
 }
 int ScaLBL_Communicator::FirstInterior(){
 	return first_interior;
@@ -401,7 +400,7 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 	// ********* Exterior **********
 	// Step 1/2: Index the outer walls of the grid, exclude the ghost cells.
 	// solid is -1, and pores are seqientially indexed
-	idx=0;	next=0;
+	idx=0;
 	for (k=1; k<Nz-1; k++){
 		for (j=1; j<Ny-1; j++){
 			for (i=1; i<Nx-1; i++){
@@ -421,13 +420,13 @@ int ScaLBL_Communicator::MemoryOptimizedLayoutAA(IntArray &Map, int *neighborLis
 			}
 		}
 	}
-	next=idx;
+	last_exterior=idx;
 	
 	//printf("Interior... \n");
 	
 	// ********* Interior **********
 	// align the next read
-	first_interior=(next/16 + 1)*16; //what the hell is this
+	first_interior=(last_exterior/16 + 1)*16; //arbitrary reindexing
 	idx = first_interior;
 	// Step 2/2: Next loop over the domain interior in block-cyclic fashion
 	for (k=2; k<Nz-2; k++){

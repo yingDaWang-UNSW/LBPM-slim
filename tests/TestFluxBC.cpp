@@ -201,7 +201,7 @@ int main (int argc, char **argv)
 			ScaLBL_Comm->RecvD3Q19AA(fq); //WRITE INTO OPPOSITE
 			din = ScaLBL_Comm->D3Q19_Flux_BC_z(NeighborList, fq, flux, timestep);
 			ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, fq, dout, timestep);
-			ScaLBL_D3Q19_AAodd_MRT(NeighborList, fq, 0, ScaLBL_Comm->next, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
+			ScaLBL_D3Q19_AAodd_MRT(NeighborList, fq, 0, ScaLBL_Comm->last_exterior, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
 			ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 			timestep++;
 
@@ -210,7 +210,7 @@ int main (int argc, char **argv)
 			ScaLBL_Comm->RecvD3Q19AA(fq); //WRITE INTO OPPOSITE
 			din = ScaLBL_Comm->D3Q19_Flux_BC_z(NeighborList, fq, flux, timestep);
 			ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, fq, dout, timestep);
-			ScaLBL_D3Q19_AAeven_MRT(fq, 0, ScaLBL_Comm->next, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
+			ScaLBL_D3Q19_AAeven_MRT(fq, 0, ScaLBL_Comm->last_exterior, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
 			ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 			timestep++;
 			//************************************************************************/

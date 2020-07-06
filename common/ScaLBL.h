@@ -171,7 +171,7 @@ public:
 	int Nx,Ny,Nz,N;
 	int BoundaryCondition;
 	
-	int next;
+	int last_exterior;
 	int first_interior,last_interior;
 	//......................................................................................
 	//  Set up for D319 distributions
@@ -227,7 +227,7 @@ public:
 	void PrintD3Q19();
 
 private:
-	//void D3Q19_MapRecv_OLD(int q, int Cqx, int Cqy, int Cqz, int *list,  int start, int count, int *d3q19_recvlist);
+
 	void D3Q19_MapRecv(int Cqx, int Cqy, int Cqz, int *list,  int start, int count, int *d3q19_recvlist);
 
 	bool Lock; 	// use Lock to make sure only one call at a time to protect data in transit

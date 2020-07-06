@@ -733,7 +733,7 @@ void ScaLBL_ColorModel::Run(){
             double flow_rate_A = sqrt(vA_x*vA_x + vA_y*vA_y + vA_z*vA_z);
             double flow_rate_B = sqrt(vB_x*vB_x + vB_y*vB_y + vB_z*vB_z);
             double force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
-            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(5.796*alpha*double(Nx*Ny*Nz*nprocs));
+            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double(Nx*Ny*Nz*nprocs));
             //double Ca = fabs((1-current_saturation)*muA*flow_rate_A + current_saturation*muB*flow_rate_B)/(5.796*alpha);
 			double gradP=force_magnitude+(din-dout)/(Nz*nprocz)/3;
 			double absperm1 = muA*flow_rate_A*9.87e11*voxelSize*voxelSize/gradP;
@@ -1333,7 +1333,7 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 	//ScaLBL_Comm->RegularLayout(Map,Phi,PhaseField);
 	ScaLBL_CopyToHost(PhaseField.data(), Phi, sizeof(double)*N);
 	//create the file
-	
+    double temp = 0.0;
 	FILE *OUTFILE;
 	char LocalRankFilename[100];
 	sprintf(LocalRankFilename,"rawVis%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
@@ -1342,56 +1342,60 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
-				//printf("%f\n",PhaseField(i, j, k));
-				//float value = PhaseField(i, j, k);
-			    //ofs.write( (const char*) &value, sizeof(value) );
-			    fprintf(OUTFILE,"%f\n",PhaseField(i, j, k));
+			    //fprintf(OUTFILE,"%f\n",PhaseField(i, j, k));
+			    temp = PhaseField(i,j,k);
+	            fwrite(&temp,sizeof(double),1,OUTFILE);
 			}
 		}
 	}
-
+	fclose(OUTFILE);
 	FILE *OUTFILEX;
 	char LocalRankFilenameX[100];
-	sprintf(LocalRankFilenameX,"rawVis%d/Velx_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+	sprintf(LocalRankFilenameX,"rawVis%d/Vel_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
 	OUTFILEX = fopen(LocalRankFilenameX,"w");
-
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
-			    fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
+			    //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
+			    temp = Velocity_x(i,j,k);
+	            fwrite(&temp,sizeof(double),1,OUTFILEX);
 			}
 		}
 	}
 	
-	FILE *OUTFILEY;
-	char LocalRankFilenameY[100];
-	sprintf(LocalRankFilenameY,"rawVis%d/Vely_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-	OUTFILEY = fopen(LocalRankFilenameY,"w");
+//	FILE *OUTFILEY;
+//	char LocalRankFilenameY[100];
+//	sprintf(LocalRankFilenameY,"rawVis%d/Vely_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+//	OUTFILEY = fopen(LocalRankFilenameY,"w");
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
-			    fprintf(OUTFILEY,"%f\n",Velocity_y(i, j, k));
+			    //fprintf(OUTFILEY,"%f\n",Velocity_y(i, j, k));
+			    temp = Velocity_y(i,j,k);
+	            fwrite(&temp,sizeof(double),1,OUTFILE);
 			}
 		}
 	}
 	
-	FILE *OUTFILEZ;
-	char LocalRankFilenameZ[100];
-	sprintf(LocalRankFilenameZ,"rawVis%d/Velz_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-	OUTFILEZ = fopen(LocalRankFilenameZ,"w");
+//	FILE *OUTFILEZ;
+//	char LocalRankFilenameZ[100];
+//	sprintf(LocalRankFilenameZ,"rawVis%d/Velz_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+//	OUTFILEZ = fopen(LocalRankFilenameZ,"w");
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
-			    fprintf(OUTFILEZ,"%f\n",Velocity_z(i, j, k));
+			    //fprintf(OUTFILEZ,"%f\n",Velocity_z(i, j, k));
+			    temp = Velocity_z(i,j,k);
+	            fwrite(&temp,sizeof(double),1,OUTFILE);
 			}
 		}
 	}
 
 //	fwrite(PhaseField.data(),8,N,OUTFILE);
-	fclose(OUTFILE);
+//	fclose(OUTFILE);
 	fclose(OUTFILEX);
-	fclose(OUTFILEY);
-	fclose(OUTFILEZ);
+//	fclose(OUTFILEY);
+//	fclose(OUTFILEZ);
 	MPI_Barrier(comm);
     //ofs.close();
 }

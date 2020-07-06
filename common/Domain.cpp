@@ -31,61 +31,16 @@
 #include "common/Communication.h"
 
 // Inline function to read line without a return argument
-static inline void fgetl( char * str, int num, FILE * stream )
-{
-    char* ptr = fgets( str, num, stream );
-    if ( 0 ) {char *temp = (char *)&ptr; temp++;}
-}
+//static inline void fgetl( char * str, int num, FILE * stream )
+//{
+//    char* ptr = fgets( str, num, stream );
+//    if ( 0 ) {char *temp = (char *)&ptr; temp++;}
+//}
 
 /********************************************************
  * Constructors/Destructor                               *
  ********************************************************/
-Domain::Domain( int nx, int ny, int nz, int rnk, int npx, int npy, int npz, 
-               double lx, double ly, double lz, int BC):
-	Nx(0), Ny(0), Nz(0), 
-	Lx(0), Ly(0), Lz(0), Volume(0), BoundaryCondition(0),
-	Comm(MPI_COMM_WORLD),
-	sendCount_x(0), sendCount_y(0), sendCount_z(0), sendCount_X(0), sendCount_Y(0), sendCount_Z(0),
-	sendCount_xy(0), sendCount_yz(0), sendCount_xz(0), sendCount_Xy(0), sendCount_Yz(0), sendCount_xZ(0),
-	sendCount_xY(0), sendCount_yZ(0), sendCount_Xz(0), sendCount_XY(0), sendCount_YZ(0), sendCount_XZ(0),
-	sendList_x(NULL), sendList_y(NULL), sendList_z(NULL), sendList_X(NULL), sendList_Y(NULL), sendList_Z(NULL),
-	sendList_xy(NULL), sendList_yz(NULL), sendList_xz(NULL), sendList_Xy(NULL), sendList_Yz(NULL), sendList_xZ(NULL),
-	sendList_xY(NULL), sendList_yZ(NULL), sendList_Xz(NULL), sendList_XY(NULL), sendList_YZ(NULL), sendList_XZ(NULL),
-	sendBuf_x(NULL), sendBuf_y(NULL), sendBuf_z(NULL), sendBuf_X(NULL), sendBuf_Y(NULL), sendBuf_Z(NULL),
-	sendBuf_xy(NULL), sendBuf_yz(NULL), sendBuf_xz(NULL), sendBuf_Xy(NULL), sendBuf_Yz(NULL), sendBuf_xZ(NULL),
-	sendBuf_xY(NULL), sendBuf_yZ(NULL), sendBuf_Xz(NULL), sendBuf_XY(NULL), sendBuf_YZ(NULL), sendBuf_XZ(NULL),
-	recvCount_x(0), recvCount_y(0), recvCount_z(0), recvCount_X(0), recvCount_Y(0), recvCount_Z(0),
-	recvCount_xy(0), recvCount_yz(0), recvCount_xz(0), recvCount_Xy(0), recvCount_Yz(0), recvCount_xZ(0),
-	recvCount_xY(0), recvCount_yZ(0), recvCount_Xz(0), recvCount_XY(0), recvCount_YZ(0), recvCount_XZ(0),
-	recvList_x(NULL), recvList_y(NULL), recvList_z(NULL), recvList_X(NULL), recvList_Y(NULL), recvList_Z(NULL),
-	recvList_xy(NULL), recvList_yz(NULL), recvList_xz(NULL), recvList_Xy(NULL), recvList_Yz(NULL), recvList_xZ(NULL),
-	recvList_xY(NULL), recvList_yZ(NULL), recvList_Xz(NULL), recvList_XY(NULL), recvList_YZ(NULL), recvList_XZ(NULL),
-	recvBuf_x(NULL), recvBuf_y(NULL), recvBuf_z(NULL), recvBuf_X(NULL), recvBuf_Y(NULL), recvBuf_Z(NULL),
-	recvBuf_xy(NULL), recvBuf_yz(NULL), recvBuf_xz(NULL), recvBuf_Xy(NULL), recvBuf_Yz(NULL), recvBuf_xZ(NULL),
-	recvBuf_xY(NULL), recvBuf_yZ(NULL), recvBuf_Xz(NULL), recvBuf_XY(NULL), recvBuf_YZ(NULL), recvBuf_XZ(NULL),
-	sendData_x(NULL), sendData_y(NULL), sendData_z(NULL), sendData_X(NULL), sendData_Y(NULL), sendData_Z(NULL),
-	sendData_xy(NULL), sendData_yz(NULL), sendData_xz(NULL), sendData_Xy(NULL), sendData_Yz(NULL), sendData_xZ(NULL),
-	sendData_xY(NULL), sendData_yZ(NULL), sendData_Xz(NULL), sendData_XY(NULL), sendData_YZ(NULL), sendData_XZ(NULL),
-	recvData_x(NULL), recvData_y(NULL), recvData_z(NULL), recvData_X(NULL), recvData_Y(NULL), recvData_Z(NULL),
-	recvData_xy(NULL), recvData_yz(NULL), recvData_xz(NULL), recvData_Xy(NULL), recvData_Yz(NULL), recvData_xZ(NULL),
-	recvData_xY(NULL), recvData_yZ(NULL), recvData_Xz(NULL), recvData_XY(NULL), recvData_YZ(NULL), recvData_XZ(NULL),
-	id(NULL)
-{	
-	// set up the neighbor ranks
-    int myrank;
-    MPI_Comm_rank( Comm, &myrank );
-	rank_info = RankInfoStruct( myrank, rank_info.nx, rank_info.ny, rank_info.nz );
-	
-	MPI_Barrier(Comm);
-	
-    auto db = std::make_shared<Database>( );
-    db->putScalar<int>( "BC", BC );
-    db->putVector<int>( "nproc", { npx, npx, npx } );
-    db->putVector<int>( "n", { nx, ny, nz } );
-    db->putScalar<int>( "nspheres", 0 );
-    db->putVector<double>( "L", { lx, ly, lz } );
-    initialize( db );
-}
+
 Domain::Domain( std::shared_ptr<Database> db, MPI_Comm Communicator):
 	Nx(0), Ny(0), Nz(0), 
 	Lx(0), Ly(0), Lz(0), Volume(0), BoundaryCondition(0),
@@ -597,143 +552,4 @@ int Domain::PoreCount(){
     }
     return Npore;
 }
-
-//void Domain::CommunicateMeshHalo(DoubleArray &Mesh)
-//{
-//	int sendtag, recvtag;
-//	sendtag = recvtag = 7;
-//	double *MeshData = Mesh.data();
-//	PackMeshData(sendList_x, sendCount_x ,sendData_x, MeshData);
-//	PackMeshData(sendList_X, sendCount_X ,sendData_X, MeshData);
-//	PackMeshData(sendList_y, sendCount_y ,sendData_y, MeshData);
-//	PackMeshData(sendList_Y, sendCount_Y ,sendData_Y, MeshData);
-//	PackMeshData(sendList_z, sendCount_z ,sendData_z, MeshData);
-//	PackMeshData(sendList_Z, sendCount_Z ,sendData_Z, MeshData);
-//	PackMeshData(sendList_xy, sendCount_xy ,sendData_xy, MeshData);
-//	PackMeshData(sendList_Xy, sendCount_Xy ,sendData_Xy, MeshData);
-//	PackMeshData(sendList_xY, sendCount_xY ,sendData_xY, MeshData);
-//	PackMeshData(sendList_XY, sendCount_XY ,sendData_XY, MeshData);
-//	PackMeshData(sendList_xz, sendCount_xz ,sendData_xz, MeshData);
-//	PackMeshData(sendList_Xz, sendCount_Xz ,sendData_Xz, MeshData);
-//	PackMeshData(sendList_xZ, sendCount_xZ ,sendData_xZ, MeshData);
-//	PackMeshData(sendList_XZ, sendCount_XZ ,sendData_XZ, MeshData);
-//	PackMeshData(sendList_yz, sendCount_yz ,sendData_yz, MeshData);
-//	PackMeshData(sendList_Yz, sendCount_Yz ,sendData_Yz, MeshData);
-//	PackMeshData(sendList_yZ, sendCount_yZ ,sendData_yZ, MeshData);
-//	PackMeshData(sendList_YZ, sendCount_YZ ,sendData_YZ, MeshData);
-//	//......................................................................................
-//	MPI_Sendrecv(sendData_x,sendCount_x,MPI_DOUBLE,rank_x(),sendtag,
-//			recvData_X,recvCount_X,MPI_DOUBLE,rank_X(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_X,sendCount_X,MPI_DOUBLE,rank_X(),sendtag,
-//			recvData_x,recvCount_x,MPI_DOUBLE,rank_x(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_y,sendCount_y,MPI_DOUBLE,rank_y(),sendtag,
-//			recvData_Y,recvCount_Y,MPI_DOUBLE,rank_Y(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_Y,sendCount_Y,MPI_DOUBLE,rank_Y(),sendtag,
-//			recvData_y,recvCount_y,MPI_DOUBLE,rank_y(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_z,sendCount_z,MPI_DOUBLE,rank_z(),sendtag,
-//			recvData_Z,recvCount_Z,MPI_DOUBLE,rank_Z(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_Z,sendCount_Z,MPI_DOUBLE,rank_Z(),sendtag,
-//			recvData_z,recvCount_z,MPI_DOUBLE,rank_z(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_xy,sendCount_xy,MPI_DOUBLE,rank_xy(),sendtag,
-//			recvData_XY,recvCount_XY,MPI_DOUBLE,rank_XY(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_XY,sendCount_XY,MPI_DOUBLE,rank_XY(),sendtag,
-//			recvData_xy,recvCount_xy,MPI_DOUBLE,rank_xy(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_Xy,sendCount_Xy,MPI_DOUBLE,rank_Xy(),sendtag,
-//			recvData_xY,recvCount_xY,MPI_DOUBLE,rank_xY(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_xY,sendCount_xY,MPI_DOUBLE,rank_xY(),sendtag,
-//			recvData_Xy,recvCount_Xy,MPI_DOUBLE,rank_Xy(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_xz,sendCount_xz,MPI_DOUBLE,rank_xz(),sendtag,
-//			recvData_XZ,recvCount_XZ,MPI_DOUBLE,rank_XZ(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_XZ,sendCount_XZ,MPI_DOUBLE,rank_XZ(),sendtag,
-//			recvData_xz,recvCount_xz,MPI_DOUBLE,rank_xz(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_Xz,sendCount_Xz,MPI_DOUBLE,rank_Xz(),sendtag,
-//			recvData_xZ,recvCount_xZ,MPI_DOUBLE,rank_xZ(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_xZ,sendCount_xZ,MPI_DOUBLE,rank_xZ(),sendtag,
-//			recvData_Xz,recvCount_Xz,MPI_DOUBLE,rank_Xz(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_yz,sendCount_yz,MPI_DOUBLE,rank_yz(),sendtag,
-//			recvData_YZ,recvCount_YZ,MPI_DOUBLE,rank_YZ(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_YZ,sendCount_YZ,MPI_DOUBLE,rank_YZ(),sendtag,
-//			recvData_yz,recvCount_yz,MPI_DOUBLE,rank_yz(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_Yz,sendCount_Yz,MPI_DOUBLE,rank_Yz(),sendtag,
-//			recvData_yZ,recvCount_yZ,MPI_DOUBLE,rank_yZ(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	MPI_Sendrecv(sendData_yZ,sendCount_yZ,MPI_DOUBLE,rank_yZ(),sendtag,
-//			recvData_Yz,recvCount_Yz,MPI_DOUBLE,rank_Yz(),recvtag,Comm,MPI_STATUS_IGNORE);
-//	//........................................................................................
-//	UnpackMeshData(recvList_x, recvCount_x ,recvData_x, MeshData);
-//	UnpackMeshData(recvList_X, recvCount_X ,recvData_X, MeshData);
-//	UnpackMeshData(recvList_y, recvCount_y ,recvData_y, MeshData);
-//	UnpackMeshData(recvList_Y, recvCount_Y ,recvData_Y, MeshData);
-//	UnpackMeshData(recvList_z, recvCount_z ,recvData_z, MeshData);
-//	UnpackMeshData(recvList_Z, recvCount_Z ,recvData_Z, MeshData);
-//	UnpackMeshData(recvList_xy, recvCount_xy ,recvData_xy, MeshData);
-//	UnpackMeshData(recvList_Xy, recvCount_Xy ,recvData_Xy, MeshData);
-//	UnpackMeshData(recvList_xY, recvCount_xY ,recvData_xY, MeshData);
-//	UnpackMeshData(recvList_XY, recvCount_XY ,recvData_XY, MeshData);
-//	UnpackMeshData(recvList_xz, recvCount_xz ,recvData_xz, MeshData);
-//	UnpackMeshData(recvList_Xz, recvCount_Xz ,recvData_Xz, MeshData);
-//	UnpackMeshData(recvList_xZ, recvCount_xZ ,recvData_xZ, MeshData);
-//	UnpackMeshData(recvList_XZ, recvCount_XZ ,recvData_XZ, MeshData);
-//	UnpackMeshData(recvList_yz, recvCount_yz ,recvData_yz, MeshData);
-//	UnpackMeshData(recvList_Yz, recvCount_Yz ,recvData_Yz, MeshData);
-//	UnpackMeshData(recvList_yZ, recvCount_yZ ,recvData_yZ, MeshData);
-//	UnpackMeshData(recvList_YZ, recvCount_YZ ,recvData_YZ, MeshData);
-//}
-
-//// Ideally stuff below here should be moved somewhere else -- doesn't really belong here
-//void WriteCheckpoint(const char *FILENAME, const double *cDen, const double *cfq, int Np)
-//{
-//    int q,n;
-//    double value;
-//    ofstream File(FILENAME,ios::binary);
-//    for (n=0; n<Np; n++){
-//        // Write the two density values
-//        value = cDen[n];
-//        File.write((char*) &value, sizeof(value));
-//        value = cDen[Np+n];
-//        File.write((char*) &value, sizeof(value));
-//        // Write the even distributions
-//        for (q=0; q<19; q++){
-//            value = cfq[q*Np+n];
-//            File.write((char*) &value, sizeof(value));
-//        }
-//    }
-//    File.close();
-
-//}
-
-//void ReadCheckpoint(char *FILENAME, double *cPhi, double *cfq, int Np)
-//{
-//    int q=0, n=0;
-//    double value=0;
-//    ifstream File(FILENAME,ios::binary);
-//    for (n=0; n<Np; n++){
-//        File.read((char*) &value, sizeof(value));
-//        cPhi[n] = value;
-//        // Read the distributions
-//        for (q=0; q<19; q++){
-//            File.read((char*) &value, sizeof(value));
-//            cfq[q*Np+n] = value;
-//        }
-//    }
-//    File.close();
-//}
-
-//void ReadBinaryFile(char *FILENAME, double *Data, int N)
-//{
-//  int n;
-//  double value;
-//  ifstream File(FILENAME,ios::binary);
-//  if (File.good()){
-//    for (n=0; n<N; n++){
-//      // Write the two density values                                                                                
-//      File.read((char*) &value, sizeof(value));
-//      Data[n] = value;
-
-//    }
-//  }
-//  else {
-//    for (n=0; n<N; n++) Data[n] = 1.2e-34;
-//  }
-//  File.close();
-//}
 

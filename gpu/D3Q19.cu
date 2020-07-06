@@ -1608,11 +1608,6 @@ __global__  void dvc_ScaLBL_D3Q19_AAodd_Flux_BC_z(int *d_neighborList, int *list
 
 //*************************************************************************
 
-//extern "C" void ScaLBL_D3Q19_MapRecv(int q, int Cqx, int Cqy, int Cqz, int *list,  int start, int count,
-//			int *d3q19_recvlist, int Nx, int Ny, int Nz){
-//	int GRID = count / 512 + 1;
-//	dvc_ScaLBL_D3Q19_Unpack <<<GRID,512 >>>(q, Cqx, Cqy, Cqz, list, start, count, d3q19_recvlist, Nx, Ny, Nz);
-//}
 
 extern "C" void ScaLBL_D3Q19_Pack(int q, int *list, int start, int count, double *sendbuf, double *dist, int N){
 	int GRID = count / 512 + 1;

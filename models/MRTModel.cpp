@@ -188,7 +188,7 @@ void ScaLBL_MRTModel::Create(){
 	// ScaLBL_Communicator ScaLBL_Comm(Mask); // original
 	ScaLBL_Comm  = std::shared_ptr<ScaLBL_Communicator>(new ScaLBL_Communicator(Mask));
 	Np=Mask->PoreCount();
-	int Npad=(Np/16 + 2)*16; // the fuck is this
+	int Npad=(Np/16 + 2)*16; // Np in memoptim is defined differently to porecount: see scalbl.cpp for details
 	if (rank==0)    printf ("Set up memory efficient layout \n");
 	Map.resize(Nx,Ny,Nz);       
 	//Map.fill(-2);
@@ -201,25 +201,25 @@ void ScaLBL_MRTModel::Create(){
 	// LBM variables
 	if (rank==0)    printf ("Allocating distributions \n");
 	//......................device distributions.................................
-	int dist_mem_size = Np*sizeof(double);
-	int neighborSize=18*(Np*sizeof(int));
+	//int dist_mem_size = Np*sizeof(double);
+	//int neighborSize=18*Np*sizeof(int);
 	//...........................................................................
-	ScaLBL_AllocateDeviceMemory((void **) &NeighborList, neighborSize);
-	ScaLBL_AllocateDeviceMemory((void **) &fq, 19*dist_mem_size);  
-	ScaLBL_AllocateDeviceMemory((void **) &Pressure, sizeof(double)*Np);
-	ScaLBL_AllocateDeviceMemory((void **) &Velocity, 3*sizeof(double)*Np);
+	ScaLBL_AllocateDeviceMemory((void **) &NeighborList, 18*Np*sizeof(int));
+	ScaLBL_AllocateDeviceMemory((void **) &fq, 19*Np*sizeof(double));  
+	ScaLBL_AllocateDeviceMemory((void **) &Pressure, Np*sizeof(double));
+	ScaLBL_AllocateDeviceMemory((void **) &Velocity, 3*Np*sizeof(double));
 	if (thermalFlag) {
-    	ScaLBL_AllocateDeviceMemory((void **) &cq, 19*dist_mem_size);  
-		ScaLBL_AllocateDeviceMemory((void **) &Concentration, sizeof(double)*Np);  
+    	ScaLBL_AllocateDeviceMemory((void **) &cq, 19*Np*sizeof(double));  
+		ScaLBL_AllocateDeviceMemory((void **) &Concentration, Np*sizeof(double));  
 	}
 //	if (FDThermalFlag) {
-//    	ScaLBL_AllocateDeviceMemory((void **) &cq, dist_mem_size);  
+//    	ScaLBL_AllocateDeviceMemory((void **) &cq, Np*sizeof(double));  
 //	}
 	//...........................................................................
 	// Update GPU data structures
 	if (rank==0)    printf ("Setting up device map and neighbor list \n");
 	// copy the neighbor list 
-	ScaLBL_CopyToDevice(NeighborList, neighborList, neighborSize);
+	ScaLBL_CopyToDevice(NeighborList, neighborList, 18*Np*sizeof(int));
 	MPI_Barrier(comm);
 	
 }        

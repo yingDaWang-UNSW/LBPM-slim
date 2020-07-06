@@ -384,7 +384,7 @@ int main(int argc, char **argv)
 		
 		//...........................................................................
 		ScaLBL_CopyToHost(fq_host,fq,19*Np*sizeof(double));
-		check =	GlobalCheckDebugDist(fq_host, Map, Np, Nx-2, Ny-2, Nz-2,iproc,jproc,kproc,nprocx,nprocy,nprocz,0,ScaLBL_Comm.next);
+		check =	GlobalCheckDebugDist(fq_host, Map, Np, Nx-2, Ny-2, Nz-2,iproc,jproc,kproc,nprocx,nprocy,nprocz,0,ScaLBL_Comm.last_exterior);
 		//...........................................................................
 
 		int timestep = 0;

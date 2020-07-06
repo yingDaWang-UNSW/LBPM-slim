@@ -230,14 +230,14 @@ int main(int argc, char **argv)
 			ScaLBL_Comm->SendD3Q19AA(dist); //READ FROM NORMAL
 			ScaLBL_D3Q19_AAodd_MRT(NeighborList, dist,  ScaLBL_Comm->first_interior, ScaLBL_Comm->last_interior, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
 			ScaLBL_Comm->RecvD3Q19AA(dist); //WRITE INTO OPPOSITE
-			ScaLBL_D3Q19_AAodd_MRT(NeighborList, dist, 0, ScaLBL_Comm->next, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
+			ScaLBL_D3Q19_AAodd_MRT(NeighborList, dist, 0, ScaLBL_Comm->last_exterior, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
 			ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 			timestep++;
 
 			ScaLBL_Comm->SendD3Q19AA(dist); //READ FORM NORMAL
 			ScaLBL_D3Q19_AAeven_MRT(dist, ScaLBL_Comm->first_interior, ScaLBL_Comm->last_interior, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
 			ScaLBL_Comm->RecvD3Q19AA(dist); //WRITE INTO OPPOSITE
-			ScaLBL_D3Q19_AAeven_MRT(dist, 0, ScaLBL_Comm->next, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
+			ScaLBL_D3Q19_AAeven_MRT(dist, 0, ScaLBL_Comm->last_exterior, Np, rlx_setA, rlx_setB, Fx, Fy, Fz);
 			ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 			timestep++;
 			//************************************************************************/

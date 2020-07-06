@@ -33,46 +33,8 @@
 
 
 class Domain;
-template<class TYPE> class PatchData;
-
-
-//! Class to hold information about a box
-class Box {
-public:
-    int ifirst[3];
-    int ilast[3];
-};
-
 
 enum class DataLocation { CPU, DEVICE };
-
-
-//! Class to hold information about a patch
-class Patch {
-public:
-    
-    //! Empty constructor
-    Patch() = delete;
-
-    //! Copy constructor
-    Patch( const Patch& ) = delete;
-
-    //! Assignment operator
-    Patch& operator=( const Patch& ) = delete;
-
-    //! Return the box for the patch
-    inline const Box& getBox() const { return d_box; } 
-
-    //! Create patch data
-    template<class TYPE>
-    std::shared_ptr<PatchData<TYPE>> createPatchData( DataLocation location ) const;
-
-private:
-    Box d_box;
-    int d_owner;
-    Domain *d_domain;
-
-};
 
 
 //! Class to hold domain info
@@ -81,11 +43,7 @@ public:
     //! Default constructor
     Domain( std::shared_ptr<Database> db, MPI_Comm Communicator);
 
-    //! Obsolete constructor
-    Domain( int nx, int ny, int nz, int rnk, int npx, int npy, int npz, 
-                   double lx, double ly, double lz, int BC);
-
-    //! Empty constructor
+   //! Empty constructor
     Domain() = delete;
 
     //! Copy constructor
@@ -100,24 +58,12 @@ public:
     //! Get the database
     inline std::shared_ptr<const Database> getDatabase() const { return d_db; }
 
-    //! Get the domain box
-    inline const Box& getBox() const { return d_box; } 
-
-    //! Get local patch
-    inline const Patch& getLocalPatch() const { return *d_localPatch; }
-
-    //! Get all patches
-    inline const std::vector<Patch>& getAllPatch() const { return d_patches; }
-
 
 private:
 
     void initialize( std::shared_ptr<Database> db );
 
     std::shared_ptr<Database> d_db;
-    Box d_box;
-    Patch *d_localPatch;
-    std::vector<Patch> d_patches;
 
 
 public: // Public variables (need to create accessors instead)
@@ -191,10 +137,10 @@ public: // Public variables (need to create accessors instead)
     int PoreCount();
 
 private:
-
-    void PackID(int *list, int count, char *sendbuf, char *ID);
-    void UnpackID(int *list, int count, char *recvbuf, char *ID);
-    void CommHaloIDs();
+    // packing and unpacking is defined on a case-by-case basis
+/*    void PackID(int *list, int count, char *sendbuf, char *ID);*/
+/*    void UnpackID(int *list, int count, char *recvbuf, char *ID);*/
+/*    void CommHaloIDs();*/
     
 	//......................................................................................
 	MPI_Request req1[18], req2[18];
@@ -215,46 +161,5 @@ private:
     double *recvData_xy, *recvData_yz, *recvData_xz, *recvData_Xy, *recvData_Yz, *recvData_xZ;
     double *recvData_xY, *recvData_yZ, *recvData_Xz, *recvData_XY, *recvData_YZ, *recvData_XZ;
 };
-
-
-// Class to hold data on a patch
-template<class TYPE>
-class PatchData {
-public:
-
-    //! Get the raw data pointer
-    TYPE* data() { return d_data; }
-
-    //! Get the raw data pointer
-    const TYPE* data() const { return d_data; }
-
-    //! Get the patch
-    const Patch& getPatch() const { return *d_patch; }
-
-    //! Start communication
-    void beginCommunication();
-
-    //! End communication
-    void endCommunication();
-
-    //! Access ghost values
-    TYPE operator()( int, int, int ) const;
-
-    //! Copy data from another PatchData
-    void copy( const PatchData& rhs );
-
-private:
-    DataLocation d_location;
-    const Patch *d_patch;
-    TYPE *d_data;
-    TYPE *d_gcw;
-
-};
-
-/*void WriteCheckpoint(const char *FILENAME, const double *cDen, const double *cfq, int Np);*/
-
-/*void ReadCheckpoint(char *FILENAME, double *cDen, double *cfq, int Np);*/
-
-/*void ReadBinaryFile(char *FILENAME, double *Data, int N);*/
 
 #endif
