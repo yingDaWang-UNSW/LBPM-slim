@@ -90,7 +90,7 @@ def runLBPMTwoPhase(domain, targetdir, npx, npy, npz,
                '    fluxReversalFlag = false', '\n',
                '    fluxReversalType = 1', '\n', # 1 for flip IO phases, 2 for flip flow direction
                '    fluxReversalSat = 0.15', '\n', # if neg, then use settling
-               '    settlingTolerance = 1e-6', '\n', # 
+               '    settlingTolerance = 5e-5', '\n', # 
                '    ComponentLabels = ',str(solidIDs), '\n',
                '    ComponentAffinity = ',str(contactAngles), '\n', # affinity to A, -1 (B) is water, 1 (A) is oil
                '    affinityRampupFlag = false', '\n',
@@ -101,7 +101,7 @@ def runLBPMTwoPhase(domain, targetdir, npx, npy, npz,
                '', '\n',
                'Analysis {', '\n', 
                '    tolerance = 1e20', '\n', # morpho steady state tolerance level (set high for consistent morph)
-               '    ramp_timesteps = 1000', '\n', # timesteps before morph is activated
+               '    ramp_timesteps = 10000', '\n', # timesteps before morph is activated
                '    //morph_interval = 10000', '\n', # manual morph
                '    //morph_delta = -0.1', '\n',
                '    autoMorphFlag = ',autoMorph, '\n', # automorph using shells
@@ -109,10 +109,10 @@ def runLBPMTwoPhase(domain, targetdir, npx, npy, npz,
                '    fluxMorphFlag = ',fluxMorph, '\n', # automorph using injection this sucks
                '    coinjectionFlag = ',coinjection, '\n', # automatic coinjection so does this
                '    satInit = ', str(limSw), '\n', # the saturation set to start automorph. reach this saturation by flux injection
-               '    satInc = 0.1', '\n', # push by (set low for single step)
+               '    satInc = 0.05', '\n', # push by (set low for single step)
                '    injectionType = ', str(injType), '\n', # 1 for drain (morph+) 2 for imb(morph-)
                '    stabilisationRate = 50000', '\n', # time between steady checks
-               '    accelerationRate = 3000', '\n', # time between morph events
+               '    accelerationRate = 1000', '\n', # time between morph events
                '    blobid_interval = 10000000', '\n',
                '    analysis_interval = ', str(analysisInterval), '\n',          
                '    restart_interval = 100000', '\n',

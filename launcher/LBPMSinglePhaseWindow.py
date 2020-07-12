@@ -1,12 +1,11 @@
 import scipy.io
 import numpy as np
 import os
-import os.path as Path
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout
 from PyQt5.QtWidgets import QWidget
-from PyQt5.QtWidgets import QLineEdit, QPushButton, QCheckBox
+from PyQt5.QtWidgets import QLineEdit, QPushButton
 from PyQt5.QtGui import QDoubleValidator
 
 from LBPMWindow import LBPMWindow, IntLineEdit
@@ -107,16 +106,22 @@ class SinglePhaseWindow(LBPMWindow):
         form.addRow("Viscosity", self.muif)
         
         form.addRow("Periodic Pressure Gradient", None)
-        self.fxif = IntLineEdit()
-        self.fyif = IntLineEdit()
-        self.fzif = IntLineEdit()
+        self.fxif = QLineEdit()
+        self.fxif.setValidator(QDoubleValidator)
+        self.fxsif.setFixedWidth(100)
+        self.fyif = QLineEdit()
+        self.fyif.setValidator(QDoubleValidator)
+        self.fysif.setFixedWidth(100)
+        self.fzif = QLineEdit()
+        self.fzif.setValidator(QDoubleValidator)
+        self.fzsif.setFixedWidth(100)
         form.addRow("x:", self.fxif)
         form.addRow("y:", self.fyif)
         form.addRow("z:", self.fzif)
        
         self.fluxif = IntLineEdit(10)
         self.fluxif.setFixedWidth(100)
-        form.addRow("Injection Rate (voxels/timestamp)", self.fluxif)
+        form.addRow("Injection Rate (voxels/timestep)", self.fluxif)
         
         self.pinif = QLineEdit()
         self.pinif.setValidator(QDoubleValidator())
@@ -201,10 +206,6 @@ def SinglePhase(window):
     
     #physical parameters
     voxelSize=window.voxelSize;
-    domain[0,:,:] = True
-    domain[-1,:,:] = True
-    domain[:,0,:] = True
-    domain[:,-1,:] = True
     
     
     mu=window.mu; 

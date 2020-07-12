@@ -2,7 +2,6 @@ import os
 from math import ceil
 import subprocess
 import sys
-import subprocess
 
 def runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize,
                       timesteps, gpuIDs, Fx, Fy, Fz, flux,
