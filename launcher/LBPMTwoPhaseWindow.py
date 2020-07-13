@@ -218,11 +218,11 @@ class TwoPhaseWindow(LBPMWindow):
         self.alpha = float(self.alphaif.text())
         self.beta = float(self.betaif.text())
         self.setCapillaryNumber = self.scncbx.isChecked()
-        self.fx = int(self.fxif.text())
-        self.fy = int(self.fyif.text())
-        self.fz = int(self.fzif.text())
+        self.fx = float(self.fxif.text())
+        self.fy = float(self.fyif.text())
+        self.fz = float(self.fzif.text())
         self.simtype = str(self.simcbb.currentText())
-        self.flux = int(self.fluxif.text())
+        self.flux = float(self.fluxif.text())
         self.pin = float(self.pinif.text())
         self.pout = float(self.poutif.text())
         self.inputIDs = self.inidif.text()
@@ -243,6 +243,10 @@ def TwoPhase(window):
     image = np.array(image).astype(bool)
     
     domain = rd.removeDisconnections(image)
+    domain[:,:,0] = True	
+    domain[:,:,-1] = True	
+    domain[:,0,:] = True	
+    domain[:,-1,:] = True
     
     HPCFlag = False
     restart = False

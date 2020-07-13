@@ -2,12 +2,12 @@ from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtWidgets import QLineEdit
 from PyQt5.QtCore import QSize
-from PyQt5.QtGui import QIntValidator
+from PyQt5.QtGui import QDoubleValidator
 
 class IntLineEdit(QLineEdit):
     def __init__(self, maxLength=3):
         QLineEdit.__init__(self)
-        self.setValidator(QIntValidator())
+        self.setValidator(QDoubleValidator())
         self.setMaxLength(maxLength)
         self.setFixedWidth(40)
 

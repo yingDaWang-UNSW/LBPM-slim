@@ -173,10 +173,10 @@ class SinglePhaseWindow(LBPMWindow):
         self.outpath = self.ofsfn.text()
         self.voxelSize = float(self.vxsif.text())
         self.mu = float(self.muif.text())
-        self.fx = int(self.fxif.text())
-        self.fy = int(self.fyif.text())
-        self.fz = int(self.fzif.text())
-        self.flux = int(self.fluxif.text())
+        self.fx = float(self.fxif.text())
+        self.fy = float(self.fyif.text())
+        self.fz = float(self.fzif.text())
+        self.flux = float(self.fluxif.text())
         self.pin = float(self.pinif.text())
         self.pout = float(self.poutif.text())
         
@@ -193,6 +193,10 @@ def SinglePhase(window):
     image = np.array(image).astype(bool)
     
     domain = rd.removeDisconnections(image)
+    domain[:,:,0] = True	
+    domain[:,:,-1] = True	
+    domain[:,0,:] = True	
+    domain[:,-1,:] = True
     
     #simulation parameters
     visInterval=window.visInterval 
