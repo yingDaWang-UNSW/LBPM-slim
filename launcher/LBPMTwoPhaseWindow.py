@@ -18,9 +18,10 @@ class TwoPhaseWindow(LBPMWindow):
         self.backWindow = backWindow
         
          
-    def openWindow(self):
+    def openWindow(self, installLocation):
         centralWidget = QWidget(self)          
         self.setCentralWidget(centralWidget)
+        self.installLocation = installLocation
         fullLayout = QVBoxLayout(self)
         mainLayout = QHBoxLayout(self)
         centralWidget.setLayout(fullLayout)
@@ -57,7 +58,7 @@ class TwoPhaseWindow(LBPMWindow):
         form.addRow("Timesteps", self.tsif)
         
         self.viif = IntLineEdit(10)
-        self.viif.setText('1000000000000')
+        self.viif.setText('1000000000')
         self.viif.setFixedWidth(100)
         form.addRow("Visualisation Interval", self.viif)
         
@@ -283,6 +284,7 @@ def TwoPhase(window):
     contactAngles = window.contactAngles
     
     setCapillaryNumber = window.setCapillaryNumber
+    install = window.installLocation
     
     targetdir = window.outpath
     if(not os.path.exists(targetdir)):
@@ -293,4 +295,4 @@ def TwoPhase(window):
     voxelSize, timesteps, gpuIDs, simType,
     Fx, Fy, Fz, flux, Pin, Pout, muA, muB, rhoA, rhoB, alpha, beta,
     inputIDs, readIDs, solidIDs, contactAngles,
-    restart, visInterval, analysisInterval, permTolerance, terminal, HPCFlag, setCapillaryNumber)
+    restart, visInterval, analysisInterval, permTolerance, terminal, HPCFlag, setCapillaryNumber, install)

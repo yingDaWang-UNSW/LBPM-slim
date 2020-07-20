@@ -6,9 +6,7 @@ import sys
 def runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize,
                       timesteps, gpuIDs, Fx, Fy, Fz, flux,
                       Pin, Pout, mu, restart, visInterval,
-                      analysisInterval, permTolerance, terminal):
-    LBPM_CPU_Install = "/mnt/c/Users/THOMAS/Documents/Projects/Uni/LBPM-CPU"
-    LBPM_GPU_Install = "/mnt/c/Users/THOMAS/Documents/Projects/Uni/LBPM-GPU"
+                      analysisInterval, permTolerance, terminal, install):
     
     bgkFlag = 'false';
     thermalFlag = 'false';
@@ -82,14 +80,14 @@ def runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize,
     
     if (not gpuIDs):
         runFile=('#!/bin/bash', '\n',
-                 'export LBPM_DIR="',LBPM_CPU_Install,'"', '\n',
+                 'export LBPM_DIR="',install,'"', '\n',
                  'export NUMPROCS=',str(npx*npy*npz), '\n',
                  'mpirun -np 1 $LBPM_DIR/bin/lbpm_serial_decomp inputFile.db', '\n',
                  'mpirun -np $NUMPROCS $LBPM_DIR/tests/lbpm_permeability_simulator inputFile.db'
                  )
     else:
         runFile=('#!/bin/bash', '\n',
-                 'export LBPM_DIR="',LBPM_GPU_Install,'"', '\n',
+                 'export LBPM_DIR="',install,'"', '\n',
                  'export NUMPROCS=',str(npx*npy*npz), '\n',
                  'mpirun -np 1 $LBPM_DIR/bin/lbpm_serial_decomp inputFile.db', '\n',
                  'CUDA_VISIBLE_DEVICES=', gpuIDs,' mpirun -np $NUMPROCS $LBPM_DIR/tests/lbpm_permeability_simulator inputFile.db'

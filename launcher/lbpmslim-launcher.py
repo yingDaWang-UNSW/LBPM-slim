@@ -1,9 +1,10 @@
 import sys
+import os
 
 from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtWidgets import QVBoxLayout
-from PyQt5.QtWidgets import QWidget
-from PyQt5.QtWidgets import QPushButton, QLabel
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout
+from PyQt5.QtWidgets import QWidget, QMessageBox
+from PyQt5.QtWidgets import QPushButton, QLabel, QLineEdit
 
 from LBPMWindow import LBPMWindow
 from LBPMSinglePhaseWindow import SinglePhaseWindow
@@ -18,7 +19,31 @@ class MainWindow(LBPMWindow):
         self.setCentralWidget(centralWidget)   
  
         mainLayout = QVBoxLayout(self)     
-        centralWidget.setLayout(mainLayout)  
+        centralWidget.setLayout(mainLayout)
+        
+        instfs = QHBoxLayout()
+        self.instfn = QLineEdit()
+        self.instfn.setReadOnly(True)
+        instbtn = QPushButton("Select Folder")
+        def oninstbtnpush():
+            path = os.path.dirname(self.instfn.text())
+            if not path:
+                path = "~"
+            dialog = QtWidgets.QFileDialog(self)
+            dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
+            dialog.setDirectory(path)
+            dialog.setFileMode(QtWidgets.QFileDialog.Directory)
+            dialog.setOption(QtWidgets.QFileDialog.ShowDirsOnly, True)
+            if dialog.exec_() == QtWidgets.QFileDialog.Accepted:
+                self.instfn.setText(dialog.selectedFiles()[0])
+        
+        instbtn.clicked.connect(oninstbtnpush)
+        instfs.addWidget(self.instfn)
+        instfs.addWidget(instbtn)
+        form = QFormLayout()
+        form.addRow("Install Location", instfs)
+        mainLayout.addLayout(form)
+        
  
         title = QLabel("Choose flow:", self) 
         title.setAlignment(QtCore.Qt.AlignCenter)
@@ -27,7 +52,11 @@ class MainWindow(LBPMWindow):
         singlephase = QPushButton('Single Phase', self)
         singlePhaseWindow = SinglePhaseWindow(self)
         def openSinglePhaseFlow():
-            singlePhaseWindow.openWindow()
+            inst = self.instfn.text()
+            if(not inst):
+                QMessageBox.about(self, "Missing data", "Please select an install location.")
+                return
+            singlePhaseWindow.openWindow(inst)
             singlePhaseWindow.show()
             self.hide()
 
@@ -38,12 +67,18 @@ class MainWindow(LBPMWindow):
         twoPhaseWindow = TwoPhaseWindow(self)
         
         def openTwoPhaseFlow():
-            twoPhaseWindow.openWindow()
+            inst = self.instfn.text()
+            if(not inst):
+                QMessageBox.about(self, "Missing data", "Please select an install location.")
+                return
+            twoPhaseWindow.openWindow(inst)
             twoPhaseWindow.show()
             self.hide()
 
         twophase.clicked.connect(openTwoPhaseFlow)
         mainLayout.addWidget(twophase)
+        
+        
      
     
 def run_app():

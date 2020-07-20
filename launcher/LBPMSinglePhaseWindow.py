@@ -19,9 +19,10 @@ class SinglePhaseWindow(LBPMWindow):
         
 
          
-    def openWindow(self):
+    def openWindow(self, installLocation):
         centralWidget = QWidget(self)          
         self.setCentralWidget(centralWidget)
+        self.installLocation = installLocation
         fullLayout = QVBoxLayout(self)
         mainLayout = QHBoxLayout(self)
         centralWidget.setLayout(fullLayout)
@@ -51,7 +52,7 @@ class SinglePhaseWindow(LBPMWindow):
         form.addRow("Domain File", domfs)
         
         self.viif = IntLineEdit(10)
-        self.viif.setText('1e100')
+        self.viif.setText('1000000000')
         self.viif.setFixedWidth(100)
         form.addRow("Visualisation Interval", self.viif)
                 
@@ -227,7 +228,9 @@ def SinglePhase(window):
     Pin = window.pin;
     Pout = window.pout;
     
-    rls.runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize, timesteps, gpuIDs, Fx, Fy, Fz, flux, Pin, Pout, mu, restartFq, visInterval, analysisInterval, permTolerance, terminal)
+    install = window.installLocation
+    
+    rls.runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize, timesteps, gpuIDs, Fx, Fy, Fz, flux, Pin, Pout, mu, restartFq, visInterval, analysisInterval, permTolerance, terminal, install)
  
 
 
