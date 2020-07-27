@@ -1,10 +1,12 @@
 import scipy.io
 import numpy as np
 import os
+import subprocess
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread, QObject
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QWidget, QLabel
 from PyQt5.QtWidgets import QLineEdit, QPushButton
 from PyQt5.QtGui import QDoubleValidator
 
@@ -142,13 +144,25 @@ class SinglePhaseWindow(LBPMWindow):
           
         btnlayout = QHBoxLayout()
         runbtn = QPushButton("Run Solver")
+        runThread = QThread()
+        observerThread = QThread()
         def on_run_clicked():
-            self.hide()
-            self.backWindow.hide()
+            #self.hide()
+            #self.backWindow.hide()
             self.saveValues()
-            SinglePhase(self)
-            QtWidgets.QApplication.quit()
-            
+            runObj = SinglePhaseRunObj(self)
+            runObj.moveToThread(runThread)
+            runThread.started.connect(runObj.startRun)
+            observerObj = SinglePhaseObserverObj(runObj)
+            observerObj.moveToThread(observerThread)
+            observerObj.finished.connect(observerThread.quit)
+            observerObj.finished.connect(runThread.quit)
+            runObj.subprocessStarted.connect(observerObj.setSubprocess)
+            runObj.updated.connect(observerObj.updateWindowText)
+            runThread.start()
+            observerThread.start()
+        
+                    
         runbtn.clicked.connect(on_run_clicked)
         btnlayout.addWidget(runbtn)
         backbtn = QPushButton("Back")
@@ -181,56 +195,133 @@ class SinglePhaseWindow(LBPMWindow):
         self.pin = float(self.pinif.text())
         self.pout = float(self.poutif.text())
         
-        
-def SinglePhase(window):
-    mat = scipy.io.loadmat(window.domainPath)
-    keyname = ''
-    for key in list(mat.keys()):
-        if(not key.startswith('__') and not key.endswith('__')):
-            keyname = key
-            break
-        
-    image = mat[keyname]#[:200,:200,:200]
-    image = np.array(image).astype(bool)
+
+class SinglePhaseStatusWindow(LBPMWindow):
+    terminated = pyqtSignal()
     
-    domain = rd.removeDisconnections(image)
-    domain[:,:,0] = True	
-    domain[:,:,-1] = True	
-    domain[:,0,:] = True	
-    domain[:,-1,:] = True
-    
-    #simulation parameters
-    visInterval=window.visInterval 
-    restartFq=False;
-    analysisInterval = window.analysisInterval;
-    permTolerance = window.permTolerance;
-    terminal = True;
-    timesteps = window.timesteps;
-    gpuIDs=[];
-    npx=window.npx;
-    npy=window.npy;
-    npz=window.npz;
-    
-    targetdir = window.outpath
-    if(not os.path.exists(targetdir)):
-        os.mkdir(targetdir)
-    os.chdir(targetdir)
-    
-    #physical parameters
-    voxelSize=window.voxelSize;
-    
-    
-    mu=window.mu; 
-    Fx = window.fx;
-    Fy = window.fy;
-    Fz = window.fz;
-    flux = window.flux;
-    Pin = window.pin;
-    Pout = window.pout;
-    
-    install = window.installLocation
-    
-    rls.runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize, timesteps, gpuIDs, Fx, Fy, Fz, flux, Pin, Pout, mu, restartFq, visInterval, analysisInterval, permTolerance, terminal, install)
+    def __init__(self, observerObject):
+        LBPMWindow.__init__(self)
+        self.observerObject = observerObject
+        centralWidget = QWidget(self)          
+        self.setCentralWidget(centralWidget)   
  
+        mainLayout = QVBoxLayout(self)     
+        centralWidget.setLayout(mainLayout)
+        self.status = QLabel("Running...", self) 
+        self.status.setAlignment(QtCore.Qt.AlignCenter)
+        mainLayout.addWidget(self.status)
+        
+        abortbtn = QPushButton('Abort', self)
+        def abort():
+            self.terminated.emit()
+        abortbtn.clicked.connect(abort)
+        mainLayout.addWidget(abortbtn)
+        return
+    
+    def updateText(self, text):
+        self.status.setText(text)
+        
+
+class SinglePhaseRunObj(QObject):
+    subprocessStarted = pyqtSignal(subprocess.Popen)
+    updated = pyqtSignal(str)
+    
+    def __init__(self, window):
+        QObject.__init__(self)
+        self.window = window
+        
+    
+    def startRun(self):
+        print("Run Object run called")
+        self.updated.emit("Reading domain file...")
+        mat = scipy.io.loadmat(self.window.domainPath)
+        keyname = ''
+        for key in list(mat.keys()):
+            if(not key.startswith('__') and not key.endswith('__')):
+                keyname = key
+                break
+            
+        image = mat[keyname][:200,:200,:200]
+        image = np.array(image).astype(bool)
+        self.updated.emit("Removing disconnections...")
+        domain = rd.removeDisconnections(image)
+        domain[:,:,0] = True	
+        domain[:,:,-1] = True	
+        domain[:,0,:] = True	
+        domain[:,-1,:] = True
+        
+        #simulation parameters
+        visInterval=self.window.visInterval 
+        restart = False
+        restartFq=False;
+        analysisInterval = self.window.analysisInterval;
+        permTolerance = self.window.permTolerance;
+        terminal = True;
+        timesteps = self.window.timesteps;
+        gpuIDs=[];
+        npx=self.window.npx;
+        npy=self.window.npy;
+        npz=self.window.npz;
+        
+        targetdir = self.window.outpath
+        if(not os.path.exists(targetdir)):
+            os.mkdir(targetdir)
+        os.chdir(targetdir)
+        
+        #physical parameters
+        voxelSize=self.window.voxelSize;
+        
+        mu=self.window.mu; 
+        Fx = self.window.fx;
+        Fy = self.window.fy;
+        Fz = self.window.fz;
+        flux = self.window.flux;
+        Pin = self.window.pin;
+        Pout = self.window.pout;
+        
+        install = self.window.installLocation
+        
+        rls.runLBPMSinglePhase(self, domain, targetdir, npx, npy, npz, voxelSize, 
+                               timesteps, gpuIDs, Fx, Fy, Fz, flux, Pin, Pout, 
+                               mu, restart, visInterval, analysisInterval, permTolerance, 
+                               terminal, install)
 
 
+
+
+class SinglePhaseObserverObj(QObject):
+    finished = pyqtSignal()
+    
+    @pyqtSlot(subprocess.Popen)
+    def setSubprocess(self, subprocess):
+        self.subprocess = subprocess
+    
+    @pyqtSlot()
+    def terminateRunThread(self):
+        if(self.subprocess):
+            os.killpg(os.getpgid(self.subprocess.pid), 15)
+        print("Aborted.")
+        self.finished.emit()
+        self.statusWindow.close()
+    
+    @pyqtSlot(str)
+    def updateWindowText(self, text):
+        self.statusWindow.updateText(text)
+        self.statusWindow.show()
+    
+    
+    def __init__(self, runObject):
+        QtCore.QThread.__init__(self)
+        self.runObject = runObject
+        self.subprocess = None
+        self.statusWindow = SinglePhaseStatusWindow(self)
+        self.statusWindow.terminated.connect(self.terminateRunThread)
+        self.statusWindow.show()
+        
+        
+        
+        
+
+                
+        
+    

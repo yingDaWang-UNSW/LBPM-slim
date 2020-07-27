@@ -3,10 +3,11 @@ from math import ceil
 import subprocess
 import sys
 
-def runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize,
+def runLBPMSinglePhase(runObject, domain, targetdir, npx, npy, npz, voxelSize,
                       timesteps, gpuIDs, Fx, Fy, Fz, flux,
                       Pin, Pout, mu, restart, visInterval,
                       analysisInterval, permTolerance, terminal, install):
+    
     
     bgkFlag = 'false';
     thermalFlag = 'false';
@@ -39,7 +40,7 @@ def runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize,
         restartFq = 'true';
     else:
         restartFq='false';
-        
+    runObject.updated.emit("Writing inputfile...")
     inputfile = ('Domain {', '\n' ,
                 '    Filename = "', fileName, '.raw"', '\n',
                 '    nproc = ', str(npx), ', ', str(npy), ', ', str(npz),'\n',
@@ -77,6 +78,7 @@ def runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize,
     fid = open('inputFile.db', 'wt')
     fid.write(''.join(inputfile))
     fid.close()
+    runObject.updated.emit("Writing runfile...")
     
     if (not gpuIDs):
         runFile=('#!/bin/bash', '\n',
@@ -96,7 +98,7 @@ def runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize,
     fid = open('runfile.db', 'wt')
     fid.write(''.join(runFile))
     fid.close()
-    
+    runObject.updated.emit("Writing domain file...")
     fid = open(fileName +'.raw','wb');
     domain.tofile(fid)
     fid.close()
@@ -104,6 +106,12 @@ def runLBPMSinglePhase(domain, targetdir, npx, npy, npz, voxelSize,
     pathname = os.path.abspath('runfile.db')
     cmd = ["bash", pathname]
 
-    print("Running solver...")
+    runObject.updated.emit("Running Solver...")
     
-    subprocess.Popen(cmd, stdout=sys.stdout)
+    sp = subprocess.Popen(cmd, stdout=sys.stdout, preexec_fn=os.setsid)
+    runObject.subprocessStarted.emit(sp)
+    while(not sp.poll):
+        os.time.sleep(5)
+        
+    runObject.updated.emit("Solver finished running")
+    
