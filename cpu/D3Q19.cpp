@@ -185,14 +185,18 @@ extern "C" void ScaLBL_D3Q19_AAeven_Pressure_BC_z(int *list, double *dist, doubl
 		f8 = dist[7*Np+n];
 		f9 = dist[10*Np+n];
 		f10 = dist[9*Np+n];
+		f11 = dist[12*Np+n];
 		f12 = dist[11*Np+n];
 		f13 = dist[14*Np+n];
+		f14 = dist[13*Np+n];
+		f15 = dist[16*Np+n];
 		f16 = dist[15*Np+n];
 		f17 = dist[18*Np+n];
+		f18 = dist[17*Np+n];
 		//...................................................
 		// Determine the inlet flow velocity
-		//ux = (f1-f2+f7-f8+f9-f10+f11-f12+f13-f14);
-		//uy = (f3-f4+f7-f8-f9+f10+f15-f16+f17-f18);
+		ux = (f1-f2+f7-f8+f9-f10+f11-f12+f13-f14);
+		uy = (f3-f4+f7-f8-f9+f10+f15-f16+f17-f18);
 		uz = din - (f0+f1+f2+f3+f4+f7+f8+f9+f10 + 2*(f6+f12+f13+f16+f17));
 
 		Cxz = 0.5*(f1+f7+f9-f2-f10-f8) - 0.3333333333333333*ux;
@@ -236,13 +240,17 @@ extern "C" void ScaLBL_D3Q19_AAeven_Pressure_BC_Z(int *list, double *dist, doubl
 		f9 = dist[10*Np+n];
 		f10 = dist[9*Np+n];
 		f11 = dist[12*Np+n];
+		f12 = dist[11*Np+n];
+		f13 = dist[14*Np+n];
 		f14 = dist[13*Np+n];
 		f15 = dist[16*Np+n];
+		f16 = dist[15*Np+n];
+		f17 = dist[18*Np+n];
 		f18 = dist[17*Np+n];
 		
 		// Determine the outlet flow velocity
-		//ux = f1-f2+f7-f8+f9-f10+f11-f12+f13-f14;
-		//uy = f3-f4+f7-f8-f9+f10+f15-f16+f17-f18;
+		ux = f1-f2+f7-f8+f9-f10+f11-f12+f13-f14;
+		uy = f3-f4+f7-f8-f9+f10+f15-f16+f17-f18;
 		uz = -dout + (f0+f1+f2+f3+f4+f7+f8+f9+f10 + 2*(f5+f11+f14+f15+f18));
 
 		Cxz = 0.5*(f1+f7+f9-f2-f10-f8) - 0.3333333333333333*ux;
@@ -280,7 +288,7 @@ extern "C" void ScaLBL_D3Q19_AAodd_Pressure_BC_z(int *d_neighborList, int *list,
 
 		nread = d_neighborList[n];
 		f1 = dist[nread];
-
+		
 		nread = d_neighborList[n+2*Np];
 		f3 = dist[nread];
 
@@ -316,8 +324,21 @@ extern "C" void ScaLBL_D3Q19_AAodd_Pressure_BC_z(int *d_neighborList, int *list,
 
 		nread = d_neighborList[n+15*Np];
 		f16 = dist[nread];
+	
+		nread = d_neighborList[n+10*Np];
+		f11 = dist[nread];
+		
+		nread = d_neighborList[n+13*Np];
+		f14 = dist[nread];
+		
+		nread = d_neighborList[n+14*Np];
+		f15 = dist[nread];
+		
+		nread = d_neighborList[n+17*Np];
+		f18 = dist[nread];
+		
 
-		// Unknown distributions
+		// Unknown distributions locations
 		nr5 = d_neighborList[n+4*Np];
 		nr11 = d_neighborList[n+10*Np];
 		nr15 = d_neighborList[n+14*Np];
@@ -326,8 +347,8 @@ extern "C" void ScaLBL_D3Q19_AAodd_Pressure_BC_z(int *d_neighborList, int *list,
 		
 		//...................................................
 		// Determine the inlet flow velocity
-		//ux = (f1-f2+f7-f8+f9-f10+f11-f12+f13-f14);
-		//uy = (f3-f4+f7-f8-f9+f10+f15-f16+f17-f18);
+		ux = (f1-f2+f7-f8+f9-f10+f11-f12+f13-f14);
+		uy = (f3-f4+f7-f8-f9+f10+f15-f16+f17-f18);
 		uz = din - (f0+f1+f2+f3+f4+f7+f8+f9+f10 + 2*(f6+f12+f13+f16+f17));
 
 		Cxz = 0.5*(f1+f7+f9-f2-f10-f8) - 0.3333333333333333*ux;
@@ -404,6 +425,18 @@ extern "C" void ScaLBL_D3Q19_AAodd_Pressure_BC_Z(int *d_neighborList, int *list,
 		nread = d_neighborList[n+17*Np];
 		f18 = dist[nread];
 		
+		nread = d_neighborList[n+11*Np];
+		f12 = dist[nread];
+		
+		nread = d_neighborList[n+15*Np];
+		f16 = dist[nread];
+		
+		nread = d_neighborList[n+16*Np];
+		f17 = dist[nread];
+		
+		nread = d_neighborList[n+12*Np];
+		f13 = dist[nread];
+		
 		// unknown distributions
 		nr6 = d_neighborList[n+5*Np];
 		nr12 = d_neighborList[n+11*Np];
@@ -412,8 +445,8 @@ extern "C" void ScaLBL_D3Q19_AAodd_Pressure_BC_Z(int *d_neighborList, int *list,
 		nr13 = d_neighborList[n+12*Np];
 
 		// Determine the inlet flow velocity
-		//ux = f1-f2+f7-f8+f9-f10+f11-f12+f13-f14;
-		//uy = f3-f4+f7-f8-f9+f10+f15-f16+f17-f18;
+		ux = f1-f2+f7-f8+f9-f10+f11-f12+f13-f14;
+		uy = f3-f4+f7-f8-f9+f10+f15-f16+f17-f18;
 		uz = -dout + (f0+f1+f2+f3+f4+f7+f8+f9+f10 + 2*(f5+f11+f14+f15+f18));
 
 		Cxz = 0.5*(f1+f7+f9-f2-f10-f8) - 0.3333333333333333*ux;

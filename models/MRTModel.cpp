@@ -303,7 +303,11 @@ void ScaLBL_MRTModel::Run(){
 	if (rank==0) printf("********************************************************\n");
 	timestep=0;
 	while (timestep < timestepMax) {
-		//************************************************************************/
+	    // add pressure BC ramp up in a separate section here if you want
+//		if (BoundaryCondition == 3){
+//            
+//		}
+	    
 		//ODD TIMESTEP************************************************************
 		timestep++;// odd timesteps need to be solved interior then exterior
 		if (thermalFlag) { //run thermal flag update vel fields every 2 steps
