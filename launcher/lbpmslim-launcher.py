@@ -78,8 +78,6 @@ class MainWindow(LBPMWindow):
         twophase.clicked.connect(openTwoPhaseFlow)
         mainLayout.addWidget(twophase)
         
-        
-     
     
 def run_app():
     app = QtWidgets.QApplication(sys.argv)

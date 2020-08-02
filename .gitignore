@@ -1,0 +1,7 @@
+launcher/bin
+launcher/include
+launcher/lib
+launcher/share
+launcher/lib64
+launcher/pyvenv.cfg
+launcher/__pycache__

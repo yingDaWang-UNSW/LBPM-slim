@@ -40,7 +40,6 @@ class TwoPhaseWindow(LBPMWindow):
             path = os.path.dirname(self.fsfn.text())
             if not path:
                 path = "~"
-
             dialog = QtWidgets.QFileDialog(self)
             dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
             dialog.setDirectory(path)

@@ -241,7 +241,7 @@ class SinglePhaseRunObj(QObject):
                 keyname = key
                 break
             
-        image = mat[keyname][:200,:200,:200]
+        image = mat[keyname]#[:200,:200,:200]
         image = np.array(image).astype(bool)
         self.updated.emit("Removing disconnections...")
         domain = rd.removeDisconnections(image)
@@ -252,7 +252,6 @@ class SinglePhaseRunObj(QObject):
         
         #simulation parameters
         visInterval=self.window.visInterval 
-        restart = False
         restartFq=False;
         analysisInterval = self.window.analysisInterval;
         permTolerance = self.window.permTolerance;
@@ -283,7 +282,7 @@ class SinglePhaseRunObj(QObject):
         
         rls.runLBPMSinglePhase(self, domain, targetdir, npx, npy, npz, voxelSize, 
                                timesteps, gpuIDs, Fx, Fy, Fz, flux, Pin, Pout, 
-                               mu, restart, visInterval, analysisInterval, permTolerance, 
+                               mu, restartFq, visInterval, analysisInterval, permTolerance, 
                                terminal, install)
 
 
