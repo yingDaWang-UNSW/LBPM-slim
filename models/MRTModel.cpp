@@ -31,7 +31,7 @@ bool visTolerance = true;
 double DiffCoeff = 0.1;
 //int toleranceInterval = 10000;
 int analysis_interval = 1000;
-double fluxAccelerationRatio = 10.0;
+double tempdin=0.0;
 ScaLBL_MRTModel::ScaLBL_MRTModel(int RANK, int NP, MPI_Comm COMM):
 rank(RANK), nprocs(NP), Restart(0),timestep(0),timestepMax(0),tau(0),
 Fx(0),Fy(0),Fz(0),flux(0),din(0),dout(0),mu(0),
@@ -302,12 +302,17 @@ void ScaLBL_MRTModel::Run(){
 	if (rank==0) printf("No. of timesteps: %i , Boundary Condition: %i \n", timestepMax, BoundaryCondition);
 	if (rank==0) printf("********************************************************\n");
 	timestep=0;
+//	if (BoundaryCondition == 3 && ~restartFq) { // this reduces pressure oscillation due to zero init
+//	    tempdin=din;
+//	    din=dout;
+//	    flux=10; //arbitrary number, needs to be lower for tighter, smaller domains, and vice versa
+//    }
 	while (timestep < timestepMax) {
 	    // add pressure BC ramp up in a separate section here if you want
-//		if (BoundaryCondition == 3){
-//            
-//		}
-	    
+////		if (BoundaryCondition == 3 && timestep <= 10000){
+////            din=dout+(tempdin-dout)*timestep/10000;
+////		}
+////	    
 		//ODD TIMESTEP************************************************************
 		timestep++;// odd timesteps need to be solved interior then exterior
 		if (thermalFlag) { //run thermal flag update vel fields every 2 steps
@@ -331,7 +336,8 @@ void ScaLBL_MRTModel::Run(){
 		ScaLBL_DeviceBarrier();
 		// Set BCs at exteriors
 		if (BoundaryCondition == 3){
-			ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, fq, din, timestep);
+		    if (din>tempdin) ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, fq, din, timestep);
+		    else din = ScaLBL_Comm->D3Q19_Flux_BC_z(NeighborList, fq, flux, timestep);
 			ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, fq, dout, timestep);
 		}
 		if (BoundaryCondition == 4){
@@ -353,7 +359,8 @@ void ScaLBL_MRTModel::Run(){
 		ScaLBL_DeviceBarrier();
 		// Set BCs
 		if (BoundaryCondition == 3){
-			ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, fq, din, timestep);
+		    if (din>tempdin) ScaLBL_Comm->D3Q19_Pressure_BC_z(NeighborList, fq, din, timestep);
+		    else din = ScaLBL_Comm->D3Q19_Flux_BC_z(NeighborList, fq, flux, timestep);
 			ScaLBL_Comm->D3Q19_Pressure_BC_Z(NeighborList, fq, dout, timestep);
 		}
 		if (BoundaryCondition == 4){

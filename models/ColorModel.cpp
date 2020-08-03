@@ -870,7 +870,7 @@ void ScaLBL_ColorModel::Run(){
             }
 
             // adjust the force if capillary number is set
-            if (rank == 0) printf("Current Params: Sat = %f, flux = %e, Force = %e, Nca = %e, setPar = %e\n",current_saturation, flux, force_magnitude, Ca, settlingParam);
+            if (rank == 0) printf("Current Params: Sat = %f, flux = %e, gradP = %e, Nca = %e, setPar = %e\n",current_saturation, flux, gradP, Ca, settlingParam);
 			if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag && timestep > ramp_timesteps){ // activate if capillary number is specified, and during morph, only after acceleration is done
 			    // at each analysis step, 
                 if (Ca>0.f){
