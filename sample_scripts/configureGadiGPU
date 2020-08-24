@@ -3,7 +3,7 @@
 module purge
 module load cmake/3.16.2
 module load gcc/system 
-module load openmpi/4.0.1
+module load openmpi/2.1.6
 module load cuda/10.1
 
 export LBPM_SOURCE="/home/561/yw5484/LBPMYDW/LBPM-slim/"
