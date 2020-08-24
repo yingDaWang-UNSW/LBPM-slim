@@ -552,4 +552,26 @@ int Domain::PoreCount(){
     }
     return Npore;
 }
+double Domain::Porosity(){
+    // Compute the porosity
+    int nprocs=nprocx()*nprocy()*nprocz();
+    double sum;
+    double porosity;
+    double sum_local=0.0;
+    double iVol_global = 1.0/(1.0*(Nx-2)*(Ny-2)*(Nz-2)*nprocs);
+    for (int k=1;k<Nz-1;k++){
+        for (int j=1;j<Ny-1;j++){
+            for (int i=1;i<Nx-1;i++){
+                int n = k*Nx*Ny+j*Nx+i;
+                if (id[n] > 0){
+                    sum_local+=1.0;
+                }
+            }
+        }
+    }
+    
+    MPI_Allreduce(&sum_local,&sum,1,MPI_DOUBLE,MPI_SUM,Comm);
+    porosity = sum*iVol_global;
+    return porosity;
+}
 

@@ -32,6 +32,7 @@ double DiffCoeff = 0.1;
 //int toleranceInterval = 10000;
 int analysis_interval = 1000;
 double tempdin=0.0;
+double Porosity=0.0;
 ScaLBL_MRTModel::ScaLBL_MRTModel(int RANK, int NP, MPI_Comm COMM):
 rank(RANK), nprocs(NP), Restart(0),timestep(0),timestepMax(0),tau(0),
 Fx(0),Fy(0),Fz(0),flux(0),din(0),dout(0),mu(0),
@@ -188,6 +189,7 @@ void ScaLBL_MRTModel::Create(){
 	// ScaLBL_Communicator ScaLBL_Comm(Mask); // original
 	ScaLBL_Comm  = std::shared_ptr<ScaLBL_Communicator>(new ScaLBL_Communicator(Mask));
 	Np=Mask->PoreCount();
+	Porosity=Mask->Porosity();
 	int Npad=(Np/16 + 2)*16; // Np in memoptim is defined differently to porecount: see scalbl.cpp for details
 	if (rank==0)    printf ("Set up memory efficient layout \n");
 	Map.resize(Nx,Ny,Nz);       
@@ -302,17 +304,17 @@ void ScaLBL_MRTModel::Run(){
 	if (rank==0) printf("No. of timesteps: %i , Boundary Condition: %i \n", timestepMax, BoundaryCondition);
 	if (rank==0) printf("********************************************************\n");
 	timestep=0;
-//	if (BoundaryCondition == 3 && ~restartFq) { // this reduces pressure oscillation due to zero init
-//	    tempdin=din;
-//	    din=dout;
-//	    flux=10; //arbitrary number, needs to be lower for tighter, smaller domains, and vice versa
-//    }
+	if (BoundaryCondition == 3 && ~restartFq) { // this reduces pressure oscillation due to zero init
+	    tempdin=din;
+	    din=dout;
+	    flux=10*Porosity; //arbitrary number, needs to be lower for tighter, smaller domains, and vice versa
+    }
 	while (timestep < timestepMax) {
 	    // add pressure BC ramp up in a separate section here if you want
-////		if (BoundaryCondition == 3 && timestep <= 10000){
-////            din=dout+(tempdin-dout)*timestep/10000;
-////		}
-////	    
+//		if (BoundaryCondition == 3 && timestep <= 10000){
+//            din=dout+(tempdin-dout)*timestep/10000;
+//		}
+	    
 		//ODD TIMESTEP************************************************************
 		timestep++;// odd timesteps need to be solved interior then exterior
 		if (thermalFlag) { //run thermal flag update vel fields every 2 steps
@@ -507,7 +509,7 @@ void ScaLBL_MRTModel::Run(){
 			}
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {
-				printf("Timestep: %d, MLUPS: %f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt (%) = %0.4f, gradP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/((Nz-2)*nprocz));
+				printf("Timestep: %d, MLUPS: %f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt (%) = %0.4e, gradP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/((Nz-2)*nprocz));
 				FILE * log_file = fopen("Permeability.csv","a");
 				fprintf(log_file,"%i %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g\n",timestep, Fx, Fy, Fz, din, dout, mu, vax,vay,vaz, absperm);
 				fclose(log_file);
@@ -535,6 +537,8 @@ void ScaLBL_MRTModel::Run(){
 	        else velPField();//
 		}
 	}
+    if (fqFlag) fqField();//
+    else velPField();//
 	//************************************************************************/
 }
 

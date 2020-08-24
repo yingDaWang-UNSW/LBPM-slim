@@ -135,7 +135,7 @@ public: // Public variables (need to create accessors instead)
     //void CommunicateMeshHalo(DoubleArray &Mesh);
     void CommInit(); 
     int PoreCount();
-
+    double Porosity();
 private:
     // packing and unpacking is defined on a case-by-case basis
 /*    void PackID(int *list, int count, char *sendbuf, char *ID);*/
