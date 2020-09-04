@@ -852,7 +852,7 @@ void ScaLBL_ColorModel::Run(){
                     if (autoMorphFlag) { //if automorph is active, reverse the morph direction, and reverse the force if thats an active flag
                         injectionType = fabs(injectionType-3); //1-2 switch
                         satInit=1.0-satInit;
-                        if (rank==0) printf("[Automorph], Flux reversal conditions have been met, the injection type has been switched to %d\n", injectionType);
+                        if (rank==0) printf("[AUTOMORPH], Flux reversal conditions have been met, the injection type has been switched to %d\n", injectionType);
                     }
                     if (fluxReversalType==1){
                         inletA=fabs(inletA-1.0); //a is nwp
@@ -973,9 +973,17 @@ void ScaLBL_ColorModel::Run(){
 					    if (injectionType==1){
 			                targetSaturation = current_saturation - satInc;
 		                    shellRadius = 2.0;
+		                    if (targetSaturation < 0. ){
+    						    printf("[AUTOMORPH]: MorphDrain has reached full saturation. Terminating simulation. \n");
+    						    break; 
+						    }
 			            } else if (injectionType==2){
 			                targetSaturation = current_saturation + satInc;
 		                    shellRadius = -0.1;
+		                    if (targetSaturation > 1. ){
+    						    printf("[AUTOMORPH]: MorphImb has reached full saturation. Terminating simulation. \n");
+    						    break; 
+						    }
 			            }
 			            autoMorphAdapt = true; // turn on acceleration immediately
 			            accelerationCounter = accelerationRate+1;
