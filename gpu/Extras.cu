@@ -19,7 +19,7 @@
 
 extern "C" int ScaLBL_SetDevice(int rank){
 	int n_devices; 
-	//int local_rank = atoi(getenv("MV2_COMM_WORLD_LOCAL_RANK"));
+	//int local_rank = atoi(getenv("OMPI_COMM_WORLD_LOCAL_RANK"));
 	cudaGetDeviceCount(&n_devices); 
 	//int device = local_rank % n_devices; 
 	int device = rank % n_devices; 

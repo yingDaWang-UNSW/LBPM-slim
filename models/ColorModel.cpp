@@ -669,13 +669,9 @@ void ScaLBL_ColorModel::Run(){
         // analysis intervals
 		// allow initial ramp-up to get closer to steady state
 		if (timestep%analysis_interval == 0){
-		    if (rank==0) {
-            	stoptime = MPI_Wtime();
-        		cputime = (stoptime - starttime);
-	            printf("TimeStep: %d, Elapsed time = %f \n", timestep, cputime);
-            }
             //ScaLBL_D3Q19_Pressure(fq,Pressure,Np);
 			//ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
+			// i think these can be done in vector layout?
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[0],Velocity_x);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],Velocity_y);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],Velocity_z);
@@ -728,8 +724,6 @@ void ScaLBL_ColorModel::Run(){
 			vB_z /= count;
             double muA = rhoA*(tauA-0.5)/3.f;
             double muB = rhoB*(tauB-0.5)/3.f;
-
-
             double flow_rate_A = sqrt(vA_x*vA_x + vA_y*vA_y + vA_z*vA_z);
             double flow_rate_B = sqrt(vB_x*vB_x + vB_y*vB_y + vB_z*vB_z);
             double force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
@@ -738,10 +732,6 @@ void ScaLBL_ColorModel::Run(){
 			double gradP=force_magnitude+(din-dout)/(Nz*nprocz)/3;
 			double absperm1 = muA*flow_rate_A*9.87e11*voxelSize*voxelSize/gradP;
 			double absperm2 = muB*flow_rate_B*9.87e11*voxelSize*voxelSize/gradP;
-			if (rank==0) {
-				printf("Phase 1: %f Darcies,    ",timestep, absperm1);
-				printf("Phase 2: %f Darcies\n",timestep, absperm2);
-			}
             // compute the settling parameter and phase volumes
             double countA = 0.;// = Averages->Volume_w();
             double countB = 0.;// = Averages->Volume_n();
@@ -763,7 +753,6 @@ void ScaLBL_ColorModel::Run(){
 		            }
 	            }
             }
-
         	MPI_Barrier(Dm->Comm);
             MPI_Allreduce(&phiDiff,&settlingParam,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
 	        MPI_Allreduce(&countA,&volA,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
@@ -772,8 +761,23 @@ void ScaLBL_ColorModel::Run(){
             //scale the settling parameter by the domain size
             settlingParam = sqrt(settlingParam)/(double(Nx*Ny*Nz*nprocs))/poro;
             current_saturation = volB/(volA+volB);
+            double MLUPSGlob = 0.;
+            double MLUPS = 0.;
+        	stoptime = MPI_Wtime();
+    		cputime = (stoptime - starttime);
+		    if (rank==0) {
+	            printf("TimeStep: %d, Elapsed time = %f, ", timestep, cputime);
+            }
+		    MLUPS =  double(Np)*timestep/cputime/1000000;
+			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Dm->Comm); //why is this failing?
+            //printf("Rank: %d, MLUPS: %f\n",rank, MLUPS);
+			if (rank==0) {
+				printf("Phase 1: %f Darcies, ",timestep, absperm1);
+				printf("Phase 2: %f Darcies\n",timestep, absperm2);
+	            printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e, Nca = %e, dNca/dt = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca, fabs((Ca - Ca_previous)/Ca), settlingParam);
+			}
 			//if (rank==0) printf("Va: %f, Vb: %f\n", volA, volB);
-            // rampup the component affinities 
+            // rampup the component affinities - functionalise this for better code
             if (affinityRampupFlag && timestep < affinityRampSteps){
             	size_t NLABELS=0;
 	            char VALUE=0;
@@ -868,9 +872,7 @@ void ScaLBL_ColorModel::Run(){
                     fluxReversalFlag = false;
                 }
             }
-
             // adjust the force if capillary number is set
-            if (rank == 0) printf("Current Params: Sat = %f, flux = %e, gradP = %e, Nca = %e, setPar = %e\n",current_saturation, flux, gradP, Ca, settlingParam);
 			if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag && timestep > ramp_timesteps){ // activate if capillary number is specified, and during morph, only after acceleration is done
 			    // at each analysis step, 
                 if (Ca>0.f){
@@ -893,20 +895,17 @@ void ScaLBL_ColorModel::Run(){
                     
                     
                     flux *= min(max(0.5, capillary_number / Ca), 2.0); //much more concise than if else bounding
-                    if (rank == 0) printf("Adjusting force by factor %f, Nca = %e, Target: %e \n ",min(max(0.5, capillary_number / Ca), 2.0), Ca, capillary_number);
+                    if (rank == 0) printf("Adjusting force by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, capillary_number / Ca), 2.0), force_magnitude, Ca, capillary_number);
                     //Averages->SetParams(rhoA,rhoB,tauA,tauB,Fx,Fy,Fz,alpha);
             	}
 			}
-			
-			
 			//co-injeciton stabilisation routine
 			if (timestep > ramp_timesteps && coinjectionFlag){
 			    if (stabilityCounter >= stabilisationRate){ // theres no adaptation phase, so no extra flag here
-			        if (rank==0) printf("[CO-INJECTION]: Seeking Nca stabilisation. Ca = %e, (previous = %e), Saturation = %f \n",Ca,Ca_previous, current_saturation);
 			        if (fabs((Ca - Ca_previous)/Ca) < tolerance ){
             		    WriteDebugYDW();
 				        if (rank==0){ //save the data as a rel perm point
-					        printf("*** Steady state reached. WRITE STEADY POINT *** \n");
+					        printf("[CO-INJECTION]: Steady state reached. WRITE STEADY POINT\n");
 					        //printf("Ca = %f, (previous = %f) \n",Ca,Ca_previous);
 					        volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
 					        volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
@@ -925,7 +924,7 @@ void ScaLBL_ColorModel::Run(){
 		                }
         			    if (rank==0) printf("[CO-INJECTION]: Inlet altered to: Phase 1: %f, Phase 2: %f \n",inletA, inletB);
 				    } else { //if the system is unstable, continue stabilisation
-					    if (rank==0) printf("********* System is unstable, continuing LBM stabilisation.\n");
+					    if (rank==0) printf("[CO-INJECTION]: System is unstable, continuing LBM stabilisation.\n");
 					    stabilityCounter = 1;
 				    }
 				    Ca_previous = Ca;
@@ -958,11 +957,10 @@ void ScaLBL_ColorModel::Run(){
 //			    }
                 // once rampup and init flux are done, run morph
 			    if (!autoMorphAdapt && stabilityCounter >= stabilisationRate){//if acceleration is currently off, (stabilisation is active)
-				    if (rank==0) printf("[AUTOMORPH]: Seeking Nca stabilisation. Ca = %e, (previous = %e), Saturation = %f \n",Ca,Ca_previous, current_saturation);
 				    if (fabs((Ca - Ca_previous)/Ca) < tolerance ){ //if the capillary number has stabilised, record, adjust, and activate acceleration
 	        		    WriteDebugYDW();
 					    if (rank==0){ //save the data as a rel perm point
-						    printf("*** Steady state reached. WRITE STEADY POINT *** \n");
+						    printf("[AUTOMORPH]: Steady state reached. WRITE STEADY POINT \n");
 						    //printf("Ca = %f, (previous = %f) \n",Ca,Ca_previous);
 						    volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
 						    volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
@@ -974,7 +972,7 @@ void ScaLBL_ColorModel::Run(){
 	                    MPI_Barrier(comm);				    
 					    if (injectionType==1){
 			                targetSaturation = current_saturation - satInc;
-		                    shellRadius = 1.0;
+		                    shellRadius = 2.0;
 			            } else if (injectionType==2){
 			                targetSaturation = current_saturation + satInc;
 		                    shellRadius = -0.1;
@@ -982,7 +980,7 @@ void ScaLBL_ColorModel::Run(){
 			            autoMorphAdapt = true; // turn on acceleration immediately
 			            accelerationCounter = accelerationRate+1;
 				    } else { //if the system is unstable, continue stabilisation
-					    if (rank==0) printf("********* System is unstable, continuing LBM stabilisation.\n");
+					    if (rank==0) printf("[AUTOMORPH]: System is unstable, continuing LBM stabilisation.\n");
 					    stabilityCounter = 1; //enforce capillary number is not readjusted
 				    }
 				    Ca_previous = Ca;
@@ -992,14 +990,14 @@ void ScaLBL_ColorModel::Run(){
                     // check the state
 	                if (current_saturation*((injectionType-1)*2-1)>targetSaturation*((injectionType-1)*2-1)){
 		                autoMorphAdapt = false;
-    					if (rank==0) printf("********* Target reached, beginning stabilisation\n");
+    					if (rank==0) printf("[AUTOMORPH]: Target reached, beginning stabilisation\n");
 				        stabilityCounter = max(-stabilisationRate,-10*analysis_interval); //give some time to readjust the capillary number
 //                        BoundaryCondition = 0;
 //                        flux = 0;
                         
 	                } else {
-    					if (rank==0 && !fluxMorphFlag) printf("********* Automorph executing, beginning interim relaxation\n");
-    					if (rank==0 && fluxMorphFlag) printf("********* Fluxmorph still active, continuing...\n");
+    					if (rank==0 && !fluxMorphFlag) printf("[AUTOMORPH]: Automorph executing, beginning interim relaxation\n");
+    					if (rank==0 && fluxMorphFlag) printf("[AUTOMORPH]: Fluxmorph still active, continuing...\n");
     					accelerationCounter = 0; //reset the acceleration
 	                }
 					if (fluxMorphFlag) { //fluxmorph accelearation rate
@@ -1065,19 +1063,19 @@ void ScaLBL_ColorModel::Run(){
 	//************************************************************************
 	ScaLBL_DeviceBarrier();
 	MPI_Barrier(comm);
-	stoptime = MPI_Wtime();
-	if (rank==0) printf("-------------------------------------------------------------------\n");
-	// Compute the walltime per timestep
-	cputime = (stoptime - starttime)/timestep;
-	// Performance obtained from each node
-	double MLUPS = double(Np)/cputime/1000000;
+//	stoptime = MPI_Wtime();
+//	if (rank==0) printf("-------------------------------------------------------------------\n");
+//	// Compute the walltime per timestep
+//	cputime = (stoptime - starttime)/timestep;
+//	// Performance obtained from each node
+//	double MLUPS = double(Np)/cputime/1000000;
 
-	if (rank==0) printf("********************************************************\n");
-	if (rank==0) printf("CPU time = %f \n", cputime);
-	if (rank==0) printf("Lattice update rate (per core)= %f MLUPS \n", MLUPS);
-	MLUPS *= nprocs;
-	if (rank==0) printf("Lattice update rate (total)= %f MLUPS \n", MLUPS);
-	if (rank==0) printf("********************************************************\n");
+//	if (rank==0) printf("********************************************************\n");
+//	if (rank==0) printf("CPU time = %f \n", cputime);
+//	if (rank==0) printf("Lattice update rate (per core)= %f MLUPS \n", MLUPS);
+//	MLUPS *= nprocs;
+//	if (rank==0) printf("Lattice update rate (total)= %f MLUPS \n", MLUPS);
+//	if (rank==0) printf("********************************************************\n");
 
 	// ************************************************************************
 }

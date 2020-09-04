@@ -25,7 +25,6 @@ bool restartFq = false;
 bool bgkFlag = false;
 bool thermalFlag = false;
 //bool FDThermalFlag = false;
-double tol=1e6;
 double permTolerance = 1e-5;
 bool visTolerance = true;
 double DiffCoeff = 0.1;
@@ -497,7 +496,7 @@ void ScaLBL_MRTModel::Run(){
 			double gradP=sqrt(Fx*Fx+Fy*Fy+Fz*Fz)+(din-dout)/((Nz-2)*nprocz)/3;
 			double absperm = voxelSize*voxelSize*mu*sqrt(vax*vax+vay*vay+vaz*vaz)/gradP;
 			double abspermZ = voxelSize*voxelSize*mu*vaz/gradP;
-			double convRate = fabs((absperm-Kold)/Kold)*100;
+			double convRate = fabs((absperm-Kold)/Kold);
             double MLUPSGlob;
             double MLUPS;
         	stoptime = MPI_Wtime();
@@ -509,14 +508,13 @@ void ScaLBL_MRTModel::Run(){
 			}
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {
-				printf("Timestep: %d, MLUPS: %f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt (%) = %0.4e, gradP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/((Nz-2)*nprocz));
+				printf("Timestep: %d, MLUPS: %0.4f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt = %0.4e, gradP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/((Nz-2)*nprocz));
 				FILE * log_file = fopen("Permeability.csv","a");
 				fprintf(log_file,"%i %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g\n",timestep, Fx, Fy, Fz, din, dout, mu, vax,vay,vaz, absperm);
 				fclose(log_file);
 			}
 			Kold=absperm;
-			tol = convRate/100;
-			if (tol<permTolerance) {
+			if (convRate<permTolerance) {
 			    if (rank==0) printf("Convergence criteria reached, stopping early\n");
 			    if (visTolerance) {
 			        if (fqFlag) fqField();//
