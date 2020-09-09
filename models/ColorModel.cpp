@@ -807,7 +807,7 @@ void ScaLBL_ColorModel::Run(){
                 connectedNWPBlobs.push_back(*st); 
             connectedNWPBlobs.erase( unique( connectedNWPBlobs.begin(), connectedNWPBlobs.end() ), connectedNWPBlobs.end() );
             if (rank==0) {
-                printf("Hydraulically connected NWP Blob IDs: "); 
+                printf("Hydraulically connected Phase 1 Blob IDs: "); 
                 for (int i=0;i<connectedNWPBlobs.size();i++){
                     printf("%d ",connectedNWPBlobs[i]);
                 }
@@ -826,7 +826,7 @@ void ScaLBL_ColorModel::Run(){
                 connectedWPBlobs.push_back(*st2); 
             connectedWPBlobs.erase( unique( connectedWPBlobs.begin(), connectedWPBlobs.end() ), connectedWPBlobs.end() );
             if (rank==0) {
-                printf("Hydraulically connected WP Blob IDs: "); 
+                printf("Hydraulically connected Phase 2 Blob IDs: "); 
                 for (int i=0;i<connectedWPBlobs.size();i++){
                     printf("%d ",connectedWPBlobs[i]);
                 }
@@ -1080,7 +1080,7 @@ void ScaLBL_ColorModel::Run(){
 			//co-injeciton stabilisation routine
 			if (timestep > ramp_timesteps && coinjectionFlag){
 			    if (stabilityCounter >= stabilisationRate){ // theres no adaptation phase, so no extra flag here
-			        if (Ca_EMA_previous < tolerance ){
+			        if (dCadtEMA < tolerance ){
             		    WriteDebugYDW();
 				        if (rank==0){ //save the data as a rel perm point
 					        printf("[CO-INJECTION]: Steady state reached. WRITE STEADY POINT\n");
@@ -1135,7 +1135,7 @@ void ScaLBL_ColorModel::Run(){
 //			    }
                 // once rampup and init flux are done, run morph
 			    if (!autoMorphAdapt && stabilityCounter >= stabilisationRate){//if acceleration is currently off, (stabilisation is active)
-				    if (Ca_EMA_previous < tolerance ){ //if the capillary number has stabilised, record, adjust, and activate acceleration
+				    if (dCadtEMA < tolerance ){ //if the capillary number has stabilised, record, adjust, and activate acceleration
 	        		    WriteDebugYDW();
 					    if (rank==0){ //save the data as a rel perm point
 						    printf("[AUTOMORPH]: Steady state reached. WRITE STEADY POINT \n");
