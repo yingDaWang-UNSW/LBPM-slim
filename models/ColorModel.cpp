@@ -20,8 +20,10 @@ color lattice boltzmann model
  
  // setup automorph, and fluxmorph, and implement flux reversal option
 #include "models/ColorModel.h"
-
 #include <sys/stat.h>
+#include <bits/stdc++.h> 
+#include <algorithm>
+using namespace std;
 ScaLBL_ColorModel::ScaLBL_ColorModel(int RANK, int NP, MPI_Comm COMM):
 rank(RANK), nprocs(NP),  Restart(0),timestep(0),timestepMax(0),tauA(0),tauB(0),rhoA(0),rhoB(0),alpha(0),beta(0),
 Fx(0),Fy(0),Fz(0),flux(0),din(0),dout(0),inletA(0),inletB(0),outletA(0),outletB(0),
@@ -35,7 +37,7 @@ ScaLBL_ColorModel::~ScaLBL_ColorModel(){
 
 void ScaLBL_ColorModel::ReadParams(string filename){
 	// read the input database 
-	db = std::make_shared<Database>( filename );
+	db = make_shared<Database>( filename );
 	domain_db = db->getDatabase( "Domain" );
 	color_db = db->getDatabase( "Color" );
 	analysis_db = db->getDatabase( "Analysis" );
@@ -102,24 +104,24 @@ void ScaLBL_ColorModel::ReadParams(string filename){
 
 }
 void ScaLBL_ColorModel::SetDomain(){
-	Dm  = std::shared_ptr<Domain>(new Domain(domain_db,comm));      // full domain for analysis
-	Mask  = std::shared_ptr<Domain>(new Domain(domain_db,comm));    // mask domain removes immobile phases
+	//Dm  = shared_ptr<Domain>(new Domain(domain_db,comm));      // full domain for analysis
+	Dm  = shared_ptr<Domain>(new Domain(domain_db,comm));    // mask domain removes immobile phases
 	Nx+=2; Ny+=2; Nz += 2;
 	N = Nx*Ny*Nz;
 	id = new char [N];
 	for (int i=0; i<Nx*Ny*Nz; i++) Dm->id[i] = 1;               // initialize this way
-	//Averages = std::shared_ptr<TwoPhase> ( new TwoPhase(Dm) ); // TwoPhase analysis object
+	//Averages = shared_ptr<TwoPhase> ( new TwoPhase(Dm) ); // TwoPhase analysis object
 	Distance.resize(Nx,Ny,Nz);
-	MPI_Barrier(comm);
-	Dm->CommInit();
-	MPI_Barrier(comm);
+	MPI_Barrier(Dm->Comm);
+	//Dm->CommInit();
+	MPI_Barrier(Dm->Comm);
 	rank = Dm->rank();
 }
 
 void ScaLBL_ColorModel::ReadInput(){
 	size_t readID;
-	Mask->ReadIDs();
-	for (int i=0; i<Nx*Ny*Nz; i++) id[i] = Mask->id[i];  // save what was read
+	Dm->ReadIDs();
+	for (int i=0; i<Nx*Ny*Nz; i++) id[i] = Dm->id[i];  // save what was read
 	char LocalRankFilename[100];
 	sprintf(LocalRankString,"%05d",rank);
 	sprintf(LocalRankFilename,"%s%s","ID.",LocalRankString);
@@ -135,7 +137,7 @@ void ScaLBL_ColorModel::ReadInput(){
 			for (int i=0;i<Nx;i++){
 				int n = k*Nx*Ny+j*Nx+i;
 				// Initialize the solid phase
-				if (Mask->id[n] > 0)	id_solid(i,j,k) = 1;
+				if (Dm->id[n] > 0)	id_solid(i,j,k) = 1;
 				else	     	      	id_solid(i,j,k) = 0;
 			}
 		}
@@ -152,7 +154,7 @@ void ScaLBL_ColorModel::ReadInput(){
 	}
 //	MeanFilter(Averages->SDs);
 	if (rank==0) printf("Initialized solid phase -- Converting to Signed Distance function \n");
-	CalcDist(Distance,id_solid,*Mask);
+	CalcDist(Distance,id_solid,*Dm);
 	
 	if (rank == 0) cout << "Domain set." << endl;
 	
@@ -198,7 +200,7 @@ void ScaLBL_ColorModel::AssignComponentLabels(double *phase)
 						AFFINITY=AffinityList[idx];
 						label_count[idx]++;
 						idx = NLABELS;
-						Mask->id[n] = 0; // set mask to zero since this is an immobile component
+						Dm->id[n] = 0; // set mask to zero since this is an immobile component
 					}
 				}
 				// fluid labels are reserved
@@ -210,7 +212,7 @@ void ScaLBL_ColorModel::AssignComponentLabels(double *phase)
 		}
 	}
 	// Set Dm to match Mask
-	for (int i=0; i<Nx*Ny*Nz; i++) Dm->id[i] = Mask->id[i]; 
+	//for (int i=0; i<Nx*Ny*Nz; i++) Dm->id[i] = Mask->id[i]; 
 
 	MPI_Allreduce(&label_count[0],&label_count_global[0],NLABELS,MPI_INT,MPI_SUM,Dm->Comm);
     //poro=0.0;
@@ -236,28 +238,23 @@ void ScaLBL_ColorModel::Create(){
 	 *  This function creates the variables needed to run a LBM 
 	 */
 	//.........................................................
-	// don't perform computations at the eight corners
-	//id[0] = id[Nx-1] = id[(Ny-1)*Nx] = id[(Ny-1)*Nx + Nx-1] = 0;
-	//id[(Nz-1)*Nx*Ny] = id[(Nz-1)*Nx*Ny+Nx-1] = id[(Nz-1)*Nx*Ny+(Ny-1)*Nx] = id[(Nz-1)*Nx*Ny+(Ny-1)*Nx + Nx-1] = 0;
-
-	//.........................................................
 	// Initialize communication structures in averaging domain
-	for (int i=0; i<Nx*Ny*Nz; i++) Dm->id[i] = Mask->id[i];
-	Mask->CommInit();
-	Np=Mask->PoreCount();
+	//for (int i=0; i<Nx*Ny*Nz; i++) Dm->id[i] = Mask->id[i];
+	Dm->CommInit();
+	Np=Dm->PoreCount();
 	//...........................................................................
 	if (rank==0)    printf ("Create ScaLBL_Communicator \n");
 	// Create a communicator for the device (will use optimized layout)
 	// ScaLBL_Communicator ScaLBL_Comm(Mask); // original
-	ScaLBL_Comm  = std::shared_ptr<ScaLBL_Communicator>(new ScaLBL_Communicator(Mask));
-	ScaLBL_Comm_Regular  = std::shared_ptr<ScaLBL_Communicator>(new ScaLBL_Communicator(Mask));
+	ScaLBL_Comm  = shared_ptr<ScaLBL_Communicator>(new ScaLBL_Communicator(Dm));
+	ScaLBL_Comm_Regular  = shared_ptr<ScaLBL_Communicator>(new ScaLBL_Communicator(Dm));
 
 	int Npad=(Np/16 + 2)*16;
 	if (rank==0)    printf ("Set up memory efficient layout, %i | %i | %i \n", Np, Npad, N);
 	Map.resize(Nx,Ny,Nz);       Map.fill(-2);
 	auto neighborList= new int[18*Npad];
-	Np = ScaLBL_Comm->MemoryOptimizedLayoutAA(Map,neighborList,Mask->id,Np);
-	MPI_Barrier(comm);
+	Np = ScaLBL_Comm->MemoryOptimizedLayoutAA(Map,neighborList,Dm->id,Np);
+	MPI_Barrier(Dm->Comm);
 
 	//...........................................................................
 	//                MAIN  VARIABLES ALLOCATED HERE
@@ -351,7 +348,7 @@ void ScaLBL_ColorModel::Initialize(){
 				timestep=0;
 			}
 		}
-		MPI_Bcast(&timestep,1,MPI_INT,0,comm);
+		MPI_Bcast(&timestep,1,MPI_INT,0,Dm->Comm);
 		// Read in the restart file to CPU buffers
 		int *TmpMap;
 		TmpMap = new int[Np];
@@ -404,7 +401,7 @@ void ScaLBL_ColorModel::Initialize(){
 		ScaLBL_CopyToDevice(Phi,cPhi,N*sizeof(double));
 		ScaLBL_DeviceBarrier();
 
-		MPI_Barrier(comm);
+		MPI_Barrier(Dm->Comm);
 	}
 
 	if (rank==0)	printf ("Initializing phase field \n");
@@ -438,7 +435,10 @@ void ScaLBL_ColorModel::Run(){
 	double capillary_number = 0;
 	double tolerance = 1.f;
 	double Ca_previous = 0.f;
-
+    double Ca_EMA = 0.f;
+    double Ca_EMA_previous = 0.f;
+    double dCadt = 0.f;
+    double dCadtEMA = 0.f;
 	// for mixed wetting problems
     bool affinityRampupFlag = false;
     int affinityRampSteps = 0;
@@ -571,13 +571,13 @@ void ScaLBL_ColorModel::Run(){
 	//.......create and start timer............
 	double starttime,stoptime,cputime;
 	ScaLBL_DeviceBarrier();
-	MPI_Barrier(comm);
+	MPI_Barrier(Dm->Comm);
 	starttime = MPI_Wtime();
 	//.........................................
 	
 	//************ MAIN ITERATION LOOP ***************************************/
 	//PROFILE_START("Loop");
-    //std::shared_ptr<Database> analysis_db;
+    //shared_ptr<Database> analysis_db;
 	//bool Regular = false;
 	int counter=0;
 	//runAnalysis analysis( analysis_db, rank_info, ScaLBL_Comm, Dm, Np, Regular, beta, Map );
@@ -621,7 +621,7 @@ void ScaLBL_ColorModel::Run(){
 		ScaLBL_D3Q19_AAodd_Color(NeighborList, dvcMap, fq, Aq, Bq, Den, Phi, Velocity, rhoA, rhoB, tauA, tauB,
 				alpha, beta, Fx, Fy, Fz, Nx, Nx*Ny, 0, ScaLBL_Comm->LastExterior(), Np);
 		ScaLBL_DeviceBarrier(); 
-		MPI_Barrier(comm);
+		MPI_Barrier(Dm->Comm);
 
 		// *************EVEN TIMESTEP*************
 		timestep++;
@@ -656,7 +656,7 @@ void ScaLBL_ColorModel::Run(){
 		}
 		ScaLBL_D3Q19_AAeven_Color(dvcMap, fq, Aq, Bq, Den, Phi, Velocity, rhoA, rhoB, tauA, tauB, alpha, beta, Fx, Fy, Fz, Nx, Nx*Ny, 0, ScaLBL_Comm->LastExterior(), Np);
 		ScaLBL_DeviceBarrier(); 
-		MPI_Barrier(comm);
+		MPI_Barrier(Dm->Comm);
 		//************************************************************************
 		
 		//PROFILE_STOP("Update");
@@ -670,17 +670,18 @@ void ScaLBL_ColorModel::Run(){
 		// allow initial ramp-up to get closer to steady state
 		if (timestep%analysis_interval == 0){
             //ScaLBL_D3Q19_Pressure(fq,Pressure,Np);
-			//ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
+			//ScaLBL_DeviceBarrier(); MPI_Barrier(Dm->Comm);
 			// i think these can be done in vector layout?
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[0],Velocity_x);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],Velocity_y);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],Velocity_z);
 			ScaLBL_Comm->RegularLayout(Map,&Den[0],Density_A_Cart);
 			ScaLBL_Comm->RegularLayout(Map,&Den[Np],Density_B_Cart);
+			
             DoubleArray phase(Nx,Ny,Nz);
         	ScaLBL_CopyToHost(phase.data(), Phi, N*sizeof(double));
-			double count_loc=0;
-			double count;
+        	
+        	// initialise the variables needed to aggregate velocity
 			//double vax, vay, vaz, vbx, vby, vbz;
             double vA_x;// = Averages->van_global(0);
             double vA_y;// = Averages->van_global(1);
@@ -691,76 +692,251 @@ void ScaLBL_ColorModel::Run(){
 			double vax_loc, vay_loc, vaz_loc, vbx_loc, vby_loc, vbz_loc;
 			vax_loc = vay_loc = vaz_loc = 0.f;
 			vbx_loc = vby_loc = vbz_loc = 0.f;
+			
+			// initialise the variables needed for hydraulic components 
+	        double vF = 0.f;
+	        double vS = 0.f;
+	        IntArray NWP_blob_label(Nx,Ny,Nz);
+	        IntArray WP_blob_label(Nx,Ny,Nz);
+	        //Array<char> phase_id(Nx,Ny,Nz);
+			//double vax, vay, vaz, vbx, vby, vbz;
+            double vA_x_H;// = Averages->van_global(0);
+            double vA_y_H;// = Averages->van_global(1);
+            double vA_z_H;// = Averages->van_global(2);
+            double vB_x_H;// = Averages->vaw_global(0);
+            double vB_y_H;// = Averages->vaw_global(1);
+            double vB_z_H;// = Averages->vaw_global(2);
+			double vax_loc_H, vay_loc_H, vaz_loc_H, vbx_loc_H, vby_loc_H, vbz_loc_H;
+			vax_loc_H = vay_loc_H = vaz_loc_H = 0.f;
+			vbx_loc_H = vby_loc_H = vbz_loc_H = 0.f;
+			// find the NWP blobs
+			ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,NWP_blob_label,Dm->Comm);
+	        MPI_Barrier(Dm->Comm);
+	        //find the WP blobs
+	        phase.scale(-1);
+			ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,WP_blob_label,Dm->Comm);
+	        phase.scale(-1);
+	        MPI_Barrier(Dm->Comm);
+	        int numLocNWPBlobs=NWP_blob_label.max();
+	        int numGlobNWPBlobs;
+			MPI_Allreduce(&numLocNWPBlobs,&numGlobNWPBlobs,1,MPI_INT,MPI_MAX,Dm->Comm);
+	        int numLocWPBlobs=WP_blob_label.max();
+	        int numGlobWPBlobs;
+			MPI_Allreduce(&numLocWPBlobs,&numGlobWPBlobs,1,MPI_INT,MPI_MAX,Dm->Comm);
+	        MPI_Barrier(Dm->Comm);
+	        if (rank==0) printf("Phase 1 Bodies: %d, Phase 2 Bodies: %d \n", numGlobNWPBlobs, numGlobWPBlobs);
+	        // for each blob, check if it is hydraulically connected
+	        // sweep the inlet and outlet ranks to see if a blob exists
+	        int kproc = Dm->kproc();
+	        vector<int> inletNWPBlobsLoc{-1,-2};
+	        //vector<int> inletNWPBlobsGlob;
+            int *inletNWPBlobsGlob;
+	        vector<int> outletNWPBlobsLoc{-1,-2};
+	        //vector<int> outletNWPBlobsGlob;
+            int *outletNWPBlobsGlob;
+	        vector<int> inletWPBlobsLoc{-1,-2};
+	        //vector<int> inletWPBlobsGlob;
+            int *inletWPBlobsGlob;
+	        vector<int> outletWPBlobsLoc{-1,-2};
+	        //vector<int> outletWPBlobsGlob;
+            int *outletWPBlobsGlob;
+	        int locBlobIDNWP;
+	        int locBlobIDWP;
+	        // local unique IO blobs
+	        if (kproc == 0){
+	            // if inlet domain, check which nwp and wp blobs are in inlet
+	            // list these blobs per processor and collate globally
+	            // check blobs one by one, or check in single sweep?
+         		int k=1;
+     			for (int j=1;j<Ny-1;j++){
+     				for (int i=1;i<Nx-1;i++){
+     					int n = k*Nx*Ny+j*Nx+i;
+                        locBlobIDNWP = NWP_blob_label(i,j,k);
+                        locBlobIDWP = WP_blob_label(i,j,k);
+                        if (find(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), locBlobIDNWP) == inletNWPBlobsLoc.end()){
+                            //printf("Rank = %d, New NWP Blob %d in inlet\n",rank, locBlobIDNWP);
+                            inletNWPBlobsLoc.push_back(locBlobIDNWP);
+                        }
+                        if (find(inletWPBlobsLoc.begin(), inletWPBlobsLoc.end(), locBlobIDWP) == inletWPBlobsLoc.end()){
+                            //printf("Rank = %d, New WP Blob %d in inlet\n",rank, locBlobIDWP);
+                            inletWPBlobsLoc.push_back(locBlobIDWP);
+                        }
+                        
+     				}                    
+     			}
+	        }
+	        //now check outlet domain
+	        if (kproc == nprocz-1){
+         		int k=Nz-2;
+     			for (int j=1;j<Ny-1;j++){
+     				for (int i=1;i<Nx-1;i++){
+     					int n = k*Nx*Ny+j*Nx+i;
+                        locBlobIDNWP = NWP_blob_label(i,j,k);
+                        locBlobIDWP = WP_blob_label(i,j,k);
+                        if (find(outletNWPBlobsLoc.begin(), outletNWPBlobsLoc.end(), locBlobIDNWP) == outletNWPBlobsLoc.end()){
+                            //printf("Rank = %d, New NWP Blob %d in outlet\n",rank, locBlobIDNWP);
+                            outletNWPBlobsLoc.push_back(locBlobIDNWP);
+                        }
+                        if (find(outletWPBlobsLoc.begin(), outletWPBlobsLoc.end(), locBlobIDWP) == outletWPBlobsLoc.end()){
+                            //printf("Rank = %d, New WP Blob %d in outlet\n",rank, locBlobIDWP);
+                            outletWPBlobsLoc.push_back(locBlobIDWP);
+                        }
+     				}                    
+     			}
+	        }
+	        MPI_Barrier(Dm->Comm);
+	        // collate inlet and outlet blob IDs to global
+	        int numInletNWPBlobs = collateBoundaryBlobs(inletNWPBlobsGlob,inletNWPBlobsLoc);
+	        int numInletWPBlobs = collateBoundaryBlobs(inletWPBlobsGlob,inletWPBlobsLoc);
+	        int numOutletNWPBlobs = collateBoundaryBlobs(outletNWPBlobsGlob,outletNWPBlobsLoc);
+	        int numOutletWPBlobs = collateBoundaryBlobs(outletWPBlobsGlob,outletWPBlobsLoc);
+	        // check the inlet and outlet blobs to find connected IDs
+	        vector<int> connectedNWPBlobs;
+	        vector<int> connectedWPBlobs;
+
+            sort(inletNWPBlobsGlob, inletNWPBlobsGlob + numInletNWPBlobs); 
+            sort(outletNWPBlobsGlob, outletNWPBlobsGlob + numOutletNWPBlobs); 
+            vector<int> v(numInletNWPBlobs + numOutletNWPBlobs); 
+            vector<int>::iterator it, st; 
+            it = set_intersection(inletNWPBlobsGlob, inletNWPBlobsGlob + numInletNWPBlobs, 
+                                  outletNWPBlobsGlob, outletNWPBlobsGlob + numOutletNWPBlobs, 
+                                  v.begin()); 
+          
+
+            for (st = v.begin(); st != it; ++st) 
+                connectedNWPBlobs.push_back(*st); 
+            connectedNWPBlobs.erase( unique( connectedNWPBlobs.begin(), connectedNWPBlobs.end() ), connectedNWPBlobs.end() );
+            if (rank==0) {
+                printf("Hydraulically connected NWP Blob IDs: "); 
+                for (int i=0;i<connectedNWPBlobs.size();i++){
+                    printf("%d ",connectedNWPBlobs[i]);
+                }
+                printf("\n");
+            }
+            
+            sort(inletWPBlobsGlob, inletWPBlobsGlob + numInletWPBlobs); 
+            sort(outletWPBlobsGlob, outletWPBlobsGlob + numOutletWPBlobs); 
+            vector<int> v2(numInletWPBlobs + numOutletWPBlobs); 
+            vector<int>::iterator it2, st2; 
+            it2 = set_intersection(inletWPBlobsGlob, inletWPBlobsGlob + numInletWPBlobs, 
+                                  outletWPBlobsGlob, outletWPBlobsGlob + numOutletWPBlobs, 
+                                  v2.begin()); 
+          
+            for (st2 = v2.begin(); st2 != it2; ++st2) 
+                connectedWPBlobs.push_back(*st2); 
+            connectedWPBlobs.erase( unique( connectedWPBlobs.begin(), connectedWPBlobs.end() ), connectedWPBlobs.end() );
+            if (rank==0) {
+                printf("Hydraulically connected WP Blob IDs: "); 
+                for (int i=0;i<connectedWPBlobs.size();i++){
+                    printf("%d ",connectedWPBlobs[i]);
+                }
+                printf("\n");
+            }
+
+            // The settling parameter and phase volumes
+            double countA = 0.;// = Averages->Volume_w();
+            double countB = 0.;// = Averages->Volume_n();
+            double countA_H = 0.;// = Averages->Volume_w();
+            double countB_H = 0.;// = Averages->Volume_n();
+            double current_saturation;
+            double current_saturation_H;
+            double settlingParam = 0.;
+            double phiDiff = 0.;
+			// sum velocities, volumes, differences
 			for (int k=1; k<Nz-1; k++){
 				for (int j=1; j<Ny-1; j++){
 					for (int i=1; i<Nx-1; i++){
-						count_loc+=1.0;
 						if (Distance(i,j,k) > 0){
+	                        phiDiff = phiDiff + (phase(i,j,k) - oldPhase(i,j,k))*(phase(i,j,k) - oldPhase(i,j,k));
+	                        oldPhase(i,j,k) = phase(i,j,k);
 						    if (phase(i,j,k)>0){
 							    vax_loc += Velocity_x(i,j,k);
 							    vay_loc += Velocity_y(i,j,k);
 							    vaz_loc += Velocity_z(i,j,k);
+	                            countA+=1.0;
+							    if (find(connectedNWPBlobs.begin(), connectedNWPBlobs.end(), NWP_blob_label(i,j,k)) != connectedNWPBlobs.end()) {
+    							    vax_loc_H += Velocity_x(i,j,k);
+							        vay_loc_H += Velocity_y(i,j,k);
+							        vaz_loc_H += Velocity_z(i,j,k);
+	                                countA_H+=1.0;							    
+							    }
 							} else {
 							    vbx_loc += Velocity_x(i,j,k);
 							    vby_loc += Velocity_y(i,j,k);
 							    vbz_loc += Velocity_z(i,j,k);
+	                            countB+=1.0;
+							    if (find(connectedWPBlobs.begin(), connectedWPBlobs.end(), WP_blob_label(i,j,k)) != connectedWPBlobs.end()) {
+    							    vbx_loc_H += Velocity_x(i,j,k);
+							        vby_loc_H += Velocity_y(i,j,k);
+							        vbz_loc_H += Velocity_z(i,j,k);
+							        countB_H+=1.0;
+							    }
 							}
 						}
 					}
 				}
 			}
-			MPI_Allreduce(&vax_loc,&vA_x,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			MPI_Allreduce(&vay_loc,&vA_y,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			MPI_Allreduce(&vaz_loc,&vA_z,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			MPI_Allreduce(&vbx_loc,&vB_x,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			MPI_Allreduce(&vby_loc,&vB_y,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			MPI_Allreduce(&vbz_loc,&vB_z,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			MPI_Allreduce(&count_loc,&count,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			vA_x /= count;
-			vA_y /= count;
-			vA_z /= count;
-			vB_x /= count;
-			vB_y /= count;
-			vB_z /= count;
+        	MPI_Barrier(Dm->Comm);
+			MPI_Allreduce(&vax_loc,&vA_x,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vay_loc,&vA_y,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vaz_loc,&vA_z,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vbx_loc,&vB_x,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vby_loc,&vB_y,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vbz_loc,&vB_z,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			
+			MPI_Allreduce(&vax_loc_H,&vA_x_H,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vay_loc_H,&vA_y_H,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vaz_loc_H,&vA_z_H,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vbx_loc_H,&vB_x_H,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vby_loc_H,&vB_y_H,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			MPI_Allreduce(&vbz_loc_H,&vB_z_H,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+			
+            MPI_Allreduce(&phiDiff,&settlingParam,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+	        MPI_Allreduce(&countA,&volA,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+	        MPI_Allreduce(&countB,&volB,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+	        
+	        MPI_Allreduce(&countA_H,&volA_H,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+	        MPI_Allreduce(&countB_H,&volB_H,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+	        
+        	MPI_Barrier(Dm->Comm);
+			vA_x /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vA_y /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vA_z /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vB_x /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vB_y /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vB_z /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			
+			vA_x_H /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vA_y_H /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vA_z_H /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vB_x_H /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vB_y_H /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
+			vB_z_H /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
             double muA = rhoA*(tauA-0.5)/3.f;
             double muB = rhoB*(tauB-0.5)/3.f;
             double flow_rate_A = sqrt(vA_x*vA_x + vA_y*vA_y + vA_z*vA_z);
             double flow_rate_B = sqrt(vB_x*vB_x + vB_y*vB_y + vB_z*vB_z);
+            double flow_rate_A_H = sqrt(vA_x_H*vA_x_H + vA_y_H*vA_y_H + vA_z_H*vA_z_H);
+            double flow_rate_B_H = sqrt(vB_x_H*vB_x_H + vB_y_H*vB_y_H + vB_z_H*vB_z_H);
             double force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
-            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double(Nx*Ny*Nz*nprocs));
             //double Ca = fabs((1-current_saturation)*muA*flow_rate_A + current_saturation*muB*flow_rate_B)/(5.796*alpha);
-			double gradP=force_magnitude+(din-dout)/(Nz*nprocz)/3;
+			double gradP=force_magnitude+(din-dout)/((Nz-2)*nprocz)/3;
 			double absperm1 = muA*flow_rate_A*9.87e11*voxelSize*voxelSize/gradP;
 			double absperm2 = muB*flow_rate_B*9.87e11*voxelSize*voxelSize/gradP;
-            // compute the settling parameter and phase volumes
-            double countA = 0.;// = Averages->Volume_w();
-            double countB = 0.;// = Averages->Volume_n();
-            double current_saturation;
-            double settlingParam = 0.;
-            double phiDiff = 0.;
-            for (int k=0;k<Nz;k++){
-	            for (int j=0;j<Ny;j++){
-		            for (int i=0;i<Nx;i++){
-						if (Distance(i,j,k) > 0){
-	                        phiDiff = phiDiff + (phase(i,j,k) - oldPhase(i,j,k))*(phase(i,j,k) - oldPhase(i,j,k));
-	                        oldPhase(i,j,k) = phase(i,j,k);
-	                        if (phase(i,j,k)>0) {
-	                            countA=countA+1;
-	                        } if (phase(i,j,k)<0) {
-	                            countB=countB+1;
-	                        }
-	                    }
-		            }
-	            }
-            }
-        	MPI_Barrier(Dm->Comm);
-            MPI_Allreduce(&phiDiff,&settlingParam,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
-	        MPI_Allreduce(&countA,&volA,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
-	        MPI_Allreduce(&countB,&volB,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
-        	MPI_Barrier(Dm->Comm);
+			double absperm1_H = muA*flow_rate_A_H*9.87e11*voxelSize*voxelSize/gradP;
+			double absperm2_H = muB*flow_rate_B_H*9.87e11*voxelSize*voxelSize/gradP;
             //scale the settling parameter by the domain size
-            settlingParam = sqrt(settlingParam)/(double(Nx*Ny*Nz*nprocs))/poro;
+            settlingParam = sqrt(settlingParam)/(double((Nx-2)*(Ny-2)*(Nz-2)*nprocs))/poro;
             current_saturation = volB/(volA+volB);
+            current_saturation_H = volB_H/(volA_H+volB_H);
+            // calculate the hydraulically connected capillary number if necessary...
+            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double((Nx-2)*(Ny-2)*(Nz-2)*nprocs));
+            Ca_EMA = approxRollingAverage(Ca_EMA, Ca, timestep);
+            dCadt = fabs((Ca - Ca_previous)/Ca_previous);
+            dCadtEMA = fabs((Ca_EMA - Ca_EMA_previous)/Ca_EMA_previous);
+            Ca_previous=Ca;
+            Ca_EMA_previous=Ca_EMA;
+            
             double MLUPSGlob = 0.;
             double MLUPS = 0.;
         	stoptime = MPI_Wtime();
@@ -772,11 +948,10 @@ void ScaLBL_ColorModel::Run(){
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Dm->Comm); //why is this failing?
             //printf("Rank: %d, MLUPS: %f\n",rank, MLUPS);
 			if (rank==0) {
-				printf("Phase 1: %f Darcies, ",timestep, absperm1);
-				printf("Phase 2: %f Darcies\n",timestep, absperm2);
-	            printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e, Nca = %e, dNca/dt = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca, fabs((Ca - Ca_previous)/Ca), settlingParam);
+				printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1, absperm2,absperm1_H, absperm2_H);
+	            printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e, Nca = %e, EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca, Ca_EMA, dCadtEMA, settlingParam);
 			}
-			//if (rank==0) printf("Va: %f, Vb: %f\n", volA, volB);
+
             // rampup the component affinities - functionalise this for better code
             if (affinityRampupFlag && timestep < affinityRampSteps){
             	size_t NLABELS=0;
@@ -842,7 +1017,7 @@ void ScaLBL_ColorModel::Run(){
 //		            }
 //	            }
             }
-            
+        	MPI_Barrier(Dm->Comm);
             
             // check for flux reversal
 	        //printf("Core: %d, setParm: %f\n",rank, settlingParam); 
@@ -872,6 +1047,8 @@ void ScaLBL_ColorModel::Run(){
                     fluxReversalFlag = false;
                 }
             }
+            
+            
             // adjust the force if capillary number is set
 			if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag && timestep > ramp_timesteps){ // activate if capillary number is specified, and during morph, only after acceleration is done
 			    // at each analysis step, 
@@ -879,7 +1056,6 @@ void ScaLBL_ColorModel::Run(){
                     Fx *= capillary_number / Ca;
                     Fy *= capillary_number / Ca;
                     Fz *= capillary_number / Ca;
-                    Ca_previous=Ca;
                     force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
 
                     if (force_magnitude > 1e-3){
@@ -899,14 +1075,15 @@ void ScaLBL_ColorModel::Run(){
                     //Averages->SetParams(rhoA,rhoB,tauA,tauB,Fx,Fy,Fz,alpha);
             	}
 			}
+			
+			
 			//co-injeciton stabilisation routine
 			if (timestep > ramp_timesteps && coinjectionFlag){
 			    if (stabilityCounter >= stabilisationRate){ // theres no adaptation phase, so no extra flag here
-			        if (fabs((Ca - Ca_previous)/Ca) < tolerance ){
+			        if (Ca_EMA_previous < tolerance ){
             		    WriteDebugYDW();
 				        if (rank==0){ //save the data as a rel perm point
 					        printf("[CO-INJECTION]: Steady state reached. WRITE STEADY POINT\n");
-					        //printf("Ca = %f, (previous = %f) \n",Ca,Ca_previous);
 					        volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
 					        volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
 					        FILE * kr_log_file = fopen("relperm.csv","a");
@@ -914,7 +1091,7 @@ void ScaLBL_ColorModel::Run(){
 					        fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,inletA,inletB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2);
 					        fclose(kr_log_file);
 				        }
-                        MPI_Barrier(comm);
+                        MPI_Barrier(Dm->Comm);
 				        if (injectionType==1){
                             inletA=inletA+satInc; //a is nwp
                             inletB=inletB-satInc;
@@ -927,10 +1104,11 @@ void ScaLBL_ColorModel::Run(){
 					    if (rank==0) printf("[CO-INJECTION]: System is unstable, continuing LBM stabilisation.\n");
 					    stabilityCounter = 1;
 				    }
-				    Ca_previous = Ca;
 		        }
 			    stabilityCounter += analysis_interval;
 			}
+			
+			
             //AUTOMORPH routine
 			if (timestep > ramp_timesteps && autoMorphFlag){
 //			    if (current_saturation*((injectionType-1)*2-1)<satInit*((injectionType-1)*2-1) && satInit > 0.0){
@@ -957,11 +1135,10 @@ void ScaLBL_ColorModel::Run(){
 //			    }
                 // once rampup and init flux are done, run morph
 			    if (!autoMorphAdapt && stabilityCounter >= stabilisationRate){//if acceleration is currently off, (stabilisation is active)
-				    if (fabs((Ca - Ca_previous)/Ca) < tolerance ){ //if the capillary number has stabilised, record, adjust, and activate acceleration
+				    if (Ca_EMA_previous < tolerance ){ //if the capillary number has stabilised, record, adjust, and activate acceleration
 	        		    WriteDebugYDW();
 					    if (rank==0){ //save the data as a rel perm point
 						    printf("[AUTOMORPH]: Steady state reached. WRITE STEADY POINT \n");
-						    //printf("Ca = %f, (previous = %f) \n",Ca,Ca_previous);
 						    volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
 						    volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
 						    FILE * kr_log_file = fopen("relperm.csv","a");
@@ -969,19 +1146,19 @@ void ScaLBL_ColorModel::Run(){
 						    fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2);
 						    fclose(kr_log_file);
 					    }
-	                    MPI_Barrier(comm);				    
+	                    MPI_Barrier(Dm->Comm);				    
 					    if (injectionType==1){
 			                targetSaturation = current_saturation - satInc;
 		                    shellRadius = 2.0;
 		                    if (targetSaturation < 0. ){
-    						    printf("[AUTOMORPH]: MorphDrain has reached full saturation. Terminating simulation. \n");
+    						    if (rank==0) printf("[AUTOMORPH]: MorphDrain has reached full saturation. Terminating simulation. \n");
     						    break; 
 						    }
 			            } else if (injectionType==2){
 			                targetSaturation = current_saturation + satInc;
 		                    shellRadius = -0.1;
 		                    if (targetSaturation > 1. ){
-    						    printf("[AUTOMORPH]: MorphImb has reached full saturation. Terminating simulation. \n");
+    						    if (rank==0) printf("[AUTOMORPH]: MorphImb has reached full saturation. Terminating simulation. \n");
     						    break; 
 						    }
 			            }
@@ -991,7 +1168,6 @@ void ScaLBL_ColorModel::Run(){
 					    if (rank==0) printf("[AUTOMORPH]: System is unstable, continuing LBM stabilisation.\n");
 					    stabilityCounter = 1; //enforce capillary number is not readjusted
 				    }
-				    Ca_previous = Ca;
                 }
 			    stabilityCounter += analysis_interval;
 				if (autoMorphAdapt && accelerationCounter >= accelerationRate) { //if the system just stabilised, push forward to the next target
@@ -1059,7 +1235,7 @@ void ScaLBL_ColorModel::Run(){
 			            }
 			            
     				}
-    				MPI_Barrier(comm);
+    				MPI_Barrier(Dm->Comm);
 			    }
 				accelerationCounter += analysis_interval; //increment the acceleration
 			}
@@ -1070,7 +1246,7 @@ void ScaLBL_ColorModel::Run(){
 	//PROFILE_SAVE("lbpm_color_simulator",1);
 	//************************************************************************
 	ScaLBL_DeviceBarrier();
-	MPI_Barrier(comm);
+	MPI_Barrier(Dm->Comm);
 //	stoptime = MPI_Wtime();
 //	if (rank==0) printf("-------------------------------------------------------------------\n");
 //	// Compute the walltime per timestep
@@ -1112,7 +1288,7 @@ double ScaLBL_ColorModel::SpinoInit(const double delta_sw){
 			}
 		}
 	}
-	MPI_Allreduce(&count,&count_global,1,MPI_DOUBLE,MPI_SUM,comm);
+	MPI_Allreduce(&count,&count_global,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
 	volume_initial = count_global;
 	
 	// 2. Loop around the phase, and randomly reassign label based on delta_sw
@@ -1143,7 +1319,7 @@ double ScaLBL_ColorModel::SpinoInit(const double delta_sw){
 			}
 		}
 	}
-	MPI_Allreduce(&count,&count_global,1,MPI_DOUBLE,MPI_SUM,comm);
+	MPI_Allreduce(&count,&count_global,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
 	volume_final=count_global;
 
 	double delta_volume = (volume_final-volume_initial);
@@ -1174,6 +1350,7 @@ double ScaLBL_ColorModel::SpinoInit(const double delta_sw){
 	return delta_volume;
 }
 
+
 double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta){
 	const RankInfoStruct rank_info(rank,nprocx,nprocy,nprocz);
 
@@ -1198,13 +1375,13 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 			}
 		}
 	}
-	MPI_Allreduce(&count,&count_global,1,MPI_DOUBLE,MPI_SUM,comm);
+	MPI_Allreduce(&count,&count_global,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
 	volume_initial = count_global;
 
 	// 2. Identify connected components of phase field -> phase_label
 	//BlobIDstruct new_index;
-	ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,phase_label,comm);
-	MPI_Barrier(comm);
+	ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,phase_label,Dm->Comm);
+	MPI_Barrier(Dm->Comm);
 	// only operate on component "0"
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
@@ -1282,7 +1459,7 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 			}
 		}
 	}
-	MPI_Allreduce(&count,&count_global,1,MPI_DOUBLE,MPI_SUM,comm);
+	MPI_Allreduce(&count,&count_global,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
 	volume_final=count_global;
 
 	double delta_volume = (volume_final-volume_initial);
@@ -1333,7 +1510,7 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 		sprintf(LocalRankFoldername,"./rawVis%d",timestep); 
 	    mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     }
-	MPI_Barrier(comm);
+	MPI_Barrier(Dm->Comm);
 	// Copy back final phase indicator field and convert to regular layout
 	DoubleArray PhaseField(Nx,Ny,Nz);
 	//ScaLBL_Comm->RegularLayout(Map,Phi,PhaseField);
@@ -1344,7 +1521,7 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 	char LocalRankFilename[100];
 	sprintf(LocalRankFilename,"rawVis%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
 	OUTFILE = fopen(LocalRankFilename,"w");
-    //td::fstream ofs(LocalRankFilename, std::ios::out | std::ios::binary );
+    //td::fstream ofs(LocalRankFilename, ios::out | ios::binary );
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
@@ -1402,6 +1579,54 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 	fclose(OUTFILEX);
 //	fclose(OUTFILEY);
 //	fclose(OUTFILEZ);
-	MPI_Barrier(comm);
+	MPI_Barrier(Dm->Comm);
     //ofs.close();
+}
+
+double ScaLBL_ColorModel::approxRollingAverage(double avg, double new_sample, int timestep) {
+    double counter = min(50.,double(timestep)/1000); 
+    avg = avg - avg / counter;
+    avg = avg + new_sample / counter;
+
+    return avg;
+}
+
+int ScaLBL_ColorModel::collateBoundaryBlobs(int *&inletNWPBlobsGlob, vector<int>inletNWPBlobsLoc) {
+            int *recvcounts;
+            recvcounts = (int *) malloc( nprocs * sizeof(int));
+            inletNWPBlobsLoc.erase(std::remove(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), -2), inletNWPBlobsLoc.end());
+            inletNWPBlobsLoc.erase(std::remove(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), -1), inletNWPBlobsLoc.end());
+	        int sizeLocalBlobsList = inletNWPBlobsLoc.size();
+	        MPI_Allgather(&sizeLocalBlobsList, 1, MPI_INT, recvcounts, 1, MPI_INT, Dm->Comm); // gather the bloblengths
+//	        if (rank==0) {
+//                for (int i = 0; i < nprocs; i++) {
+//	                printf("rank: %d, recvCounts: %d \n",rank, recvcounts[i]);
+//                }
+//	        }
+            int totlen = 0; 
+            int *displs;
+            displs = new int[sizeLocalBlobsList*sizeof(int)];
+            displs[0] = 0; // log up the cumulative values
+            totlen += recvcounts[0]; // the total
+            for (int i=1; i<nprocs; i++) {
+               totlen += recvcounts[i];   
+               displs[i] = displs[i-1] + recvcounts[i-1];
+            }
+//            for (int i = 0; i < nprocs; i++) {
+//                printf("rank: %d, totlen: %d, displacements: %d, recvCounts: %d \n",rank, totlen, displs[i], recvcounts[i]);
+//            }
+            /* allocate string, pre-fill with spaces and null terminator */
+            inletNWPBlobsGlob = (int *) malloc( totlen * sizeof(int)) ;          
+	        MPI_Barrier(Dm->Comm);
+	        int *temp;
+	        temp = (int *) malloc( inletNWPBlobsLoc.size() * sizeof(int)) ; 
+	        for (int i=0;i<inletNWPBlobsLoc.size();i++){
+	            temp[i] = inletNWPBlobsLoc[i];
+	        }
+	        MPI_Allgatherv(temp, sizeLocalBlobsList, MPI_INT, inletNWPBlobsGlob, recvcounts, displs, MPI_INT, Dm->Comm);
+//            for (int i = 0; i < totlen; i++) {
+//                printf("rank: %d, boundary blobID: %d \n",rank, inletNWPBlobsGlob[i]);
+//            }
+	        MPI_Barrier(Dm->Comm);
+	        return totlen;
 }

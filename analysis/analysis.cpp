@@ -167,7 +167,7 @@ int ComputeLocalBlobIDs( const DoubleArray& Phase, const DoubleArray& SignDist,
             LocalBlobID(i) = -2;
         } else {
             LocalBlobID(i) = -1;
-            if ( Phase(i)>vF && SignDist(i)>vS )
+            if ( Phase(i)>vF && SignDist(i)>vS ) // if the phase is +1, and in pore
                 isPhase(i) = true;
         }
     }
@@ -345,8 +345,8 @@ static int LocalToGlobalIDs( int nx, int ny, int nz, const RankInfoStruct& rank_
             IDs(i) += offset;
     }
     const BlobIDArray LocalIDs = IDs;
-    // Copy the ids and get the neighbors through the halos
-    fillHalo<BlobIDType> fillData(comm,rank_info,{nx,ny,nz},{1,1,1},0,1,{true,true,true});
+    // Copy the ids and get the neighbors through the halos, dont allow blobs to transition bouundaries - for connected components
+    fillHalo<BlobIDType> fillData(comm,rank_info,{nx,ny,nz},{1,1,1},0,1,{true,true,true},{false,false,false});
     fillData.fill(IDs);
     // Create a list of all neighbor ranks (excluding self)
     std::vector<int> neighbors;

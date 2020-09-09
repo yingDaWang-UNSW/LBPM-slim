@@ -129,6 +129,7 @@ extern "C" void ScaLBL_D3Q19_AAeven_Color(int *Map, double *dist, double *Aq, do
 		rho0=rhoA + 0.5*(1.0-phi)*(rhoB-rhoA);
 		// local relaxation time
 		tau=tauA + 0.5*(1.0-phi)*(tauB-tauA);
+		// here, compute the local force if you want to have gravity or special static phase modelling
 		rlx_setA = 1.f/tau;
 		rlx_setB = 8.f*(2.f-rlx_setA)/(8.f-rlx_setA);
 

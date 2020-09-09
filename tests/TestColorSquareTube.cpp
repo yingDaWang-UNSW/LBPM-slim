@@ -41,21 +41,21 @@ std::shared_ptr<Database> loadInputs( int nprocs )
 
 void InitializeSquareTube(ScaLBL_ColorModel &ColorModel){
   int i,j,k,n;
-  int rank = ColorModel.Mask->rank();
-  int Nx = ColorModel.Mask->Nx;
-  int Ny = ColorModel.Mask->Ny;
-  int Nz = ColorModel.Mask->Nz;
-  int nprocx = ColorModel.Mask->rank_info.nx;
-  int nprocy = ColorModel.Mask->rank_info.ny;
-  int iproc = ColorModel.Mask->rank_info.ix;
-  int jproc = ColorModel.Mask->rank_info.jy;
-  int kproc = ColorModel.Mask->rank_info.kz;
+  int rank = ColorModel.Dm->rank();
+  int Nx = ColorModel.Dm->Nx;
+  int Ny = ColorModel.Dm->Ny;
+  int Nz = ColorModel.Dm->Nz;
+  int nprocx = ColorModel.Dm->rank_info.nx;
+  int nprocy = ColorModel.Dm->rank_info.ny;
+  int iproc = ColorModel.Dm->rank_info.ix;
+  int jproc = ColorModel.Dm->rank_info.jy;
+  int kproc = ColorModel.Dm->rank_info.kz;
 
 	for (k=0;k<Nz;k++){
 		for (j=0;j<Ny;j++){
 			for (i=0;i<Nx;i++){
                 n = k*Nx*Ny + j*Nx + i;
-				ColorModel.Mask->id[n]=0;
+				ColorModel.Dm->id[n]=0;
 			}
 		}
 	}
@@ -70,12 +70,12 @@ void InitializeSquareTube(ScaLBL_ColorModel &ColorModel){
 				int kglobal= k+(Nz-2)*kproc;
 
 				// Initialize phase position field for parallel bubble test
-				if (iglobal < 2)						ColorModel.Mask->id[n]=0;
-				else if (iglobal > (Nx-2)*nprocx-2)	    ColorModel.Mask->id[n]=0;
-				else if (jglobal < 2)					ColorModel.Mask->id[n]=0;
-				else if (jglobal > (Ny-2)*nprocy-2)	    ColorModel.Mask->id[n]=0;
-				else if (kglobal < 20)					ColorModel.Mask->id[n]=1;
-				else									ColorModel.Mask->id[n]=2;
+				if (iglobal < 2)						ColorModel.Dm->id[n]=0;
+				else if (iglobal > (Nx-2)*nprocx-2)	    ColorModel.Dm->id[n]=0;
+				else if (jglobal < 2)					ColorModel.Dm->id[n]=0;
+				else if (jglobal > (Ny-2)*nprocy-2)	    ColorModel.Dm->id[n]=0;
+				else if (kglobal < 20)					ColorModel.Dm->id[n]=1;
+				else									ColorModel.Dm->id[n]=2;
 			}
 		}
 	}

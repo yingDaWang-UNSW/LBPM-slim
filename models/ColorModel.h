@@ -24,14 +24,13 @@ Implementation of color lattice boltzmann model
 #include <stdexcept>
 #include <fstream>
 
-
 //#include "analysis/TwoPhase.h"
 #include "analysis/analysis.h" //only used for blob identification in morph
 #include "analysis/distance.h" //for distance map calculation
 #include "common/ScaLBL.h"
 #include "common/Communication.h"
 #include "common/MPI_Helpers.h"
-
+using namespace std;
 class ScaLBL_ColorModel{
 public:
 	ScaLBL_ColorModel(int RANK, int NP, MPI_Comm COMM);
@@ -39,7 +38,7 @@ public:
 	
 	// functions in they should be run
 	void ReadParams(string filename);
-	void ReadParams(std::shared_ptr<Database> db0);
+	void ReadParams(shared_ptr<Database> db0);
 	void SetDomain();
 	void ReadInput();
 	void Create();
@@ -47,6 +46,8 @@ public:
 	void Run();
 	void WriteDebug();
 	void WriteDebugYDW();
+	double approxRollingAverage(double avg, double new_sample, int timestep);
+    int collateBoundaryBlobs(int *&inletNWPBlobsGlob, vector<int> inletNWPBlobsLoc);
 	
 	bool Restart,pBC;
 	int timestep,timestepMax;
@@ -59,11 +60,13 @@ public:
 	double poro;
     double volB;// = Averages->Volume_w();
     double volA;// = Averages->Volume_n();
+    double volB_H;// = Averages->Volume_w();
+    double volA_H;// = Averages->Volume_n();
 	int rank,nprocx,nprocy,nprocz,nprocs;
 	double Lx,Ly,Lz;
 
 	std::shared_ptr<Domain> Dm;   // this domain is for analysis
-	std::shared_ptr<Domain> Mask; // this domain is for lbm
+	std::shared_ptr<Domain> Mask; // this domain is for lbm //keep these legacy domains for ctesting
 	std::shared_ptr<ScaLBL_Communicator> ScaLBL_Comm;
 	std::shared_ptr<ScaLBL_Communicator> ScaLBL_Comm_Regular;
     //std::shared_ptr<TwoPhase> Averages; //for ctest only, remove this asap
