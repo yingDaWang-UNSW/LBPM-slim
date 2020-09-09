@@ -1087,8 +1087,8 @@ void ScaLBL_ColorModel::Run(){
 					        volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
 					        volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
 					        FILE * kr_log_file = fopen("relperm.csv","a");
-					        fprintf(kr_log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g ",timestep-analysis_interval+20,muA,muB,alpha,Fx,Fy,Fz);
-					        fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,inletA,inletB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2);
+					        fprintf(kr_log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g ",timestep,muA,muB,alpha,Fx,Fy,Fz);
+					        fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,inletA,inletB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2,current_saturation_H,absperm1_H,absperm2_H);
 					        fclose(kr_log_file);
 				        }
                         MPI_Barrier(Dm->Comm);
@@ -1142,8 +1142,8 @@ void ScaLBL_ColorModel::Run(){
 						    volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
 						    volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
 						    FILE * kr_log_file = fopen("relperm.csv","a");
-						    fprintf(kr_log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g ",timestep-analysis_interval+20,muA,muB,alpha,Fx,Fy,Fz);
-						    fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2);
+						    fprintf(kr_log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g ",timestep,muA,muB,alpha,Fx,Fy,Fz);
+					        fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,inletA,inletB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2,current_saturation_H,absperm1_H,absperm2_H);
 						    fclose(kr_log_file);
 					    }
 	                    MPI_Barrier(Dm->Comm);				    
