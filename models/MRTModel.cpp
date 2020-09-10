@@ -303,7 +303,7 @@ void ScaLBL_MRTModel::Run(){
 	if (rank==0) printf("No. of timesteps: %i , Boundary Condition: %i \n", timestepMax, BoundaryCondition);
 	if (rank==0) printf("********************************************************\n");
 	timestep=0;
-	if (BoundaryCondition == 3 && ~restartFq) { // this reduces pressure oscillation due to zero init
+	if (BoundaryCondition == 3 && !restartFq) { // this reduces pressure oscillation due to zero init
 	    tempdin=din;
 	    din=dout;
 	    flux=10*Porosity; //arbitrary number, needs to be lower for tighter, smaller domains, and vice versa
@@ -404,15 +404,12 @@ void ScaLBL_MRTModel::Run(){
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[0],Velocity_x);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],Velocity_y);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],Velocity_z);
-			double count_loc=0;
-			double count;
 			double vax,vay,vaz;
 			double vax_loc,vay_loc,vaz_loc;
 			vax_loc = vay_loc = vaz_loc = 0.f;
 			for (int k=1; k<Nz-1; k++){
 				for (int j=1; j<Ny-1; j++){
 					for (int i=1; i<Nx-1; i++){
-						count_loc+=1.0;
 						if (Geom(i,j,k) > 0){
 							vax_loc += Velocity_x(i,j,k);
 							vay_loc += Velocity_y(i,j,k);
@@ -425,11 +422,10 @@ void ScaLBL_MRTModel::Run(){
 			MPI_Allreduce(&vax_loc,&vax,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			MPI_Allreduce(&vay_loc,&vay,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			MPI_Allreduce(&vaz_loc,&vaz,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			MPI_Allreduce(&count_loc,&count,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			
-			vax /= count;
-			vay /= count;
-			vaz /= count;
+			vax /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;;
+			vay /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;;
+			vaz /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;;
 			
 		    if (thermalFlag) {// get concentration
     			ScaLBL_D3Q19_Pressure(cq,Concentration,Np);
@@ -469,12 +465,9 @@ void ScaLBL_MRTModel::Run(){
 
 			    double meanCLoc=0.0;
 			    double meanCGlob=0.0;
-    			double count_loc=0;
-			    double count;
 			    for (int k=1; k<Nz-1; k++){
 				    for (int j=1; j<Ny-1; j++){
 					    for (int i=1; i<Nx-1; i++){
-						    count_loc+=1.0;
 						    if (Geom(i,j,k) > 0){
 							    meanCLoc += ConcentrationCart(i,j,k);
 						    }
@@ -482,8 +475,7 @@ void ScaLBL_MRTModel::Run(){
 				    }
 			    }
 			    MPI_Allreduce(&meanCLoc,&meanCGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			    MPI_Allreduce(&count_loc,&count,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			    meanCGlob /= count;
+			    meanCGlob /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
 			    double NPe = sqrt(vax*vax+vay*vay+vaz*vaz)/DiffCoeff;
 		        if (rank==0) printf("Mean Peclet Number: %0.4e, Mean concentration in domain: %0.4f\n",NPe,meanCGlob);
 		    }
@@ -508,7 +500,7 @@ void ScaLBL_MRTModel::Run(){
 			}
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {
-				printf("Timestep: %d, MLUPS: %0.4f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt = %0.4e, gradP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*count/((Nz-2)*nprocz));
+				printf("Timestep: %d, MLUPS: %0.4f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt = %0.4e, gradP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*(Nx-2)*(Ny-2)*(Nz-2)*nprocs/((Nz-2)*nprocz));
 				FILE * log_file = fopen("Permeability.csv","a");
 				fprintf(log_file,"%i %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g\n",timestep, Fx, Fy, Fz, din, dout, mu, vax,vay,vaz, absperm);
 				fclose(log_file);

@@ -275,7 +275,7 @@ inline void CommunicateRecvLists( MPI_Comm Communicator, int sendtag, int recvta
 }
 
 
-/*//****************************************************************************************/
+/*****************************************************************************************/
 /*inline void CommunicateMeshHalo(DoubleArray &Mesh, MPI_Comm Communicator,*/
 /*		double *sendbuf_x,double *sendbuf_y,double *sendbuf_z,double *sendbuf_X,double *sendbuf_Y,double *sendbuf_Z,*/
 /*		double *sendbuf_xy,double *sendbuf_XY,double *sendbuf_xY,double *sendbuf_Xy,*/

@@ -430,7 +430,6 @@ void ScaLBL_ColorModel::Run(){
     int visualisation_interval=0;
     // manual morph parameters
 	bool SET_CAPILLARY_NUMBER = false;
-	bool steadyFlag = false; 
 	int ramp_timesteps = 50000;
 	double capillary_number = 0;
 	double tolerance = 1.f;
@@ -439,6 +438,11 @@ void ScaLBL_ColorModel::Run(){
     double Ca_EMA_previous = 0.f;
     double dCadt = 0.f;
     double dCadtEMA = 0.f;
+    double absperm1_EMA = 0.0;
+    double absperm2_EMA = 0.0;
+    double absperm1_H_EMA = 0.0;
+    double absperm2_H_EMA = 0.0;
+	int steadycounter=0;
 	// for mixed wetting problems
     bool affinityRampupFlag = false;
     int affinityRampSteps = 0;
@@ -579,7 +583,7 @@ void ScaLBL_ColorModel::Run(){
 	//PROFILE_START("Loop");
     //shared_ptr<Database> analysis_db;
 	//bool Regular = false;
-	int counter=0;
+
 	//runAnalysis analysis( analysis_db, rank_info, ScaLBL_Comm, Dm, Np, Regular, beta, Map );
 	//analysis.createThreads( analysis_method, 4 );
 	while (timestep < timestepMax ) {
@@ -669,6 +673,12 @@ void ScaLBL_ColorModel::Run(){
         // analysis intervals
 		// allow initial ramp-up to get closer to steady state
 		if (timestep%analysis_interval == 0){
+		    steadycounter+=analysis_interval;
+        	stoptime = MPI_Wtime();
+    		cputime = (stoptime - starttime);
+		    if (rank==0) {
+	            printf("=================TimeStep: %d, Elapsed time = %f=================\n", timestep, cputime);
+            }
             //ScaLBL_D3Q19_Pressure(fq,Pressure,Np);
 			//ScaLBL_DeviceBarrier(); MPI_Barrier(Dm->Comm);
 			// i think these can be done in vector layout?
@@ -717,14 +727,14 @@ void ScaLBL_ColorModel::Run(){
 			ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,WP_blob_label,Dm->Comm);
 	        phase.scale(-1);
 	        MPI_Barrier(Dm->Comm);
-	        int numLocNWPBlobs=NWP_blob_label.max();
+	        int numLocNWPBlobs=NWP_blob_label.max()+1;
 	        int numGlobNWPBlobs;
 			MPI_Allreduce(&numLocNWPBlobs,&numGlobNWPBlobs,1,MPI_INT,MPI_MAX,Dm->Comm);
-	        int numLocWPBlobs=WP_blob_label.max();
+	        int numLocWPBlobs=WP_blob_label.max()+1;
 	        int numGlobWPBlobs;
 			MPI_Allreduce(&numLocWPBlobs,&numGlobWPBlobs,1,MPI_INT,MPI_MAX,Dm->Comm);
 	        MPI_Barrier(Dm->Comm);
-	        if (rank==0) printf("Phase 1 Bodies: %d, Phase 2 Bodies: %d \n", numGlobNWPBlobs, numGlobWPBlobs);
+	        if (rank==0) printf("Phase 1 Bodies: %d, Phase 2 Bodies: %d | ", numGlobNWPBlobs, numGlobWPBlobs);
 	        // for each blob, check if it is hydraulically connected
 	        // sweep the inlet and outlet ranks to see if a blob exists
 	        int kproc = Dm->kproc();
@@ -811,7 +821,7 @@ void ScaLBL_ColorModel::Run(){
                 for (int i=0;i<connectedNWPBlobs.size();i++){
                     printf("%d ",connectedNWPBlobs[i]);
                 }
-                printf("\n");
+                printf(" | ");
             }
             
             sort(inletWPBlobsGlob, inletWPBlobsGlob + numInletWPBlobs); 
@@ -936,19 +946,18 @@ void ScaLBL_ColorModel::Run(){
             dCadtEMA = fabs((Ca_EMA - Ca_EMA_previous)/Ca_EMA_previous);
             Ca_previous=Ca;
             Ca_EMA_previous=Ca_EMA;
-            
+            absperm1_EMA = approxRollingAverage(absperm1_EMA, absperm1, timestep);
+            absperm2_EMA = approxRollingAverage(absperm2_EMA, absperm2, timestep);
+            absperm1_H_EMA = approxRollingAverage(absperm1_H_EMA, absperm1_H, timestep);
+            absperm2_H_EMA = approxRollingAverage(absperm2_H_EMA, absperm2_H, timestep);
             double MLUPSGlob = 0.;
             double MLUPS = 0.;
-        	stoptime = MPI_Wtime();
-    		cputime = (stoptime - starttime);
-		    if (rank==0) {
-	            printf("TimeStep: %d, Elapsed time = %f, ", timestep, cputime);
-            }
 		    MLUPS =  double(Np)*timestep/cputime/1000000;
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Dm->Comm); //why is this failing?
             //printf("Rank: %d, MLUPS: %f\n",rank, MLUPS);
 			if (rank==0) {
 				printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1, absperm2,absperm1_H, absperm2_H);
+				printf("EMA: Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1_EMA, absperm2_EMA,absperm1_H_EMA, absperm2_H_EMA);
 	            printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e, Nca = %e, EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca, Ca_EMA, dCadtEMA, settlingParam);
 			}
 
@@ -1149,7 +1158,7 @@ void ScaLBL_ColorModel::Run(){
 	                    MPI_Barrier(Dm->Comm);				    
 					    if (injectionType==1){
 			                targetSaturation = current_saturation - satInc;
-		                    shellRadius = 2.0;
+		                    shellRadius = 1.0+current_saturation;
 		                    if (targetSaturation < 0. ){
     						    if (rank==0) printf("[AUTOMORPH]: MorphDrain has reached full saturation. Terminating simulation. \n");
     						    break; 
@@ -1195,45 +1204,18 @@ void ScaLBL_ColorModel::Run(){
 		                }
 					} else if (spinoMorphFlag) {
 					    if (rank==0) printf("[AUTOMORPH]: Spinodal condensation to target %f (current: %f) \n", targetSaturation, current_saturation);
-					    //add/subtract % of the pore space every accelerationrates, to the target saturation
-				        //double volB = Averages->Volume_w(); 
-				        //double volA = Averages->Volume_n(); 
-				        double previousSaturation = volB/(volA+volB);
-				        double delta_volume = SpinoInit(satInc*0.5*((injectionType-1)*2-1));//run the adaptation
-				        double delta_volume_target = volB - (volA + volB)*targetSaturation; // change in volume to A
-				        // update the volume
-				        volA += delta_volume;
-				        volB -= delta_volume;
-				        double current_saturation = volB/(volA+volB);
-					    
+				        double delta_volume = SpinoInit(satInc*0.5*((injectionType-1)*2-1));//run the adaptation					    
 					} else {
-					    if (rank==0) printf("[AUTOMORPH]: Morphological acceleration to target %f (current: %f) \n", targetSaturation, current_saturation);
-	                    // do morph things, no idea why these need reinitialisation...
-				        //double volB = Averages->Volume_w(); 
-				        //double volA = Averages->Volume_n(); 
-				        double previousSaturation = volB/(volA+volB);
+					    if (rank==0) printf("[AUTOMORPH]: Morphological acceleration to target %f (current: %f) ", targetSaturation, current_saturation);
 				        double delta_volume = MorphInit(beta,shellRadius);//run the adaptation
 				        double delta_volume_target = volB - (volA + volB)*targetSaturation; // change in volume to A
-				        // update the volume
-				        volA += delta_volume;
-				        volB -= delta_volume;
-				        double current_saturation = volB/(volA+volB);
                         //shell radius adjustment should be based the change in volume vs the change in saturation
-                        
-                        /*if (injectionType==1){
-				            if ((delta_volume_target - delta_volume) / delta_volume < 0.f){
-					            shellRadius *= -1.01*min((delta_volume_target - delta_volume) / delta_volume, 3.0);
-					            if (shellRadius > 1.f) shellRadius = 1.f;
-					            if (rank==0) printf("--Adjust Shell Radius: %f \n", shellRadius);
-				            }
-			            } else */if (injectionType==2){
+                        if (injectionType==2){
 				            if ((delta_volume_target - delta_volume) / delta_volume > 0.f){
 					            shellRadius *= 1.01*min((delta_volume_target - delta_volume) / delta_volume, 3.0);
 					            if (shellRadius < -1.f) shellRadius = -1.f;
-					            if (rank==0) printf("--Adjust Shell Radius: %f \n", shellRadius);
 				            }
-			            }
-			            
+			            }			            
     				}
     				MPI_Barrier(Dm->Comm);
 			    }
@@ -1532,55 +1514,44 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 		}
 	}
 	fclose(OUTFILE);
-	FILE *OUTFILEX;
-	char LocalRankFilenameX[100];
-	sprintf(LocalRankFilenameX,"rawVis%d/Vel_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-	OUTFILEX = fopen(LocalRankFilenameX,"w");
+	
+	MPI_Barrier(Dm->Comm);
+	FILE *OUTFILEVels;
+	char LocalRankFilenameVels[100];
+	sprintf(LocalRankFilenameVels,"rawVis%d/Vel_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+	OUTFILEVels = fopen(LocalRankFilenameVels,"w");
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
 			    //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
 			    temp = Velocity_x(i,j,k);
-	            fwrite(&temp,sizeof(double),1,OUTFILEX);
+	            fwrite(&temp,sizeof(double),1,OUTFILEVels);
 			}
 		}
 	}
 	
-//	FILE *OUTFILEY;
-//	char LocalRankFilenameY[100];
-//	sprintf(LocalRankFilenameY,"rawVis%d/Vely_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-//	OUTFILEY = fopen(LocalRankFilenameY,"w");
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
 			    //fprintf(OUTFILEY,"%f\n",Velocity_y(i, j, k));
 			    temp = Velocity_y(i,j,k);
-	            fwrite(&temp,sizeof(double),1,OUTFILE);
+	            fwrite(&temp,sizeof(double),1,OUTFILEVels);
 			}
 		}
 	}
 	
-//	FILE *OUTFILEZ;
-//	char LocalRankFilenameZ[100];
-//	sprintf(LocalRankFilenameZ,"rawVis%d/Velz_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-//	OUTFILEZ = fopen(LocalRankFilenameZ,"w");
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
 			    //fprintf(OUTFILEZ,"%f\n",Velocity_z(i, j, k));
 			    temp = Velocity_z(i,j,k);
-	            fwrite(&temp,sizeof(double),1,OUTFILE);
+	            fwrite(&temp,sizeof(double),1,OUTFILEVels);
 			}
 		}
 	}
-
-//	fwrite(PhaseField.data(),8,N,OUTFILE);
-//	fclose(OUTFILE);
-	fclose(OUTFILEX);
-//	fclose(OUTFILEY);
-//	fclose(OUTFILEZ);
+	fclose(OUTFILEVels);
 	MPI_Barrier(Dm->Comm);
-    //ofs.close();
+
 }
 
 double ScaLBL_ColorModel::approxRollingAverage(double avg, double new_sample, int timestep) {
@@ -1592,41 +1563,41 @@ double ScaLBL_ColorModel::approxRollingAverage(double avg, double new_sample, in
 }
 
 int ScaLBL_ColorModel::collateBoundaryBlobs(int *&inletNWPBlobsGlob, vector<int>inletNWPBlobsLoc) {
-            int *recvcounts;
-            recvcounts = (int *) malloc( nprocs * sizeof(int));
-            inletNWPBlobsLoc.erase(std::remove(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), -2), inletNWPBlobsLoc.end());
-            inletNWPBlobsLoc.erase(std::remove(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), -1), inletNWPBlobsLoc.end());
-	        int sizeLocalBlobsList = inletNWPBlobsLoc.size();
-	        MPI_Allgather(&sizeLocalBlobsList, 1, MPI_INT, recvcounts, 1, MPI_INT, Dm->Comm); // gather the bloblengths
+    int *recvcounts;
+    recvcounts = (int *) malloc( nprocs * sizeof(int));
+    inletNWPBlobsLoc.erase(std::remove(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), -2), inletNWPBlobsLoc.end());
+    inletNWPBlobsLoc.erase(std::remove(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), -1), inletNWPBlobsLoc.end());
+    int sizeLocalBlobsList = inletNWPBlobsLoc.size();
+    MPI_Allgather(&sizeLocalBlobsList, 1, MPI_INT, recvcounts, 1, MPI_INT, Dm->Comm); // gather the bloblengths
 //	        if (rank==0) {
 //                for (int i = 0; i < nprocs; i++) {
 //	                printf("rank: %d, recvCounts: %d \n",rank, recvcounts[i]);
 //                }
 //	        }
-            int totlen = 0; 
-            int *displs;
-            displs = new int[sizeLocalBlobsList*sizeof(int)];
-            displs[0] = 0; // log up the cumulative values
-            totlen += recvcounts[0]; // the total
-            for (int i=1; i<nprocs; i++) {
-               totlen += recvcounts[i];   
-               displs[i] = displs[i-1] + recvcounts[i-1];
-            }
+    int totlen = 0; 
+    int *displs;
+    displs = new int[sizeLocalBlobsList*sizeof(int)];
+    displs[0] = 0; // log up the cumulative values
+    totlen += recvcounts[0]; // the total
+    for (int i=1; i<nprocs; i++) {
+       totlen += recvcounts[i];   
+       displs[i] = displs[i-1] + recvcounts[i-1];
+    }
 //            for (int i = 0; i < nprocs; i++) {
 //                printf("rank: %d, totlen: %d, displacements: %d, recvCounts: %d \n",rank, totlen, displs[i], recvcounts[i]);
 //            }
-            /* allocate string, pre-fill with spaces and null terminator */
-            inletNWPBlobsGlob = (int *) malloc( totlen * sizeof(int)) ;          
-	        MPI_Barrier(Dm->Comm);
-	        int *temp;
-	        temp = (int *) malloc( inletNWPBlobsLoc.size() * sizeof(int)) ; 
-	        for (int i=0;i<inletNWPBlobsLoc.size();i++){
-	            temp[i] = inletNWPBlobsLoc[i];
-	        }
-	        MPI_Allgatherv(temp, sizeLocalBlobsList, MPI_INT, inletNWPBlobsGlob, recvcounts, displs, MPI_INT, Dm->Comm);
+    /* allocate string, pre-fill with spaces and null terminator */
+    inletNWPBlobsGlob = (int *) malloc( totlen * sizeof(int)) ;          
+    MPI_Barrier(Dm->Comm);
+    int *temp;
+    temp = (int *) malloc( inletNWPBlobsLoc.size() * sizeof(int)) ; 
+    for (int i=0;i<inletNWPBlobsLoc.size();i++){
+        temp[i] = inletNWPBlobsLoc[i];
+    }
+    MPI_Allgatherv(temp, sizeLocalBlobsList, MPI_INT, inletNWPBlobsGlob, recvcounts, displs, MPI_INT, Dm->Comm);
 //            for (int i = 0; i < totlen; i++) {
 //                printf("rank: %d, boundary blobID: %d \n",rank, inletNWPBlobsGlob[i]);
 //            }
-	        MPI_Barrier(Dm->Comm);
-	        return totlen;
+    MPI_Barrier(Dm->Comm);
+    return totlen;
 }
