@@ -17,7 +17,7 @@
 color lattice boltzmann model
  */
  
- 
+ // add routine to freeze interfaces, and solve perm within the analysis loop.
  // setup automorph, and fluxmorph, and implement flux reversal option
 #include "models/ColorModel.h"
 #include <sys/stat.h>
@@ -708,6 +708,8 @@ void ScaLBL_ColorModel::Run(){
 	        double vS = 0.f;
 	        IntArray NWP_blob_label(Nx,Ny,Nz);
 	        IntArray WP_blob_label(Nx,Ny,Nz);
+            vector<int> connectedNWPBlobs;
+            vector<int> connectedWPBlobs;
 	        //Array<char> phase_id(Nx,Ny,Nz);
 			//double vax, vay, vaz, vbx, vby, vbz;
             double vA_x_H;// = Averages->van_global(0);
@@ -719,130 +721,130 @@ void ScaLBL_ColorModel::Run(){
 			double vax_loc_H, vay_loc_H, vaz_loc_H, vbx_loc_H, vby_loc_H, vbz_loc_H;
 			vax_loc_H = vay_loc_H = vaz_loc_H = 0.f;
 			vbx_loc_H = vby_loc_H = vbz_loc_H = 0.f;
-			// find the NWP blobs
-			ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,NWP_blob_label,Dm->Comm);
-	        MPI_Barrier(Dm->Comm);
-	        //find the WP blobs
-	        phase.scale(-1);
-			ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,WP_blob_label,Dm->Comm);
-	        phase.scale(-1);
-	        MPI_Barrier(Dm->Comm);
-	        int numLocNWPBlobs=NWP_blob_label.max()+1;
-	        int numGlobNWPBlobs;
-			MPI_Allreduce(&numLocNWPBlobs,&numGlobNWPBlobs,1,MPI_INT,MPI_MAX,Dm->Comm);
-	        int numLocWPBlobs=WP_blob_label.max()+1;
-	        int numGlobWPBlobs;
-			MPI_Allreduce(&numLocWPBlobs,&numGlobWPBlobs,1,MPI_INT,MPI_MAX,Dm->Comm);
-	        MPI_Barrier(Dm->Comm);
-	        if (rank==0) printf("Phase 1 Bodies: %d, Phase 2 Bodies: %d | ", numGlobNWPBlobs, numGlobWPBlobs);
-	        // for each blob, check if it is hydraulically connected
-	        // sweep the inlet and outlet ranks to see if a blob exists
-	        int kproc = Dm->kproc();
-	        vector<int> inletNWPBlobsLoc{-1,-2};
-	        //vector<int> inletNWPBlobsGlob;
-            int *inletNWPBlobsGlob;
-	        vector<int> outletNWPBlobsLoc{-1,-2};
-	        //vector<int> outletNWPBlobsGlob;
-            int *outletNWPBlobsGlob;
-	        vector<int> inletWPBlobsLoc{-1,-2};
-	        //vector<int> inletWPBlobsGlob;
-            int *inletWPBlobsGlob;
-	        vector<int> outletWPBlobsLoc{-1,-2};
-	        //vector<int> outletWPBlobsGlob;
-            int *outletWPBlobsGlob;
-	        int locBlobIDNWP;
-	        int locBlobIDWP;
-	        // local unique IO blobs
-	        if (kproc == 0){
-	            // if inlet domain, check which nwp and wp blobs are in inlet
-	            // list these blobs per processor and collate globally
-	            // check blobs one by one, or check in single sweep?
-         		int k=1;
-     			for (int j=1;j<Ny-1;j++){
-     				for (int i=1;i<Nx-1;i++){
-     					int n = k*Nx*Ny+j*Nx+i;
-                        locBlobIDNWP = NWP_blob_label(i,j,k);
-                        locBlobIDWP = WP_blob_label(i,j,k);
-                        if (find(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), locBlobIDNWP) == inletNWPBlobsLoc.end()){
-                            //printf("Rank = %d, New NWP Blob %d in inlet\n",rank, locBlobIDNWP);
-                            inletNWPBlobsLoc.push_back(locBlobIDNWP);
-                        }
-                        if (find(inletWPBlobsLoc.begin(), inletWPBlobsLoc.end(), locBlobIDWP) == inletWPBlobsLoc.end()){
-                            //printf("Rank = %d, New WP Blob %d in inlet\n",rank, locBlobIDWP);
-                            inletWPBlobsLoc.push_back(locBlobIDWP);
-                        }
-                        
-     				}                    
-     			}
-	        }
-	        //now check outlet domain
-	        if (kproc == nprocz-1){
-         		int k=Nz-2;
-     			for (int j=1;j<Ny-1;j++){
-     				for (int i=1;i<Nx-1;i++){
-     					int n = k*Nx*Ny+j*Nx+i;
-                        locBlobIDNWP = NWP_blob_label(i,j,k);
-                        locBlobIDWP = WP_blob_label(i,j,k);
-                        if (find(outletNWPBlobsLoc.begin(), outletNWPBlobsLoc.end(), locBlobIDNWP) == outletNWPBlobsLoc.end()){
-                            //printf("Rank = %d, New NWP Blob %d in outlet\n",rank, locBlobIDNWP);
-                            outletNWPBlobsLoc.push_back(locBlobIDNWP);
-                        }
-                        if (find(outletWPBlobsLoc.begin(), outletWPBlobsLoc.end(), locBlobIDWP) == outletWPBlobsLoc.end()){
-                            //printf("Rank = %d, New WP Blob %d in outlet\n",rank, locBlobIDWP);
-                            outletWPBlobsLoc.push_back(locBlobIDWP);
-                        }
-     				}                    
-     			}
-	        }
-	        MPI_Barrier(Dm->Comm);
-	        // collate inlet and outlet blob IDs to global
-	        int numInletNWPBlobs = collateBoundaryBlobs(inletNWPBlobsGlob,inletNWPBlobsLoc);
-	        int numInletWPBlobs = collateBoundaryBlobs(inletWPBlobsGlob,inletWPBlobsLoc);
-	        int numOutletNWPBlobs = collateBoundaryBlobs(outletNWPBlobsGlob,outletNWPBlobsLoc);
-	        int numOutletWPBlobs = collateBoundaryBlobs(outletWPBlobsGlob,outletWPBlobsLoc);
-	        // check the inlet and outlet blobs to find connected IDs
-	        vector<int> connectedNWPBlobs;
-	        vector<int> connectedWPBlobs;
+			if (BoundaryCondition == 0){
+			    // find the NWP blobs
+			    ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,NWP_blob_label,Dm->Comm);
+	            MPI_Barrier(Dm->Comm);
+	            //find the WP blobs
+	            phase.scale(-1);
+			    ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,WP_blob_label,Dm->Comm);
+	            phase.scale(-1);
+	            MPI_Barrier(Dm->Comm);
+	            int numLocNWPBlobs=NWP_blob_label.max()+1;
+	            int numGlobNWPBlobs;
+			    MPI_Allreduce(&numLocNWPBlobs,&numGlobNWPBlobs,1,MPI_INT,MPI_MAX,Dm->Comm);
+	            int numLocWPBlobs=WP_blob_label.max()+1;
+	            int numGlobWPBlobs;
+			    MPI_Allreduce(&numLocWPBlobs,&numGlobWPBlobs,1,MPI_INT,MPI_MAX,Dm->Comm);
+	            MPI_Barrier(Dm->Comm);
+	            if (rank==0) printf("Phase 1 Bodies: %d, Phase 2 Bodies: %d | ", numGlobNWPBlobs, numGlobWPBlobs);
+	            // for each blob, check if it is hydraulically connected
+	            // sweep the inlet and outlet ranks to see if a blob exists
+	            int kproc = Dm->kproc();
+	            vector<int> inletNWPBlobsLoc{-1,-2};
+	            //vector<int> inletNWPBlobsGlob;
+                int *inletNWPBlobsGlob;
+	            vector<int> outletNWPBlobsLoc{-1,-2};
+	            //vector<int> outletNWPBlobsGlob;
+                int *outletNWPBlobsGlob;
+	            vector<int> inletWPBlobsLoc{-1,-2};
+	            //vector<int> inletWPBlobsGlob;
+                int *inletWPBlobsGlob;
+	            vector<int> outletWPBlobsLoc{-1,-2};
+	            //vector<int> outletWPBlobsGlob;
+                int *outletWPBlobsGlob;
+	            int locBlobIDNWP;
+	            int locBlobIDWP;
+	            // local unique IO blobs
+	            if (kproc == 0){
+	                // if inlet domain, check which nwp and wp blobs are in inlet
+	                // list these blobs per processor and collate globally
+	                // check blobs one by one, or check in single sweep?
+             		int k=1;
+         			for (int j=1;j<Ny-1;j++){
+         				for (int i=1;i<Nx-1;i++){
+         					int n = k*Nx*Ny+j*Nx+i;
+                            locBlobIDNWP = NWP_blob_label(i,j,k);
+                            locBlobIDWP = WP_blob_label(i,j,k);
+                            if (find(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), locBlobIDNWP) == inletNWPBlobsLoc.end()){
+                                //printf("Rank = %d, New NWP Blob %d in inlet\n",rank, locBlobIDNWP);
+                                inletNWPBlobsLoc.push_back(locBlobIDNWP);
+                            }
+                            if (find(inletWPBlobsLoc.begin(), inletWPBlobsLoc.end(), locBlobIDWP) == inletWPBlobsLoc.end()){
+                                //printf("Rank = %d, New WP Blob %d in inlet\n",rank, locBlobIDWP);
+                                inletWPBlobsLoc.push_back(locBlobIDWP);
+                            }
+                            
+         				}                    
+         			}
+	            }
+	            //now check outlet domain
+	            if (kproc == nprocz-1){
+             		int k=Nz-2;
+         			for (int j=1;j<Ny-1;j++){
+         				for (int i=1;i<Nx-1;i++){
+         					int n = k*Nx*Ny+j*Nx+i;
+                            locBlobIDNWP = NWP_blob_label(i,j,k);
+                            locBlobIDWP = WP_blob_label(i,j,k);
+                            if (find(outletNWPBlobsLoc.begin(), outletNWPBlobsLoc.end(), locBlobIDNWP) == outletNWPBlobsLoc.end()){
+                                //printf("Rank = %d, New NWP Blob %d in outlet\n",rank, locBlobIDNWP);
+                                outletNWPBlobsLoc.push_back(locBlobIDNWP);
+                            }
+                            if (find(outletWPBlobsLoc.begin(), outletWPBlobsLoc.end(), locBlobIDWP) == outletWPBlobsLoc.end()){
+                                //printf("Rank = %d, New WP Blob %d in outlet\n",rank, locBlobIDWP);
+                                outletWPBlobsLoc.push_back(locBlobIDWP);
+                            }
+         				}                    
+         			}
+	            }
+	            MPI_Barrier(Dm->Comm);
+	            // collate inlet and outlet blob IDs to global
+	            int numInletNWPBlobs = collateBoundaryBlobs(inletNWPBlobsGlob,inletNWPBlobsLoc);
+	            int numInletWPBlobs = collateBoundaryBlobs(inletWPBlobsGlob,inletWPBlobsLoc);
+	            int numOutletNWPBlobs = collateBoundaryBlobs(outletNWPBlobsGlob,outletNWPBlobsLoc);
+	            int numOutletWPBlobs = collateBoundaryBlobs(outletWPBlobsGlob,outletWPBlobsLoc);
+	            // check the inlet and outlet blobs to find connected IDs
 
-            sort(inletNWPBlobsGlob, inletNWPBlobsGlob + numInletNWPBlobs); 
-            sort(outletNWPBlobsGlob, outletNWPBlobsGlob + numOutletNWPBlobs); 
-            vector<int> v(numInletNWPBlobs + numOutletNWPBlobs); 
-            vector<int>::iterator it, st; 
-            it = set_intersection(inletNWPBlobsGlob, inletNWPBlobsGlob + numInletNWPBlobs, 
-                                  outletNWPBlobsGlob, outletNWPBlobsGlob + numOutletNWPBlobs, 
-                                  v.begin()); 
-          
 
-            for (st = v.begin(); st != it; ++st) 
-                connectedNWPBlobs.push_back(*st); 
-            connectedNWPBlobs.erase( unique( connectedNWPBlobs.begin(), connectedNWPBlobs.end() ), connectedNWPBlobs.end() );
-            if (rank==0) {
-                printf("Hydraulically connected Phase 1 Blob IDs: "); 
-                for (int i=0;i<connectedNWPBlobs.size();i++){
-                    printf("%d ",connectedNWPBlobs[i]);
+                sort(inletNWPBlobsGlob, inletNWPBlobsGlob + numInletNWPBlobs); 
+                sort(outletNWPBlobsGlob, outletNWPBlobsGlob + numOutletNWPBlobs); 
+                vector<int> v(numInletNWPBlobs + numOutletNWPBlobs); 
+                vector<int>::iterator it, st; 
+                it = set_intersection(inletNWPBlobsGlob, inletNWPBlobsGlob + numInletNWPBlobs, 
+                                      outletNWPBlobsGlob, outletNWPBlobsGlob + numOutletNWPBlobs, 
+                                      v.begin()); 
+              
+
+                for (st = v.begin(); st != it; ++st) 
+                    connectedNWPBlobs.push_back(*st); 
+                connectedNWPBlobs.erase( unique( connectedNWPBlobs.begin(), connectedNWPBlobs.end() ), connectedNWPBlobs.end() );
+                if (rank==0) {
+                    printf("Hydraulically connected Phase 1 Blob IDs: "); 
+                    for (int i=0;i<connectedNWPBlobs.size();i++){
+                        printf("%d ",connectedNWPBlobs[i]);
+                    }
+                    printf(" | ");
                 }
-                printf(" | ");
-            }
-            
-            sort(inletWPBlobsGlob, inletWPBlobsGlob + numInletWPBlobs); 
-            sort(outletWPBlobsGlob, outletWPBlobsGlob + numOutletWPBlobs); 
-            vector<int> v2(numInletWPBlobs + numOutletWPBlobs); 
-            vector<int>::iterator it2, st2; 
-            it2 = set_intersection(inletWPBlobsGlob, inletWPBlobsGlob + numInletWPBlobs, 
-                                  outletWPBlobsGlob, outletWPBlobsGlob + numOutletWPBlobs, 
-                                  v2.begin()); 
-          
-            for (st2 = v2.begin(); st2 != it2; ++st2) 
-                connectedWPBlobs.push_back(*st2); 
-            connectedWPBlobs.erase( unique( connectedWPBlobs.begin(), connectedWPBlobs.end() ), connectedWPBlobs.end() );
-            if (rank==0) {
-                printf("Hydraulically connected Phase 2 Blob IDs: "); 
-                for (int i=0;i<connectedWPBlobs.size();i++){
-                    printf("%d ",connectedWPBlobs[i]);
+                
+                sort(inletWPBlobsGlob, inletWPBlobsGlob + numInletWPBlobs); 
+                sort(outletWPBlobsGlob, outletWPBlobsGlob + numOutletWPBlobs); 
+                vector<int> v2(numInletWPBlobs + numOutletWPBlobs); 
+                vector<int>::iterator it2, st2; 
+                it2 = set_intersection(inletWPBlobsGlob, inletWPBlobsGlob + numInletWPBlobs, 
+                                      outletWPBlobsGlob, outletWPBlobsGlob + numOutletWPBlobs, 
+                                      v2.begin()); 
+              
+                for (st2 = v2.begin(); st2 != it2; ++st2) 
+                    connectedWPBlobs.push_back(*st2); 
+                connectedWPBlobs.erase( unique( connectedWPBlobs.begin(), connectedWPBlobs.end() ), connectedWPBlobs.end() );
+                if (rank==0) {
+                    printf("Hydraulically connected Phase 2 Blob IDs: "); 
+                    for (int i=0;i<connectedWPBlobs.size();i++){
+                        printf("%d ",connectedWPBlobs[i]);
+                    }
+                    printf("\n");
                 }
-                printf("\n");
             }
-
             // The settling parameter and phase volumes
             double countA = 0.;// = Averages->Volume_w();
             double countB = 0.;// = Averages->Volume_n();
@@ -953,7 +955,7 @@ void ScaLBL_ColorModel::Run(){
             double MLUPSGlob = 0.;
             double MLUPS = 0.;
 		    MLUPS =  double(Np)*timestep/cputime/1000000;
-			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Dm->Comm); //why is this failing?
+			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Dm->Comm); 
             //printf("Rank: %d, MLUPS: %f\n",rank, MLUPS);
 			if (rank==0) {
 				printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1, absperm2,absperm1_H, absperm2_H);
@@ -1101,16 +1103,21 @@ void ScaLBL_ColorModel::Run(){
 					        fclose(kr_log_file);
 				        }
                         MPI_Barrier(Dm->Comm);
-				        if (injectionType==1){
+				        if (injectionType==1){ //drainage - increase injected oil volumes
                             inletA=inletA+satInc; //a is nwp
                             inletB=inletB-satInc;
-		                } else if (injectionType==2){
+                            outletA=outletA+satInc; //a is nwp
+                            outletB=outletB-satInc;
+		                } else if (injectionType==2){ // imbibiton, reduce injected oil volumes
                             inletA=inletA-satInc; //a is nwp
                             inletB=inletB+satInc;
+                            outletA=outletA-satInc; //a is nwp
+                            outletB=outletB+satInc;
+
 		                }
         			    if (rank==0) printf("[CO-INJECTION]: Inlet altered to: Phase 1: %f, Phase 2: %f \n",inletA, inletB);
 				    } else { //if the system is unstable, continue stabilisation
-					    if (rank==0) printf("[CO-INJECTION]: System is unstable, continuing LBM stabilisation.\n");
+					    if (rank==0) printf("[CO-INJECTION]: Continuing stabilisation. Inlet: %f, %f. Outlet: %f, %f\n",inletA, inletB, outletA, outletB);
 					    stabilityCounter = 1;
 				    }
 		        }
@@ -1148,6 +1155,13 @@ void ScaLBL_ColorModel::Run(){
 	        		    WriteDebugYDW();
 					    if (rank==0){ //save the data as a rel perm point
 						    printf("[AUTOMORPH]: Steady state reached. WRITE STEADY POINT \n");
+						    
+						    // here, take the blobmaps - generate new Dm and run singlephase lbm for hydraulically connected phases
+						    // take blob maps and get new ID maps
+						    // use new DmPh1 and DmPh2 (initialise earlier), populate them appropriately
+						    // initialise memory for single phase
+						    // run single phase, store the perm values
+						    
 						    volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
 						    volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
 						    FILE * kr_log_file = fopen("relperm.csv","a");
@@ -1159,15 +1173,15 @@ void ScaLBL_ColorModel::Run(){
 					    if (injectionType==1){
 			                targetSaturation = current_saturation - satInc;
 		                    shellRadius = 1.0+current_saturation;
-		                    if (targetSaturation < 0. ){
-    						    if (rank==0) printf("[AUTOMORPH]: MorphDrain has reached full saturation. Terminating simulation. \n");
+		                    if (targetSaturation < 0.05 ){
+    						    if (rank==0) printf("[AUTOMORPH]: MorphDrain has reached <0.05 saturation. Terminating simulation. \n");
     						    break; 
 						    }
 			            } else if (injectionType==2){
 			                targetSaturation = current_saturation + satInc;
 		                    shellRadius = -0.1;
-		                    if (targetSaturation > 1. ){
-    						    if (rank==0) printf("[AUTOMORPH]: MorphImb has reached full saturation. Terminating simulation. \n");
+		                    if (targetSaturation > 0.95 ){
+    						    if (rank==0) printf("[AUTOMORPH]: MorphImb has reached >0.95 saturation. Terminating simulation. \n");
     						    break; 
 						    }
 			            }
@@ -1492,7 +1506,6 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 		sprintf(LocalRankFoldername,"./rawVis%d",timestep); 
 	    mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     }
-	MPI_Barrier(Dm->Comm);
 	// Copy back final phase indicator field and convert to regular layout
 	DoubleArray PhaseField(Nx,Ny,Nz);
 	//ScaLBL_Comm->RegularLayout(Map,Phi,PhaseField);
@@ -1514,8 +1527,9 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 		}
 	}
 	fclose(OUTFILE);
-	
 	MPI_Barrier(Dm->Comm);
+	
+	
 	FILE *OUTFILEVels;
 	char LocalRankFilenameVels[100];
 	sprintf(LocalRankFilenameVels,"rawVis%d/Vel_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
@@ -1551,7 +1565,6 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 	}
 	fclose(OUTFILEVels);
 	MPI_Barrier(Dm->Comm);
-
 }
 
 double ScaLBL_ColorModel::approxRollingAverage(double avg, double new_sample, int timestep) {

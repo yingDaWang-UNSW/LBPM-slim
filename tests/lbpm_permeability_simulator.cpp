@@ -10,7 +10,7 @@
 //#define WRITE_SURFACES
 
 /*
- * Simulator for two-phase flow in porous media
+ * Simulator for single-phase flow in porous media
  * James E. McClure 2013-2014
  */
 

@@ -399,8 +399,8 @@ void ScaLBL_MRTModel::Run(){
 		if (timestep%analysis_interval==0 || timestep == 2){
 			ScaLBL_D3Q19_Momentum(fq,Velocity,Np);
 			ScaLBL_D3Q19_Pressure(fq,Pressure,Np);
-		    
-			ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
+			ScaLBL_DeviceBarrier(); 
+			MPI_Barrier(comm); // regular layout here is inefficient
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[0],Velocity_x);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],Velocity_y);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],Velocity_z);
