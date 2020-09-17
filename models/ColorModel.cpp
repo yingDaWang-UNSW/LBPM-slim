@@ -311,17 +311,6 @@ void ScaLBL_ColorModel::Create(){
 	
 	// copy the neighbor list 
 	ScaLBL_CopyToDevice(NeighborList, neighborList, neighborSize);
-	// initialize phi based on PhaseLabel (include solid component labels)
-	double *PhaseLabel;
-	PhaseLabel = new double[N];
-	AssignComponentLabels(PhaseLabel);
-	ScaLBL_CopyToDevice(Phi, PhaseLabel, N*sizeof(double));
-	
-	Density_A_Cart.resize(Nx,Ny,Nz);
-	Density_B_Cart.resize(Nx,Ny,Nz);
-    Velocity_x.resize(Nx,Ny,Nz);
-    Velocity_y.resize(Nx,Ny,Nz);
-    Velocity_z.resize(Nx,Ny,Nz);
 }        
 
 /********************************************************
@@ -336,75 +325,87 @@ void ScaLBL_ColorModel::Initialize(){
 	 * This function initializes model
 	 */
 	if (Restart == true){
-		if (rank==0){
-			printf("Reading restart file! \n");
-			ifstream restart("Restart.txt");
-			if (restart.is_open()){
-				restart  >> timestep;
-				printf("Restarting from timestep =%i \n",timestep);
+		if (rank==0) printf("Reading restart file! \n");
+		ifstream restart("Restart.txt");
+		if (restart.is_open()){
+			restart  >> timestep;
+			restart.close();
 			}
-			else{
-				printf("WARNING:No Restart.txt file, setting timestep=0 \n");
-				timestep=0;
-			}
-		}
-		MPI_Bcast(&timestep,1,MPI_INT,0,Dm->Comm);
-		// Read in the restart file to CPU buffers
-		int *TmpMap;
-		TmpMap = new int[Np];
-		
-		double *cPhi, *cDist, *cDen;
-		cPhi = new double[N];
-		cDen = new double[2*Np];
-		cDist = new double[19*Np];
-		ScaLBL_CopyToHost(TmpMap, dvcMap, Np*sizeof(int));
+		if (rank==0) printf("Restarting from timestep %d \n",timestep);
+        // Read in the restart file to CPU buffers
+        int *TmpMap;
+        TmpMap = new int[Np];
+        
+        double *cPhi, *cDist, *ccDen;
+        cPhi = new double[N];
+        ccDen = new double[2*Np];
+        cDist = new double[19*Np];
+        ScaLBL_CopyToHost(TmpMap, dvcMap, Np*sizeof(int));
         ScaLBL_CopyToHost(cPhi, Phi, N*sizeof(double));
-    	
-		ifstream File(LocalRestartFile,ios::binary);
-		int idx;
-		double value,va,vb;
-		for (int n=0; n<Np; n++){
-			File.read((char*) &va, sizeof(va));
-			File.read((char*) &vb, sizeof(vb));
-			cDen[n]    = va;
-			cDen[Np+n] = vb;
-		}
-		for (int n=0; n<Np; n++){
-			// Read the distributions
-			for (int q=0; q<19; q++){
-				File.read((char*) &value, sizeof(value));
-				cDist[q*Np+n] = value;
-			}
-		}
-		File.close();
-		
-		for (int n=0; n<ScaLBL_Comm->LastExterior(); n++){
-			va = cDen[n];
-			vb = cDen[Np + n];
-			value = (va-vb)/(va+vb);
-			idx = TmpMap[n];
-			if (!(idx < 0) && idx<N)
-				cPhi[idx] = value;
-		}
-		for (int n=ScaLBL_Comm->FirstInterior(); n<ScaLBL_Comm->LastInterior(); n++){
-		  va = cDen[n];
-		  vb = cDen[Np + n];
-		  	value = (va-vb)/(va+vb);
-		  	idx = TmpMap[n];
-		  	if (!(idx < 0) && idx<N)
-		  		cPhi[idx] = value;
-		}
-		
-		// Copy the restart data to the GPU
-		ScaLBL_CopyToDevice(Den,cDen,2*Np*sizeof(double));
-		ScaLBL_CopyToDevice(fq,cDist,19*Np*sizeof(double));
-		ScaLBL_CopyToDevice(Phi,cPhi,N*sizeof(double));
-		ScaLBL_DeviceBarrier();
+	    FILE *OUTFILERestart;
+	    OUTFILERestart = fopen(LocalRestartFile,"r");
+        //ifstream File(LocalRestartFile,ios::binary);
+        int idx;
+        double value,va,vb;
+        for (int n=0; n<Np; n++){
+            fread(&va,sizeof(double),1,OUTFILERestart);
+            fread(&vb,sizeof(double),1,OUTFILERestart);
+	        ccDen[n]    = va;
+	        ccDen[Np+n] = vb;
+        }
+        for (int n=0; n<Np; n++){
+	        // Read the distributions
+	        for (int q=0; q<19; q++){
+	            fread(&value,sizeof(double),1,OUTFILERestart);
+		        //File.read((char*) &value, sizeof(value));
+		        cDist[q*Np+n] = value;
+	        }
+        }
+        //File.close();
+        fclose(OUTFILERestart);
+        for (int n=0; n<ScaLBL_Comm->LastExterior(); n++){
+	        va = ccDen[n];
+	        vb = ccDen[Np + n];
+	        value = (va-vb)/(va+vb);
+	        idx = TmpMap[n];
+	        if (!(idx < 0) && idx<N)
+		        cPhi[idx] = value;
+        }
+        for (int n=ScaLBL_Comm->FirstInterior(); n<ScaLBL_Comm->LastInterior(); n++){
+          va = ccDen[n];
+          vb = ccDen[Np + n];
+          	value = (va-vb)/(va+vb);
+          	idx = TmpMap[n];
+          	if (!(idx < 0) && idx<N)
+          		cPhi[idx] = value;
+        }
+        
+        // Copy the restart data to the GPU
+        ScaLBL_CopyToDevice(Den,ccDen,2*Np*sizeof(double));
+        ScaLBL_CopyToDevice(fq,cDist,19*Np*sizeof(double));
+        ScaLBL_CopyToDevice(Phi,cPhi,N*sizeof(double));
+        ScaLBL_DeviceBarrier();
 
-		MPI_Barrier(Dm->Comm);
+        MPI_Barrier(Dm->Comm);
+	}else{
+		if (rank==0) printf("WARNING:No Restart.txt file\n");
 	}
 
-	if (rank==0)	printf ("Initializing phase field \n");
+	// initialize phi based on PhaseLabel (include solid component labels)
+	if (rank==0)	printf ("Initializing phase field and solid affinities\n");
+	double *PhaseLabel;
+	PhaseLabel = new double[N];
+	AssignComponentLabels(PhaseLabel);
+	ScaLBL_CopyToDevice(Phi, PhaseLabel, N*sizeof(double));
+	
+	Density_A_Cart.resize(Nx,Ny,Nz);
+	Density_B_Cart.resize(Nx,Ny,Nz);
+    Velocity_x.resize(Nx,Ny,Nz);
+    Velocity_y.resize(Nx,Ny,Nz);
+    Velocity_z.resize(Nx,Ny,Nz);
+    PhaseField.resize(Nx,Ny,Nz);
+	cDen.resize(2*Np);
+	cfq.resize(19*Np);
 	ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, 0, ScaLBL_Comm->LastExterior(), Np);
 	ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
 
@@ -468,7 +469,7 @@ void ScaLBL_ColorModel::Run(){
     int stabilisationRate = 10000; // interval for checking stabilisation
     int accelerationRate = 1000; // interval for doing automorph acceleration
     double shellRadius = 0.0;
-
+    int restart_interval = 0;
 
     double voxelSize = 0.0;
 	if (analysis_db->keyExists( "autoMorphFlag" )){
@@ -498,6 +499,9 @@ void ScaLBL_ColorModel::Run(){
 	if (analysis_db->keyExists( "accelerationRate" )){
 		accelerationRate = analysis_db->getScalar<int>( "accelerationRate" );
 	}
+	if (analysis_db->keyExists( "restart_interval" )){
+		restart_interval = analysis_db->getScalar<int>( "restart_interval" );
+	}
 //setup steadyFlux routine, fluxdrainmorphimb, and others
 
 
@@ -512,7 +516,7 @@ void ScaLBL_ColorModel::Run(){
     // (BoundaryCondition == 4){
 	    if (color_db->keyExists( "fluxReversalFlag" )){
 		    fluxReversalFlag = color_db->getScalar<bool>( "fluxReversalFlag" );
-		    if (rank==0 && fluxReversalFlag) printf("[In Colour Model], Flux indicators are set to be reversed\n");
+		    if (rank==0 && fluxReversalFlag) printf("[Colour Model], Flux indicators are set to be reversed\n");
 	    }  
 	    if (color_db->keyExists( "fluxReversalType" )){
 		    fluxReversalType = color_db->getScalar<int>( "fluxReversalType" );
@@ -520,21 +524,21 @@ void ScaLBL_ColorModel::Run(){
 	    if (color_db->keyExists( "fluxReversalSat" )){
 		    fluxReversalSat = color_db->getScalar<double>( "fluxReversalSat" );
 	    }    
-	    if (rank==0 && fluxReversalFlag && fluxReversalSat>=0) printf("[In Colour Model], Flux reversal is set to occur when saturation reaches %f\n", fluxReversalSat);
+	    if (rank==0 && fluxReversalFlag && fluxReversalSat>=0) printf("[Colour Model], Flux reversal is set to occur when saturation reaches %f\n", fluxReversalSat);
 	    
-	    if (rank==0 && fluxReversalFlag && fluxReversalSat<0) printf("[In Colour Model], Flux reversal is set to occur when saturation stabilises (this may not work, or take a very long time)\n");
+	    if (rank==0 && fluxReversalFlag && fluxReversalSat<0) printf("[Colour Model], Flux reversal is set to occur when saturation stabilises (this may not work, or take a very long time)\n");
 	//}
 	if (color_db->keyExists( "settlingTolerance" )){
 		settlingTolerance = color_db->getScalar<double>( "settlingTolerance" );
-		if (rank==0 && fluxReversalFlag) printf("[In Colour Model], The settling tolerance for steady state related switches is %e\n", settlingTolerance);
+		if (rank==0 && fluxReversalFlag) printf("[Colour Model], The settling tolerance for steady state related switches is %e\n", settlingTolerance);
 	}
 	if (color_db->keyExists( "affinityRampupFlag" )){
 		affinityRampupFlag = color_db->getScalar<bool>( "affinityRampupFlag" );
-		if (rank==0 && affinityRampupFlag) printf("[In Colour Model], Affinities are to be set dynamically\n");
+		if (rank==0 && affinityRampupFlag) printf("[Colour Model], Affinities are to be set dynamically\n");
 	}
 	if (color_db->keyExists( "affinityRampSteps" )){
 		affinityRampSteps = color_db->getScalar<int>( "affinityRampSteps" );
-		if (rank==0 && affinityRampSteps>0) printf("[In Colour Model], Affinities are to be ramped up to their specified values within %d timesteps\n", affinityRampSteps);
+		if (rank==0 && affinityRampSteps>0) printf("[Colour Model], Affinities are to be ramped up to their specified values within %d timesteps\n", affinityRampSteps);
 	}	
 	if (analysis_db->keyExists( "ramp_timesteps" )){
 		ramp_timesteps = analysis_db->getScalar<double>( "ramp_timesteps" );
@@ -568,7 +572,7 @@ void ScaLBL_ColorModel::Run(){
 		printf("********************************************************\n");
 		printf("No. of timesteps: %i \n", timestepMax);
 		if (autoMorphFlag){
-		    printf("[In Colour Model], Morphological Adaptation is Active. Ramp-up before Morphological Adaptation: %i \n", ramp_timesteps);
+		    printf("[Colour Model], Morphological Adaptation is Active. Ramp-up before Morphological Adaptation: %i \n", ramp_timesteps);
 		}
 		fflush(stdout);
 	}
@@ -668,6 +672,9 @@ void ScaLBL_ColorModel::Run(){
 		if (timestep%visualisation_interval == 0){
 		    WriteDebugYDW();
 		}
+		if (timestep%restart_interval == 0){
+		    WriteRestartYDW();
+		}
 			    // Run the analysis
        
         // analysis intervals
@@ -688,8 +695,7 @@ void ScaLBL_ColorModel::Run(){
 			ScaLBL_Comm->RegularLayout(Map,&Den[0],Density_A_Cart);
 			ScaLBL_Comm->RegularLayout(Map,&Den[Np],Density_B_Cart);
 			
-            DoubleArray phase(Nx,Ny,Nz);
-        	ScaLBL_CopyToHost(phase.data(), Phi, N*sizeof(double));
+        	ScaLBL_CopyToHost(PhaseField.data(), Phi, N*sizeof(double));
         	
         	// initialise the variables needed to aggregate velocity
 			//double vax, vay, vaz, vbx, vby, vbz;
@@ -723,12 +729,12 @@ void ScaLBL_ColorModel::Run(){
 			vbx_loc_H = vby_loc_H = vbz_loc_H = 0.f;
 			if (BoundaryCondition == 0){
 			    // find the NWP blobs
-			    ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,NWP_blob_label,Dm->Comm);
+			    ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,PhaseField,Distance,vF,vS,NWP_blob_label,Dm->Comm);
 	            MPI_Barrier(Dm->Comm);
 	            //find the WP blobs
-	            phase.scale(-1);
-			    ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,WP_blob_label,Dm->Comm);
-	            phase.scale(-1);
+	            PhaseField.scale(-1);
+			    ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,PhaseField,Distance,vF,vS,WP_blob_label,Dm->Comm);
+	            PhaseField.scale(-1);
 	            MPI_Barrier(Dm->Comm);
 	            int numLocNWPBlobs=NWP_blob_label.max()+1;
 	            int numGlobNWPBlobs;
@@ -859,9 +865,9 @@ void ScaLBL_ColorModel::Run(){
 				for (int j=1; j<Ny-1; j++){
 					for (int i=1; i<Nx-1; i++){
 						if (Distance(i,j,k) > 0){
-	                        phiDiff = phiDiff + (phase(i,j,k) - oldPhase(i,j,k))*(phase(i,j,k) - oldPhase(i,j,k));
-	                        oldPhase(i,j,k) = phase(i,j,k);
-						    if (phase(i,j,k)>0){
+	                        phiDiff = phiDiff + (PhaseField(i,j,k) - oldPhase(i,j,k))*(PhaseField(i,j,k) - oldPhase(i,j,k));
+	                        oldPhase(i,j,k) = PhaseField(i,j,k);
+						    if (PhaseField(i,j,k)>0){
 							    vax_loc += Velocity_x(i,j,k);
 							    vay_loc += Velocity_y(i,j,k);
 							    vaz_loc += Velocity_z(i,j,k);
@@ -942,7 +948,9 @@ void ScaLBL_ColorModel::Run(){
             current_saturation = volB/(volA+volB);
             current_saturation_H = volB_H/(volA_H+volB_H);
             // calculate the hydraulically connected capillary number if necessary...
-            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double((Nx-2)*(Ny-2)*(Nz-2)*nprocs));
+//            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double((Nx-2)*(Ny-2)*(Nz-2))*nprocs*poro);
+            double Ca = (muA*flow_rate_A)/(alpha);
+            double Ca2 = (muB*flow_rate_B)/(alpha);
             Ca_EMA = approxRollingAverage(Ca_EMA, Ca, timestep);
             dCadt = fabs((Ca - Ca_previous)/Ca_previous);
             dCadtEMA = fabs((Ca_EMA - Ca_EMA_previous)/Ca_EMA_previous);
@@ -960,7 +968,7 @@ void ScaLBL_ColorModel::Run(){
 			if (rank==0) {
 				printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1, absperm2,absperm1_H, absperm2_H);
 				printf("EMA: Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1_EMA, absperm2_EMA,absperm1_H_EMA, absperm2_H_EMA);
-	            printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e, Nca = %e, EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca, Ca_EMA, dCadtEMA, settlingParam);
+	            printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e\nNca = (%e, %e), EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca, Ca2, Ca_EMA, dCadtEMA, settlingParam);
 			}
 
             // rampup the component affinities - functionalise this for better code
@@ -993,7 +1001,7 @@ void ScaLBL_ColorModel::Run(){
 						            label_count[idx]++;
 						            idx = NLABELS;//exit the finder loop
     				                AFFINITY=AFFINITY;
-				                    phase(i,j,k) = AFFINITY;
+				                    PhaseField(i,j,k) = AFFINITY;
 					            }
 				            }
 			            }
@@ -1011,7 +1019,7 @@ void ScaLBL_ColorModel::Run(){
 		            }
 	            }
 	            // 6. copy back to the device
-	            ScaLBL_CopyToDevice(Phi,phase.data(),N*sizeof(double));
+	            ScaLBL_CopyToDevice(Phi,PhaseField.data(),N*sizeof(double));
 	            // 7. Re-initialize phase field and density
 	            ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, 0, ScaLBL_Comm->LastExterior(), Np);
 	            ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
@@ -1061,29 +1069,40 @@ void ScaLBL_ColorModel::Run(){
             
             
             // adjust the force if capillary number is set
-			if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag && timestep > ramp_timesteps){ // activate if capillary number is specified, and during morph, only after acceleration is done
+			if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag){ // activate if capillary number is specified, and during morph, only after acceleration is done - will be active during the rampup to initial morph
 			    // at each analysis step, 
                 if (Ca>0.f){
-                    Fx *= capillary_number / Ca;
-                    Fy *= capillary_number / Ca;
-                    Fz *= capillary_number / Ca;
-                    force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
+                    double caRatio = capillary_number / fabs(Ca); 
+                    if (BoundaryCondition==0){
+                        Fx *= caRatio;
+                        Fy *= caRatio;
+                        Fz *= caRatio;
+                        force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
 
-                    if (force_magnitude > 1e-3){
-		                Fx *= 1e-3/force_magnitude;   // impose ceiling for stability
-                        Fy *= 1e-3/force_magnitude;
-                        Fz *= 1e-3/force_magnitude;
+                        if (force_magnitude > 1e-3){
+		                    Fx *= 1e-3/force_magnitude;   // impose ceiling for stability
+                            Fy *= 1e-3/force_magnitude;
+                            Fz *= 1e-3/force_magnitude;
+                        }
+                        if (force_magnitude < 1e-6 && force_magnitude > 0){
+                            Fx *= 1e-6/force_magnitude;   // impose floor
+                            Fy *= 1e-6/force_magnitude;
+                            Fz *= 1e-6/force_magnitude;
+                        }
+                        if (rank == 0) printf("Adjusting force by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0),force_magnitude, Ca, capillary_number);
+                    } else if (BoundaryCondition ==4) {   
+                        flux *= min(max(0.5, caRatio), 2.0); //much more concise than if else bounding
+                        if (rank == 0) printf("Adjusting flux by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0), flux, Ca, capillary_number);
+                    } else if (BoundaryCondition ==3) {
+                        din = min(max(0.5, caRatio), 2.0)*(din - dout)+dout;
+                        if ((din-dout)/((Nz-2)*nprocz)/3 > 1e-3){
+                            din = 1e-3*3*((Nz-2)*nprocz)+dout;
+                        }
+                        if ((din-dout)/((Nz-2)*nprocz)/3 < 1e-6){
+                            din = 1e-6*3*((Nz-2)*nprocz)+dout;
+                        }
+                        if (rank == 0) printf("Adjusting gradP by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0), (din-dout)/((Nz-2)*nprocz)/3, Ca, capillary_number);
                     }
-                    if (force_magnitude < 1e-6 && force_magnitude > 0){
-                        Fx *= 1e-6/force_magnitude;   // impose floor
-                        Fy *= 1e-6/force_magnitude;
-                        Fz *= 1e-6/force_magnitude;
-                    }
-                    
-                    
-                    flux *= min(max(0.5, capillary_number / Ca), 2.0); //much more concise than if else bounding
-                    if (rank == 0) printf("Adjusting force by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, capillary_number / Ca), 2.0), force_magnitude, Ca, capillary_number);
-                    //Averages->SetParams(rhoA,rhoB,tauA,tauB,Fx,Fy,Fz,alpha);
             	}
 			}
 			
@@ -1266,21 +1285,20 @@ double ScaLBL_ColorModel::SpinoInit(const double delta_sw){
 	double vF = 0.f;
 	double vS = 0.f;
 
-	DoubleArray phase(Nx,Ny,Nz);
 	IntArray phase_label(Nx,Ny,Nz);;
 	DoubleArray phase_distance(Nx,Ny,Nz);
 	Array<char> phase_id(Nx,Ny,Nz);
 
 	// Basic algorithm to 
 	// 1. Copy phase field Phi to CPU in phase
-	ScaLBL_CopyToHost(phase.data(), Phi, N*sizeof(double));
+	ScaLBL_CopyToHost(PhaseField.data(), Phi, N*sizeof(double));
     // compute the current nwp volume
 	double count,count_global,volume_initial,volume_final;
 	count = 0.f;
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
-				if (phase(i,j,k) > 0.f && Distance(i,j,k) > 0.f) count+=1.f;
+				if (PhaseField(i,j,k) > 0.f && Distance(i,j,k) > 0.f) count+=1.f;
 			}
 		}
 	}
@@ -1294,12 +1312,12 @@ double ScaLBL_ColorModel::SpinoInit(const double delta_sw){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){ 
 			    if ( Distance(i,j,k) > 0.f){
-				    if (delta_sw < 0.0 && phase(i,j,k) < 0.f) { //if imb, and within nwp
+				    if (delta_sw < 0.0 && PhaseField(i,j,k) < 0.f) { //if imb, and within nwp
 				        float rnd = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-				        if (rnd<=fabs(delta_sw)) phase(i,j,k) = 1.0;
-				    } else if (delta_sw > 0.0 && phase(i,j,k) > 0.f) { // if drai, and within wp
+				        if (rnd<=fabs(delta_sw)) PhaseField(i,j,k) = 1.0;
+				    } else if (delta_sw > 0.0 && PhaseField(i,j,k) > 0.f) { // if drai, and within wp
 				        float rnd =  static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-				        if (rnd<=fabs(delta_sw)) phase(i,j,k) = -1.0;
+				        if (rnd<=fabs(delta_sw)) PhaseField(i,j,k) = -1.0;
 				    }
 			    }
 												    
@@ -1311,7 +1329,7 @@ double ScaLBL_ColorModel::SpinoInit(const double delta_sw){
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
-				if (phase(i,j,k) > 0.f && Distance(i,j,k) > 0.f) count+=1.f;
+				if (PhaseField(i,j,k) > 0.f && Distance(i,j,k) > 0.f) count+=1.f;
 			}
 		}
 	}
@@ -1323,7 +1341,7 @@ double ScaLBL_ColorModel::SpinoInit(const double delta_sw){
 
 	// 6. copy back to the device
 	//if (rank==0)  printf("MorphInit: copy data  back to device\n");
-	ScaLBL_CopyToDevice(Phi,phase.data(),N*sizeof(double));
+	ScaLBL_CopyToDevice(Phi,PhaseField.data(),N*sizeof(double));
 
 	// 7. Re-initialize phase field and density
 	ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, 0, ScaLBL_Comm->LastExterior(), Np);
@@ -1353,21 +1371,20 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 	double vF = 0.f;
 	double vS = 0.f;
 
-	DoubleArray phase(Nx,Ny,Nz);
 	IntArray phase_label(Nx,Ny,Nz);;
 	DoubleArray phase_distance(Nx,Ny,Nz);
 	Array<char> phase_id(Nx,Ny,Nz);
 
 	// Basic algorithm to 
 	// 1. Copy phase field to CPU
-	ScaLBL_CopyToHost(phase.data(), Phi, N*sizeof(double));
+	ScaLBL_CopyToHost(PhaseField.data(), Phi, N*sizeof(double));
 
 	double count,count_global,volume_initial,volume_final;
 	count = 0.f;
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
-				if (phase(i,j,k) > 0.f && Distance(i,j,k) > 0.f) count+=1.f;
+				if (PhaseField(i,j,k) > 0.f && Distance(i,j,k) > 0.f) count+=1.f;
 			}
 		}
 	}
@@ -1376,7 +1393,7 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 
 	// 2. Identify connected components of phase field -> phase_label
 	//BlobIDstruct new_index;
-	ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,phase,Distance,vF,vS,phase_label,Dm->Comm);
+	ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,PhaseField,Distance,vF,vS,phase_label,Dm->Comm);
 	MPI_Barrier(Dm->Comm);
 	// only operate on component "0"
 	for (int k=0; k<Nz; k++){
@@ -1397,7 +1414,7 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 		    for (int j=0; j<Ny; j++){
 			    for (int i=0; i<Nx; i++){
 				    if (phase_distance(i,j,k) < 3.f ){ //for voxels near the blob, define the distance using a diffuse interface value
-					    value = phase(i,j,k);
+					    value = PhaseField(i,j,k);
 					    if (value > 1.f)   value=1.f;
 					    if (value < -1.f)  value=-1.f;
 					    // temp -- distance based on analytical form McClure, Prins et al, Comp. Phys. Comm.
@@ -1429,7 +1446,7 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 				    if (Distance(i,j,k) > 0.f){
 					    // only update phase field in immediate proximity of largest component
 					    if (d < 3.f){
-						    phase(i,j,k) = (2.f*(exp(-2.f*beta*d))/(1.f+exp(-2.f*beta*d))-1.f);
+						    PhaseField(i,j,k) = (2.f*(exp(-2.f*beta*d))/(1.f+exp(-2.f*beta*d))-1.f);
 					    }
 				    }
 			    } 
@@ -1440,7 +1457,7 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 		    for (int j=0; j<Ny; j++){
 			    for (int i=0; i<Nx; i++){ // if the distance from the largest blob is within the morph delta, and the wall distance is larger than 1
 				    if (phase_distance(i,j,k) < morph_delta && phase_distance(i,j,k) > -morph_delta && Distance(i,j,k) > 1.f){
-					    phase(i,j,k) = 1.0*fabs(morph_delta)/morph_delta ; // relax and flip the value	
+					    PhaseField(i,j,k) = 1.0*fabs(morph_delta)/morph_delta ; // relax and flip the value	
 				    }
 													    
 			    }
@@ -1451,7 +1468,7 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 	for (int k=0; k<Nz; k++){
 		for (int j=0; j<Ny; j++){
 			for (int i=0; i<Nx; i++){
-				if (phase(i,j,k) > 0.f && Distance(i,j,k) > 0.f) count+=1.f;
+				if (PhaseField(i,j,k) > 0.f && Distance(i,j,k) > 0.f) count+=1.f;
 			}
 		}
 	}
@@ -1463,7 +1480,7 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 
 	// 6. copy back to the device
 	//if (rank==0)  printf("MorphInit: copy data  back to device\n");
-	ScaLBL_CopyToDevice(Phi,phase.data(),N*sizeof(double));
+	ScaLBL_CopyToDevice(Phi,PhaseField.data(),N*sizeof(double));
 
 	// 7. Re-initialize phase field and density
 	ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, 0, ScaLBL_Comm->LastExterior(), Np);
@@ -1493,10 +1510,42 @@ void ScaLBL_ColorModel::WriteDebug(){
 	ScaLBL_CopyToHost(PhaseField.data(), Phi, sizeof(double)*N);
 	char LocalRankFilename[100];
 	FILE *OUTFILE;
-	sprintf(LocalRankFilename,"Phase.%05i.raw",rank); //change this file name to include the size
+	sprintf(LocalRankFilename,"Phase.%05d.raw",rank); //change this file name to include the size
 	OUTFILE = fopen(LocalRankFilename,"wb");
 	fwrite(PhaseField.data(),8,N,OUTFILE);
 	fclose(OUTFILE);
+}
+
+void ScaLBL_ColorModel::WriteRestartYDW(){
+    ScaLBL_CopyToHost(cfq.data(),fq,19*Np*sizeof(double));
+    ScaLBL_CopyToHost(cDen.data(),Den,2*Np*sizeof(double));
+    if (rank==0) {
+        FILE *Rst = fopen("Restart.txt","w");
+        fprintf(Rst,"%i\n",timestep);
+        fclose(Rst);
+    }
+	char LocalRestartFilename[40];
+	FILE *OUTFILERestart;
+    sprintf(LocalRestartFilename,"Restart.%05d",rank);
+    double value;
+	OUTFILERestart = fopen(LocalRestartFilename,"w");
+    //ofstream File(LocalRestartFilename,ios::binary);
+    for (int n=0; n<Np; n++){
+        // Write the two density values
+        value = cDen(n);
+        fwrite(&value,sizeof(double),1,OUTFILERestart);
+        value = cDen(Np+n);
+        fwrite(&value,sizeof(double),1,OUTFILERestart);
+    }
+    for (int n=0; n<Np; n++){
+        // Write the distributions
+        for (int q=0; q<19; q++){
+            value = cfq(q*Np+n);
+            fwrite(&value,sizeof(double),1,OUTFILERestart);
+        }
+    }
+	fclose(OUTFILERestart);
+	MPI_Barrier(Dm->Comm);
 }
 
 void ScaLBL_ColorModel::WriteDebugYDW(){
@@ -1507,7 +1556,7 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 	    mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     }
 	// Copy back final phase indicator field and convert to regular layout
-	DoubleArray PhaseField(Nx,Ny,Nz);
+	//DoubleArray PhaseField(Nx,Ny,Nz);
 	//ScaLBL_Comm->RegularLayout(Map,Phi,PhaseField);
 	ScaLBL_CopyToHost(PhaseField.data(), Phi, sizeof(double)*N);
 	//create the file

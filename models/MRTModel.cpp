@@ -135,6 +135,8 @@ void ScaLBL_MRTModel::SetDomain(){
 	Velocity_x.resize(Nx,Ny,Nz);
 	Velocity_y.resize(Nx,Ny,Nz);
 	Velocity_z.resize(Nx,Ny,Nz);
+    fqField.resize(Nx, Ny, Nz);
+    P.resize(Nx, Ny, Nz);
 	if (thermalFlag) ConcentrationCart.resize(Nx,Ny,Nz);
     if (rank == 0) cout << "Domain set." << endl;
 	//for (int i=0; i<Nx*Ny*Nz; i++) Dm->id[i] = 1;               // initialize this way
@@ -548,7 +550,6 @@ void ScaLBL_MRTModel::fqField(){
     double temp = 0.0;	
     for (int d=0; d<19; d++) {
 	    // copy to regular layout
-        DoubleArray fqField(Nx, Ny, Nz);
 		ScaLBL_Comm->RegularLayout(Map,&fq[d*Np],fqField);   
 	    for (int k=0; k<Nz; k++){
 		    for (int j=0; j<Ny; j++){
@@ -577,13 +578,6 @@ void ScaLBL_MRTModel::velPField(){
 	char LocalRankFilename[100];
 	sprintf(LocalRankFilename,"rawVisVelP%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
 	OUTFILE = fopen(LocalRankFilename,"wb");
-    DoubleArray vx(Nx, Ny, Nz);
-    DoubleArray vy(Nx, Ny, Nz);
-    DoubleArray vz(Nx, Ny, Nz);
-    DoubleArray P(Nx, Ny, Nz);
-	ScaLBL_Comm->RegularLayout(Map,&Velocity[0],vx);
-	ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],vy);
-	ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],vz);
     ScaLBL_Comm->RegularLayout(Map,&Pressure[0],P);
 //	fwrite(vx.data(),sizeof(double),N,OUTFILE);
 //	fwrite(vy.data(),sizeof(double),N,OUTFILE);
@@ -594,7 +588,7 @@ void ScaLBL_MRTModel::velPField(){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
 			    //fprintf(OUTFILE,"%f\n",vx(i, j, k));
-			    temp = vx(i,j,k);
+			    temp = Velocity_x(i,j,k);
 	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
 	    }
@@ -602,7 +596,7 @@ void ScaLBL_MRTModel::velPField(){
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    temp = vy(i,j,k);
+			    temp = Velocity_y(i,j,k);
 			    //fprintf(OUTFILE,"%f\n",vy(i, j, k));
 	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }
@@ -611,7 +605,7 @@ void ScaLBL_MRTModel::velPField(){
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    temp = vz(i,j,k);
+			    temp = Velocity_z(i,j,k);
 			    //fprintf(OUTFILE,"%f\n",vz(i, j, k));
 	            fwrite(&temp,sizeof(double),1,OUTFILE);
 		    }

@@ -46,6 +46,7 @@ public:
 	void Run();
 	void WriteDebug();
 	void WriteDebugYDW();
+	void WriteRestartYDW();
 	double approxRollingAverage(double avg, double new_sample, int timestep);
     int collateBoundaryBlobs(int *&inletNWPBlobsGlob, vector<int> inletNWPBlobsLoc);
 	
@@ -94,6 +95,9 @@ public:
     DoubleArray Velocity_x;
     DoubleArray Velocity_y;
     DoubleArray Velocity_z;
+    DoubleArray PhaseField;
+	DoubleArray cDen;
+	DoubleArray cfq;
 private:
 	MPI_Comm comm;
     
