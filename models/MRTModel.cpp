@@ -135,7 +135,7 @@ void ScaLBL_MRTModel::SetDomain(){
 	Velocity_x.resize(Nx,Ny,Nz);
 	Velocity_y.resize(Nx,Ny,Nz);
 	Velocity_z.resize(Nx,Ny,Nz);
-    fqField.resize(Nx, Ny, Nz);
+    fqTemp.resize(Nx, Ny, Nz);
     P.resize(Nx, Ny, Nz);
 	if (thermalFlag) ConcentrationCart.resize(Nx,Ny,Nz);
     if (rank == 0) cout << "Domain set." << endl;
@@ -550,12 +550,12 @@ void ScaLBL_MRTModel::fqField(){
     double temp = 0.0;	
     for (int d=0; d<19; d++) {
 	    // copy to regular layout
-		ScaLBL_Comm->RegularLayout(Map,&fq[d*Np],fqField);   
+		ScaLBL_Comm->RegularLayout(Map,&fq[d*Np],fqTemp);   
 	    for (int k=0; k<Nz; k++){
 		    for (int j=0; j<Ny; j++){
 			    for (int i=0; i<Nx; i++){
     			    //fprintf(OUTFILE,"%f\n",fqField(i, j, k));
-			        temp = fqField(i,j,k);
+			        temp = fqTemp(i,j,k);
 	                fwrite(&temp,sizeof(double),1,OUTFILE);
 			    }
 		    }

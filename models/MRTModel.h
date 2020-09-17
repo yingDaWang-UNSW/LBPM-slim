@@ -83,7 +83,7 @@ public:
     DoubleArray Velocity_y;
     DoubleArray Velocity_z;
     DoubleArray ConcentrationCart;
-    DoubleArray fqField;
+    DoubleArray fqTemp;
 private:
 	MPI_Comm comm;
 	
