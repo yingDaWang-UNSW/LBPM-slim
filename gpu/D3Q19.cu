@@ -15,7 +15,7 @@
 */
 #include <stdio.h>
 #include <cooperative_groups.h>
-#include <cuda.h>
+
 #define NBLOCKS 1024
 #define NTHREADS 256
 
@@ -207,6 +207,7 @@ __global__ void dvc_ScaLBL_D3Q19_Init(double *dist, int Np)
 		}
 	}
 }
+
 
 
 __global__ void 
@@ -1103,17 +1104,16 @@ __global__  void dvc_ScaLBL_D3Q19_Momentum(double *dist, double *vel, int N)
 {
 	int n;
 	// distributions
-	double f0,f1,f2,f3,f4,f5,f6,f7,f8,f9;
+	double f1,f2,f3,f4,f5,f6,f7,f8,f9;
 	double f10,f11,f12,f13,f14,f15,f16,f17,f18;
 	double vx,vy,vz;
-	char id;
 
 	int S = N/NBLOCKS/NTHREADS + 1;
 	for (int s=0; s<S; s++){
 		//........Get 1-D index for this thread....................
 		n = S*blockIdx.x*blockDim.x + s*blockDim.x + threadIdx.x;
 		if (n<N){
-			f0 = dist[n];
+
 			f2 = dist[2*N+n];
 			f4 = dist[4*N+n];
 			f6 = dist[6*N+n];
@@ -1137,11 +1137,10 @@ __global__  void dvc_ScaLBL_D3Q19_Momentum(double *dist, double *vel, int N)
 			//.................Compute the velocity...................................
 			vx = f1-f2+f7-f8+f9-f10+f11-f12+f13-f14;
 			vy = f3-f4+f7-f8-f9+f10+f15-f16+f17-f18;
-			vz = f5-f6+f11-f12-f13+f14+f15-f16-f17+f18;\
-		
+			vz = f5-f6+f11-f12-f13+f14+f15-f16-f17+f18;
 			//..................Write the velocity.....................................
 			vel[n] = vx;
-		    vel[N+n] = vy;
+			vel[N+n] = vy;
 			vel[2*N+n] = vz;
 			//........................................................................
 		}
@@ -1240,14 +1239,6 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_Pressure_BC_z(int *list, double *dist, 
 		dist[13*Np+n] = f14;
 		dist[16*Np+n] = f15;
 		dist[17*Np+n] = f18;
-		/*
-		if (idx == count-1) {
-		    printf("Site=%i\n",n);
-		    printf("ux=%f, uy=%f, uz=%f\n",ux,uy,uz);
-		    printf("Cxz=%f, Cyz=%f\n",Cxz,Cyz);
-		}
-		*/
-
 	}
 }
 
@@ -1304,6 +1295,43 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_Pressure_BC_Z(int *list, double *dist, 
 		dist[15*Np+n] = f16;
 		dist[18*Np+n] = f17;
 		//...................................................
+	}
+}
+__global__  void dvc_ScaLBL_D3Q19_Reflection_BC_z(int *list, double *dist, int count, int Np){
+	int idx, n;
+	idx = blockIdx.x*blockDim.x + threadIdx.x;
+	if (idx < count){
+		n = list[idx];
+		double f5 = 0.111111111111111111111111 - dist[6*Np+n];
+		double f11 = 0.05555555555555555555556 - dist[12*Np+n];
+		double f14 = 0.05555555555555555555556 - dist[13*Np+n];
+		double f15 = 0.05555555555555555555556 - dist[16*Np+n];
+		double f18 = 0.05555555555555555555556 - dist[17*Np+n];
+		
+		dist[6*Np+n] = f5;
+		dist[12*Np+n] = f11;
+		dist[13*Np+n] = f14;
+		dist[16*Np+n] = f15;
+		dist[17*Np+n] = f18;
+	}
+}
+
+__global__  void dvc_ScaLBL_D3Q19_Reflection_BC_Z(int *list, double *dist, int count, int Np){
+	int idx, n;
+	idx = blockIdx.x*blockDim.x + threadIdx.x;
+	if (idx < count){
+		n = list[idx];
+		double f6 = 0.111111111111111111111111 - dist[5*Np+n];
+		double f12 = 0.05555555555555555555556 - dist[11*Np+n];
+		double f13 = 0.05555555555555555555556 - dist[14*Np+n] ;
+		double f16 = 0.05555555555555555555556 - dist[15*Np+n];
+		double f17 = 0.05555555555555555555556 - dist[18*Np+n];
+		
+		dist[5*Np+n] = f6;
+		dist[11*Np+n] = f12;
+		dist[14*Np+n] = f13;
+		dist[15*Np+n] = f16;
+		dist[18*Np+n] = f17;
 	}
 }
 
@@ -1606,7 +1634,6 @@ __global__  void dvc_ScaLBL_D3Q19_AAodd_Flux_BC_z(int *d_neighborList, int *list
     if (g.thread_rank() == 0) atomicAdd(dvcsum, block_sum);
 }
 
-//*************************************************************************
 
 
 extern "C" void ScaLBL_D3Q19_Pack(int q, int *list, int start, int count, double *sendbuf, double *dist, int N){
@@ -1625,7 +1652,7 @@ extern "C" void ScaLBL_D3Q19_Init(double *dist, int Np){
 	dvc_ScaLBL_D3Q19_Init<<<NBLOCKS,NTHREADS >>>(dist, Np);
 	cudaError_t err = cudaGetLastError();
 	if (cudaSuccess != err){
-		printf("CUDA error in ScaLBL_D3Q19_AA_Init: %s \n",cudaGetErrorString(err));
+		printf("CUDA error in ScaLBL_D3Q19_Init: %s \n",cudaGetErrorString(err));
 	}
 }
 
@@ -1643,24 +1670,42 @@ extern "C" void ScaLBL_D3Q19_Pressure(double *fq, double *Pressure, int Np){
 	dvc_ScaLBL_D3Q19_Pressure<<< NBLOCKS,NTHREADS >>>(fq, Pressure, Np);
 }
 
+
+
 extern "C" void ScaLBL_D3Q19_AAeven_Pressure_BC_z(int *list, double *dist, double din, int count, int N){
 	int GRID = count / 512 + 1;
 	dvc_ScaLBL_D3Q19_AAeven_Pressure_BC_z<<<GRID,512>>>(list, dist, din, count, N);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAeven_Pressure_BC_z (kernel): %s \n",cudaGetErrorString(err));
+	}
 }
 
 extern "C" void ScaLBL_D3Q19_AAeven_Pressure_BC_Z(int *list, double *dist, double dout, int count, int N){
 	int GRID = count / 512 + 1;
 	dvc_ScaLBL_D3Q19_AAeven_Pressure_BC_Z<<<GRID,512>>>(list, dist, dout, count, N);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAeven_Pressure_BC_Z (kernel): %s \n",cudaGetErrorString(err));
+	}
 }
 
 extern "C" void ScaLBL_D3Q19_AAodd_Pressure_BC_z(int *neighborList, int *list, double *dist, double din, int count, int N){
 	int GRID = count / 512 + 1;
 	dvc_ScaLBL_D3Q19_AAodd_Pressure_BC_z<<<GRID,512>>>(neighborList, list, dist, din, count, N);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAodd_Pressure_BC_z (kernel): %s \n",cudaGetErrorString(err));
+	}
 }
 
 extern "C" void ScaLBL_D3Q19_AAodd_Pressure_BC_Z(int *neighborList, int *list, double *dist, double dout, int count, int N){
 	int GRID = count / 512 + 1;
 	dvc_ScaLBL_D3Q19_AAodd_Pressure_BC_Z<<<GRID,512>>>(neighborList, list, dist, dout, count, N);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAodd_Pressure_BC_Z (kernel): %s \n",cudaGetErrorString(err));
+	}
 }
 
 
@@ -1681,13 +1726,26 @@ extern "C" double ScaLBL_D3Q19_AAeven_Flux_BC_z(int *list, double *dist, double 
 	cudaMalloc((void **)&dvcsum,sizeof(double)*count);
 	cudaMemset(dvcsum,0,sizeof(double)*count);
 	int sharedBytes = 512*sizeof(double);
+	
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAeven_Flux_BC_z (memory allocation): %s \n",cudaGetErrorString(err));
+	}
 
 	// compute the local flux and store the result
 	dvc_ScaLBL_D3Q19_AAeven_Flux_BC_z<<<GRID,512,sharedBytes>>>(list, dist, flux, area, dvcsum, count, N);
+	err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAeven_Flux_BC_z (kernel): %s \n",cudaGetErrorString(err));
+	}
 
 	// Now read the total flux
 	cudaMemcpy(&sum[0],dvcsum,sizeof(double),cudaMemcpyDeviceToHost);
 	din=sum[0];
+	err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAeven_Flux_BC_z (reduction): %s \n",cudaGetErrorString(err));
+	}
 
 	// free the memory needed for reduction
 	cudaFree(dvcsum);
@@ -1702,7 +1760,7 @@ extern "C" double ScaLBL_D3Q19_AAodd_Flux_BC_z(int *neighborList, int *list, dou
 
 	// IMPORTANT -- this routine may fail if Nx*Ny > 512*512
 	if (count > 512*512){
-		printf("WARNING (ScaLBL_D3Q19_Flux_BC_Z): CUDA reduction operation may fail if count > 512*512");
+		printf("WARNING (ScaLBL_D3Q19_AAodd_Flux_BC_z): CUDA reduction operation may fail if count > 512*512");
 	}
 
 	// Allocate memory to store the sums
@@ -1712,13 +1770,24 @@ extern "C" double ScaLBL_D3Q19_AAodd_Flux_BC_z(int *neighborList, int *list, dou
 	cudaMalloc((void **)&dvcsum,sizeof(double)*count);
 	cudaMemset(dvcsum,0,sizeof(double)*count);
 	int sharedBytes = 512*sizeof(double);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAodd_Flux_BC_z (memory allocation): %s \n",cudaGetErrorString(err));
+	}
 
 	// compute the local flux and store the result
 	dvc_ScaLBL_D3Q19_AAodd_Flux_BC_z<<<GRID,512,sharedBytes>>>(neighborList, list, dist, flux, area, dvcsum, count, N);
-
+	err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAodd_Flux_BC_z (kernel): %s \n",cudaGetErrorString(err));
+	}
 	// Now read the total flux
 	cudaMemcpy(&sum[0],dvcsum,sizeof(double),cudaMemcpyDeviceToHost);
 	din=sum[0];
+	err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_AAodd_Flux_BC_z (reduction): %s \n",cudaGetErrorString(err));
+	}
 
 	// free the memory needed for reduction
 	cudaFree(dvcsum);
@@ -1737,11 +1806,23 @@ extern "C" double deviceReduce(double *in, double* out, int N) {
 	return sum;
 }
 
-//
-//extern "C" void ScaLBL_D3Q19_Pressure_BC_Z(int *list, double *dist, double dout, int count, int Np){
-//	int GRID = count / 512 + 1;
-//	dvc_ScaLBL_D3Q19_Pressure_BC_Z<<<GRID,512>>>(disteven, distodd, dout, Nx, Ny, Nz, outlet);
-//}
+extern "C" void ScaLBL_D3Q19_Reflection_BC_z(int *list, double *dist, int count, int Np){
+	int GRID = count / 512 + 1;
+	dvc_ScaLBL_D3Q19_Reflection_BC_z<<<GRID,512>>>(list, dist, count, Np);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_Reflection_BC_z (kernel): %s \n",cudaGetErrorString(err));
+	}
+}
+
+extern "C" void ScaLBL_D3Q19_Reflection_BC_Z(int *list, double *dist, int count, int Np){
+	int GRID = count / 512 + 1;
+	dvc_ScaLBL_D3Q19_Reflection_BC_Z<<<GRID,512>>>(list, dist, count, Np);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_Reflection_BC_Z (kernel): %s \n",cudaGetErrorString(err));
+	}
+}
 
 extern "C" void ScaLBL_D3Q19_AAeven_MRT(double *dist, int start, int finish, int Np, double rlx_setA, double rlx_setB, double Fx,
        double Fy, double Fz){

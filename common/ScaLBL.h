@@ -71,6 +71,35 @@ extern "C" void ScaLBL_D3Q19_Pressure(double *dist, double *press, int Np);
 extern "C" void ScaLBL_D3Q19_AAeven_BGK(double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz);
 
 extern "C" void ScaLBL_D3Q19_AAodd_BGK(int *neighborList, double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz);
+
+// Microporous Model - single phase
+extern "C" void ScaLBL_D3Q19_GreyIMRT_Init(double *Dist, int Np, double Den);
+
+extern "C" void ScaLBL_D3Q19_AAeven_Greyscale(double *dist, int start, int finish, int Np, double rlx, double rlx_eff, double Fx, double Fy, double Fz, double *Poros,double *Perm, double *Velocity,double *Pressure);
+
+extern "C" void ScaLBL_D3Q19_AAodd_Greyscale(int *neighborList, double *dist, int start, int finish, int Np, double rlx, double rlx_eff, double Fx, double Fy, double Fz, double *Poros,double *Perm, double *Velocity,double *Pressure);
+
+extern "C" void ScaLBL_D3Q19_AAeven_Greyscale_IMRT(double *dist, int start, int finish, int Np, double rlx, double rlx_eff, double Fx, double Fy, double Fz, double *Poros,double *Perm, double *Velocity,double Den,double *Pressure);
+
+extern "C" void ScaLBL_D3Q19_AAodd_Greyscale_IMRT(int *neighborList, double *dist, int start, int finish, int Np, double rlx, double rlx_eff, double Fx, double Fy, double Fz,  double *Poros,double *Perm, double *Velocity,double Den,double *Pressure);
+
+extern "C" void ScaLBL_D3Q19_AAeven_Greyscale_MRT(double *dist, int start, int finish, int Np, double rlx, double rlx_eff, double Fx, double Fy, double Fz, double *Poros,double *Perm, double *Velocity,double Den,double *Pressure);
+
+extern "C" void ScaLBL_D3Q19_AAodd_Greyscale_MRT(int *neighborList, double *dist, int start, int finish, int Np, double rlx, double rlx_eff, double Fx, double Fy, double Fz, double *Poros,double *Perm, double *Velocity,double Den,double *Pressure);
+
+// Microporous Model - two-phase colour
+extern "C" void ScaLBL_D3Q19_AAeven_GreyscaleColor(int *Map, double *dist, double *Aq, double *Bq, double *Den, 
+        double *Phi,double *GreySolidGrad, double *Poros,double *Perm,double *Vel, 
+        double rhoA, double rhoB, double tauA, double tauB,double tauA_eff,double tauB_eff, double alpha, double beta,
+		double Fx, double Fy, double Fz, int strideY, int strideZ, int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q19_AAodd_GreyscaleColor(int *d_neighborList, int *Map, double *dist, double *Aq, double *Bq, double *Den, 
+		double *Phi, double *GreySolidGrad, double *Poros,double *Perm,double *Vel, 
+        double rhoA, double rhoB, double tauA, double tauB, double tauA_eff,double tauB_eff, double alpha, double beta,
+		double Fx, double Fy, double Fz, int strideY, int strideZ, int start, int finish, int Np);
+
+
+
 // TRT MODEL
 
 // Thermal BGK
@@ -150,12 +179,19 @@ extern "C" double ScaLBL_D3Q19_AAodd_Flux_BC_z(int *neighborList, int *list, dou
 extern "C" double ScaLBL_D3Q19_AAeven_Flux_BC_z(int *list, double *dist, double flux, double area, 
 		 int count, int N);
 
-extern "C" void ScaLBL_Color_BC_z(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np);
+extern "C" void ScaLBL_Color_BC(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np);
 
-extern "C" void ScaLBL_Color_BC_Z(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np);
+extern "C" void ScaLBL_D3Q19_Reflection_BC_z(int *list, double *dist, int count, int Np);
+
+extern "C" void ScaLBL_D3Q19_Reflection_BC_Z(int *list, double *dist, int count, int Np);
+
+extern "C" void ScaLBL_D3Q7_Reflection_BC_z(int *list, double *dist, int count, int Np);
+
+extern "C" void ScaLBL_D3Q7_Reflection_BC_Z(int *list, double *dist, int count, int Np);
 
 extern "C" void ScaLBL_SetSlice_z(double *Phi, double value, int Nx, int Ny, int Nz, int Slice);
 
+extern "C" void ScaLBL_CopySlice_z(double *Phi, int Nx, int Ny, int Nz, int Source, int Destination);
 //extern "C" void ScaLBL_FDM_Concentration_BC_z(int *list, double *cq, double cin, int count, int Np);
 class ScaLBL_Communicator{
 public:
@@ -189,7 +225,7 @@ public:
 	int FirstInterior();
 	int LastInterior();
 	
-	int MemoryOptimizedLayoutAA(IntArray &Map, int *neighborList, char *id, int Np);
+	int MemoryOptimizedLayoutAA(IntArray &Map, int *neighborList, signed char *id, int Np);
 //	void MemoryOptimizedLayout(IntArray &Map, int *neighborList, char *id, int Np);
 //	void MemoryOptimizedLayoutFull(IntArray &Map, int *neighborList, char *id, int Np);
 //	void MemoryDenseLayout(IntArray &Map, int *neighborList, char *id, int Np);
@@ -217,6 +253,12 @@ public:
 	void D3Q19_Pressure_BC_z(int *neighborList, double *fq, double din, int time);
 	void D3Q19_Pressure_BC_Z(int *neighborList, double *fq, double dout, int time);
 	double D3Q19_Flux_BC_z(int *neighborList, double *fq, double flux, int time);
+	void D3Q19_Reflection_BC_z(double *fq);
+	void D3Q19_Reflection_BC_Z(double *fq);
+	void GreyscaleSC_BC_z(int *Map, double *DenA, double *DenB, double vA, double vB);
+	void GreyscaleSC_BC_Z(int *Map, double *DenA, double *DenB, double vA, double vB);
+    void GreyscaleSC_Pressure_BC_z(int *neighborList, double *fqA, double *fqB, double dinA, double dinB, int time);
+    void GreyscaleSC_Pressure_BC_Z(int *neighborList, double *fqA, double *fqB, double doutA, double doutB, int time);
     //void FDM_Concentration_BC_z(int *neighborList, double *cq, double cin);
 //	void TestSendD3Q19(double *f_even, double *f_odd);
 //	void TestRecvD3Q19(double *f_even, double *f_odd);

@@ -20,40 +20,61 @@
 #define NBLOCKS 1024
 #define NTHREADS 256
 
-__global__  void dvc_ScaLBL_Color_BC_z(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np)
+__global__  void dvc_ScaLBL_Color_Init(char *ID, double *Den, double *Phi, double das, double dbs, int Nx, int Ny, int Nz)
 {
-	int idx,n,nm;
-	// Fill the outlet with component b
-	idx = blockIdx.x*blockDim.x + threadIdx.x;
-	if (idx < count){
-		n = list[idx];
-		Den[n] = vA;
-		Den[Np+n] = vB;
-		//double valB = Den[Np+n]; // mass that reaches inlet is conserved
+	//int i,j,k;
+	int n,N;
+	char id;
+	N = Nx*Ny*Nz;
 
-		nm = Map[n];
-		Phi[nm] = (vA-vB)/(vA+vB);
-		//Phi[n] = (vA-vB)/(vA+vB);
+	int S = N/NBLOCKS/NTHREADS + 1;
+	for (int s=0; s<S; s++){
+		//........Get 1-D index for this thread....................
+		n = S*blockIdx.x*blockDim.x + s*blockDim.x + threadIdx.x;
+		if (n<N){
+		
+  		id=ID[n];	
+ 		//.......Back out the 3-D indices for node n..............
+		//k = n/(Nx*Ny);
+		//j = (n-Nx*Ny*k)/Nx;
+		//i = n-Nx*Ny*k-Nx*j;
+
+		if ( id == 1){
+			Den[n] = 1.0;
+			Den[N+n] = 0.0;
+			Phi[n] = 1.0;
+		}
+		else if ( id == 2){
+			Den[n] = 0.0;
+			Den[N+n] = 1.0;
+			Phi[n] = -1.0;
+		}
+		else{
+			Den[n] = das;
+			Den[N+n] = dbs;
+			Phi[n] = (das-dbs)/(das+dbs);
+		}
+		}
 	}
 }
 
-__global__  void dvc_ScaLBL_Color_BC_Z(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np)
+__global__  void dvc_ScaLBL_Color_BC(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np)
 {
-	int idx,n,nm;
+	int idx,n;
 	// Fill the outlet with component b
 	idx = blockIdx.x*blockDim.x + threadIdx.x;
 	if (idx < count){
 		n = list[idx];
-		//double valA = Den[n]; // mass that reaches outlet is conserved
 		Den[n] = vA;
 		Den[Np+n] = vB;
 		
-		nm = Map[n];
-		Phi[nm] = (vA-vB)/(vA+vB);
-		//Phi[n] = (vA-vB)/(vA+vB);
+		//nm = Map[n];
+		//Phi[nm] = (vA-vB)/(vA+vB);
+		Phi[n] = (vA-vB)/(vA+vB);
 
 	}
 }
+
 //*************************************************************************
 
 
@@ -65,7 +86,14 @@ __global__  void dvc_ScaLBL_SetSlice_z(double *Phi, double value, int Nx, int Ny
 	}
 }
 
-
+__global__  void dvc_ScaLBL_CopySlice_z(double *Phi, int Nx, int Ny, int Nz, int Source, int Dest){
+	double value;
+	int n =  blockIdx.x*blockDim.x + threadIdx.x;
+	if (n < Nx*Ny){
+		value = Phi[Source*Nx*Ny+n];
+		Phi[Dest*Nx*Ny+n] = value;
+	}
+}
 
 __global__  void dvc_ScaLBL_D3Q19_AAeven_Color(int *Map, double *dist, double *Aq, double *Bq, double *Den, double *Phi,
 		double *Velocity, double rhoA, double rhoB, double tauA, double tauB, double alpha, double beta,
@@ -182,10 +210,11 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_Color(int *Map, double *dist, double *A
 
 			//...........Normalize the Color Gradient.................................
 			C = sqrt(nx*nx+ny*ny+nz*nz);
-			if (C==0.0) C=1.0;
-			nx = nx/C;
-			ny = ny/C;
-			nz = nz/C;		
+			double ColorMag = C;
+			if (C==0.0) ColorMag=1.0;
+			nx = nx/ColorMag;
+			ny = ny/ColorMag;
+			nz = nz/ColorMag;		
 
 			// q=0
 			fq = dist[n];
@@ -1098,7 +1127,7 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_Color(int *neighborList, int *Map, double
 			//..............carry out relaxation process..............................
 			//..........Toelke, Fruediger et. al. 2006................................
 			if (C == 0.0)	nx = ny = nz = 0.0;
-			m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) -alpha*C - m1);
+			m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) -19*alpha*C - m1);
 			m2 = m2 + rlx_setA*((3*rho - 5.5*(jx*jx+jy*jy+jz*jz)/rho0)- m2);
 			m4 = m4 + rlx_setB*((-0.6666666666666666*jx)- m4);
 			m6 = m6 + rlx_setB*((-0.6666666666666666*jy)- m6);
@@ -1489,7 +1518,18 @@ extern "C" void ScaLBL_SetSlice_z(double *Phi, double value, int Nx, int Ny, int
 	int GRID = Nx*Ny / 512 + 1;
 	dvc_ScaLBL_SetSlice_z<<<GRID,512>>>(Phi,value,Nx,Ny,Nz,Slice);
 }
-
+extern "C" void ScaLBL_CopySlice_z(double *Phi, int Nx, int Ny, int Nz, int Source, int Dest){
+	int GRID = Nx*Ny / 512 + 1;
+	dvc_ScaLBL_CopySlice_z<<<GRID,512>>>(Phi,Nx,Ny,Nz,Source,Dest);
+}
+extern "C" void ScaLBL_Color_BC(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np){
+    int GRID = count / 512 + 1;
+    dvc_ScaLBL_Color_BC<<<GRID,512>>>(list, Map, Phi, Den, vA, vB, count, Np);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_Color_BC: %s \n",cudaGetErrorString(err));
+	}
+}
 // Pressure Boundary Conditions Functions
 
 extern "C" void ScaLBL_D3Q19_AAeven_Color(int *Map, double *dist, double *Aq, double *Bq, double *Den, double *Phi,
@@ -1559,25 +1599,5 @@ extern "C" void ScaLBL_PhaseField_Init(int *Map, double *Phi, double *Den, doubl
 		printf("CUDA error in ScaLBL_PhaseField_Init: %s \n",cudaGetErrorString(err));
 	}
 }
-
-
-extern "C" void ScaLBL_Color_BC_z(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np){
-    int GRID = count / 512 + 1;
-    dvc_ScaLBL_Color_BC_z<<<GRID,512>>>(list, Map, Phi, Den, vA, vB, count, Np);
-	cudaError_t err = cudaGetLastError();
-	if (cudaSuccess != err){
-		printf("CUDA error in ScaLBL_Color_BC_z: %s \n",cudaGetErrorString(err));
-	}
-}
-
-extern "C" void ScaLBL_Color_BC_Z(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np){
-    int GRID = count / 512 + 1;
-    dvc_ScaLBL_Color_BC_Z<<<GRID,512>>>(list, Map, Phi, Den, vA, vB, count, Np);
-	cudaError_t err = cudaGetLastError();
-	if (cudaSuccess != err){
-		printf("CUDA error in ScaLBL_Color_BC_Z: %s \n",cudaGetErrorString(err));
-	}
-}
-
 
 

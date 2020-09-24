@@ -483,10 +483,6 @@ void ScaLBL_MRTModel::Run(){
 		        if (rank==0) printf("Mean Peclet Number: %0.4e, Mean concentration in domain: %0.4f\n",NPe,meanCGlob);
 		    }
 			
-			
-			//if (rank==0) printf("Computing Minkowski functionals \n");
-			//Morphology.ComputeScalar(Geom,0.f);
-			//Morphology.PrintAll();
 			double mu = (tau-0.5)/3.f; //this is the kimematic viscosity, so use momentum in v to cancel out
 			double gradP=sqrt(Fx*Fx+Fy*Fy+Fz*Fz)+(din-dout)/((Nz-2)*nprocz)/3;
 			double absperm = voxelSize*voxelSize*mu*sqrt(vax*vax+vay*vay+vaz*vaz)/gradP;
@@ -635,8 +631,6 @@ void ScaLBL_MRTModel::velPField(){
 		    }
 	    }
     }
-    
-    
 	fclose(OUTFILE);
 	MPI_Barrier(comm);
 }
