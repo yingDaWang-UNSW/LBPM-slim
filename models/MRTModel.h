@@ -77,13 +77,13 @@ public:
     double *Pressure;
     double *Concentration;
     //Minkowski Morphology;
-	
 	DoubleArray P;
     DoubleArray Velocity_x;
     DoubleArray Velocity_y;
     DoubleArray Velocity_z;
     DoubleArray ConcentrationCart;
     DoubleArray fqTemp;
+    
 private:
 	MPI_Comm comm;
 	

@@ -1440,100 +1440,7 @@ __global__  void dvc_ScaLBL_D3Q7_AAeven_PhaseField(int *Map, double *Aq, double 
 		}
 	}
 }
-__global__ void dvc_ScaLBL_D3Q19_Gradient(int *Map, double *phi, double *ColorGrad, int start, int finish, int Np,
-			int strideY, int strideZ){
-	int idx,ijk,nn;
-	// distributions
-	double m1,m2,m3,m4,m5,m6,m7,m8,m9;
-	double m10,m11,m12,m13,m14,m15,m16,m17,m18;
-	double nx,ny,nz;
 
-	int S = Np/NBLOCKS/NTHREADS + 1;
-	for (int s=0; s<S; s++){
-		//........Get 1-D index for this thread....................
-		idx =  S*blockIdx.x*blockDim.x + s*blockDim.x + threadIdx.x + start;
-		if (idx<finish) {
-			// Get the 1D index based on regular data layout
-			ijk = Map[idx];
-
-			//.......Back out the 3D indices for node n..............
-			//k = n/(Nx*Ny);
-			//j = (n-Nx*Ny*k)/Nx;
-			//i = n-Nx*Ny*k-Nx*j;
-			//........................................................................
-			//........Get 1-D index for this thread....................
-			//		n = S*blockIdx.x*blockDim.x + s*blockDim.x + threadIdx.x;
-			//........................................................................
-			//					COMPUTE THE COLOR GRADIENT
-			//........................................................................
-			//.................Read Phase Indicator Values............................
-			//........................................................................
-			nn = ijk-1;							// neighbor index (get convention)
-			m1 = phi[nn];						// get neighbor for phi - 1
-			//........................................................................
-			nn = ijk+1;							// neighbor index (get convention)
-			m2 = phi[nn];						// get neighbor for phi - 2
-			//........................................................................
-			nn = ijk-strideY;							// neighbor index (get convention)
-			m3 = phi[nn];					// get neighbor for phi - 3
-			//........................................................................
-			nn = ijk+strideY;							// neighbor index (get convention)
-			m4 = phi[nn];					// get neighbor for phi - 4
-			//........................................................................
-			nn = ijk-strideZ;						// neighbor index (get convention)
-			m5 = phi[nn];					// get neighbor for phi - 5
-			//........................................................................
-			nn = ijk+strideZ;						// neighbor index (get convention)
-			m6 = phi[nn];					// get neighbor for phi - 6
-			//........................................................................
-			nn = ijk-strideY-1;						// neighbor index (get convention)
-			m7 = phi[nn];					// get neighbor for phi - 7
-			//........................................................................
-			nn = ijk+strideY+1;						// neighbor index (get convention)
-			m8 = phi[nn];					// get neighbor for phi - 8
-			//........................................................................
-			nn = ijk+strideY-1;						// neighbor index (get convention)
-			m9 = phi[nn];					// get neighbor for phi - 9
-			//........................................................................
-			nn = ijk-strideY+1;						// neighbor index (get convention)
-			m10 = phi[nn];					// get neighbor for phi - 10
-			//........................................................................
-			nn = ijk-strideZ-1;						// neighbor index (get convention)
-			m11 = phi[nn];					// get neighbor for phi - 11
-			//........................................................................
-			nn = ijk+strideZ+1;						// neighbor index (get convention)
-			m12 = phi[nn];					// get neighbor for phi - 12
-			//........................................................................
-			nn = ijk+strideZ-1;						// neighbor index (get convention)
-			m13 = phi[nn];					// get neighbor for phi - 13
-			//........................................................................
-			nn = ijk-strideZ+1;						// neighbor index (get convention)
-			m14 = phi[nn];					// get neighbor for phi - 14
-			//........................................................................
-			nn = ijk-strideZ-strideY;					// neighbor index (get convention)
-			m15 = phi[nn];					// get neighbor for phi - 15
-			//........................................................................
-			nn = ijk+strideZ+strideY;					// neighbor index (get convention)
-			m16 = phi[nn];					// get neighbor for phi - 16
-			//........................................................................
-			nn = ijk+strideZ-strideY;					// neighbor index (get convention)
-			m17 = phi[nn];					// get neighbor for phi - 17
-			//........................................................................
-			nn = ijk-strideZ+strideY;					// neighbor index (get convention)
-			m18 = phi[nn];					// get neighbor for phi - 18
-			//............Compute the Color Gradient...................................
-			nx = -(m1-m2+0.5*(m7-m8+m9-m10+m11-m12+m13-m14));
-			ny = -(m3-m4+0.5*(m7-m8-m9+m10+m15-m16+m17-m18));
-			nz = -(m5-m6+0.5*(m11-m12-m13+m14+m15-m16-m17+m18));
-			//...............................................
-			//...Store the Color Gradient....................
-			ColorGrad[idx] = nx;
-			ColorGrad[Np+idx] = ny;
-			ColorGrad[2*Np+idx] = nz;
-			//...............................................
-		}
-	}
-}
 __global__ void dvc_ScaLBL_PhaseField_Init(int *Map, double *Phi, double *Den, double *Aq, double *Bq, int start, int finish, int Np){
 	int idx,n;
 	double phi,nA,nB;
@@ -1642,19 +1549,6 @@ extern "C" void ScaLBL_D3Q7_AAeven_PhaseField(int *Map, double *Aq, double *Bq, 
 		printf("CUDA error in ScaLBL_D3Q7_AAeven_PhaseField: %s \n",cudaGetErrorString(err));
 	}
 	cudaProfilerStop();
-
-}
-
-extern "C" void ScaLBL_D3Q19_Gradient(int *Map, double *Phi, double *ColorGrad, int start, int finish, int Np,
-		int Nx, int Ny, int Nz){
-
-	int strideY=Nx;
-	int strideZ=Nx*Ny;
-	dvc_ScaLBL_D3Q19_Gradient<<<NBLOCKS,NTHREADS >>>(Map, Phi, ColorGrad, start, finish, Np, strideY, strideZ);
-	cudaError_t err = cudaGetLastError();
-	if (cudaSuccess != err){
-		printf("CUDA error in ScaLBL_D3Q19_ColorGrad: %s \n",cudaGetErrorString(err));
-	}
 
 }
 

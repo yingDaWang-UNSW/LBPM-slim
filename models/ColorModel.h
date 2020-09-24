@@ -96,6 +96,7 @@ public:
     DoubleArray Velocity_y;
     DoubleArray Velocity_z;
     DoubleArray PhaseField;
+    // the porespace arrays
 	DoubleArray cDen;
 	DoubleArray cfq;
 private:

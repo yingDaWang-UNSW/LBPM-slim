@@ -137,6 +137,7 @@ void ScaLBL_MRTModel::SetDomain(){
 	Velocity_z.resize(Nx,Ny,Nz);
     fqTemp.resize(Nx, Ny, Nz);
     P.resize(Nx, Ny, Nz);
+
 	if (thermalFlag) ConcentrationCart.resize(Nx,Ny,Nz);
     if (rank == 0) cout << "Domain set." << endl;
 	//for (int i=0; i<Nx*Ny*Nz; i++) Dm->id[i] = 1;               // initialize this way
@@ -308,7 +309,7 @@ void ScaLBL_MRTModel::Run(){
 	if (BoundaryCondition == 3 && !restartFq) { // this reduces pressure oscillation due to zero init
 	    tempdin=din;
 	    din=dout;
-	    flux=10*Porosity; //arbitrary number, needs to be lower for tighter, smaller domains, and vice versa
+	    flux=1000*Porosity*Porosity; //arbitrary number, needs to be lower for tighter, smaller domains, and vice versa
     }
 	while (timestep < timestepMax) {
 	    // add pressure BC ramp up in a separate section here if you want
@@ -548,15 +549,19 @@ void ScaLBL_MRTModel::fqField(){
 	sprintf(LocalRankFilename,"rawVisFq%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
 	OUTFILE = fopen(LocalRankFilename,"w");
     double temp = 0.0;	
+    int idx=0;
     for (int d=0; d<19; d++) {
 	    // copy to regular layout
 		ScaLBL_Comm->RegularLayout(Map,&fq[d*Np],fqTemp);   
 	    for (int k=0; k<Nz; k++){
 		    for (int j=0; j<Ny; j++){
 			    for (int i=0; i<Nx; i++){
-    			    //fprintf(OUTFILE,"%f\n",fqField(i, j, k));
-			        temp = fqTemp(i,j,k);
-	                fwrite(&temp,sizeof(double),1,OUTFILE);
+    		        idx = Map(i,j,k);
+		            if (idx >= 0) {
+        			    //fprintf(OUTFILE,"%f\n",fqField(i, j, k));
+			            temp = fqTemp(i,j,k);
+	                    fwrite(&temp,sizeof(double),1,OUTFILE);
+	                }
 			    }
 		    }
 	    }
@@ -578,48 +583,60 @@ void ScaLBL_MRTModel::velPField(){
 	char LocalRankFilename[100];
 	sprintf(LocalRankFilename,"rawVisVelP%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
 	OUTFILE = fopen(LocalRankFilename,"wb");
+	
     ScaLBL_Comm->RegularLayout(Map,&Pressure[0],P);
-//	fwrite(vx.data(),sizeof(double),N,OUTFILE);
-//	fwrite(vy.data(),sizeof(double),N,OUTFILE);
-//	fwrite(vz.data(),sizeof(double),N,OUTFILE);
-//	fwrite(P.data(),sizeof(double),N,OUTFILE);
     double temp = 0.0;
+    int idx=0;
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    //fprintf(OUTFILE,"%f\n",vx(i, j, k));
-			    temp = Velocity_x(i,j,k);
-	            fwrite(&temp,sizeof(double),1,OUTFILE);
+		        idx = Map(i,j,k);
+		        if (idx >= 0) {
+			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			        temp = Velocity_x(i,j,k);
+	                fwrite(&temp,sizeof(double),1,OUTFILE);
+	            }
 		    }
 	    }
     }
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    temp = Velocity_y(i,j,k);
-			    //fprintf(OUTFILE,"%f\n",vy(i, j, k));
-	            fwrite(&temp,sizeof(double),1,OUTFILE);
+		        idx = Map(i,j,k);
+		        if (idx >= 0) {
+			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			        temp = Velocity_y(i,j,k);
+	                fwrite(&temp,sizeof(double),1,OUTFILE);
+	            }
 		    }
 	    }
     }
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    temp = Velocity_z(i,j,k);
-			    //fprintf(OUTFILE,"%f\n",vz(i, j, k));
-	            fwrite(&temp,sizeof(double),1,OUTFILE);
+		        idx = Map(i,j,k);
+		        if (idx >= 0) {
+			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			        temp = Velocity_z(i,j,k);
+	                fwrite(&temp,sizeof(double),1,OUTFILE);
+	            }
 		    }
 	    }
     }
     for (int k=0; k<Nz; k++){
 	    for (int j=0; j<Ny; j++){
 		    for (int i=0; i<Nx; i++){
-			    temp = P(i,j,k);
-			    //fprintf(OUTFILE,"%f\n",P(i, j, k));
-	            fwrite(&temp,sizeof(double),1,OUTFILE);
+		        idx = Map(i,j,k);
+		        if (idx >= 0) {
+			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			        temp = P(i,j,k);
+	                fwrite(&temp,sizeof(double),1,OUTFILE);
+	            }
 		    }
 	    }
     }
+    
+    
 	fclose(OUTFILE);
 	MPI_Barrier(comm);
 }
