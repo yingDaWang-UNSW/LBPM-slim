@@ -878,7 +878,7 @@ void ScaLBL_ColorModel::Run(){
 							        vaz_loc_H += Velocity_z(i,j,k);
 	                                countA_H+=1.0;							    
 							    }
-							} else {
+							} else if (PhaseField(i,j,k)<0) {
 							    vbx_loc += Velocity_x(i,j,k);
 							    vby_loc += Velocity_y(i,j,k);
 							    vbz_loc += Velocity_z(i,j,k);
