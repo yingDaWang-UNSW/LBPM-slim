@@ -465,8 +465,10 @@ void ScaLBL_ColorModel::Run(){
     int injectionType = 1; // 1 for drainage and 2 for imbibition
     double targetSaturation = 0.f;
     int stabilityCounter = 0;
+    int globStabilityCounter = 0;
     int accelerationCounter = 0;
-    int stabilisationRate = 10000; // interval for checking stabilisation
+    int stabilisationRate = 1000; // interval for checking stabilisation
+    int max_stabilisation = 1000000; // interval for checking stabilisation
     int accelerationRate = 1000; // interval for doing automorph acceleration
     double shellRadius = 0.0;
     int restart_interval = 0;
@@ -495,6 +497,9 @@ void ScaLBL_ColorModel::Run(){
 	}
 	if (analysis_db->keyExists( "stabilisationRate" )){
 		stabilisationRate = analysis_db->getScalar<int>( "stabilisationRate" );
+	}
+	if (analysis_db->keyExists( "max_stabilisation" )){
+		max_stabilisation = analysis_db->getScalar<int>( "max_stabilisation" );
 	}
 	if (analysis_db->keyExists( "accelerationRate" )){
 		accelerationRate = analysis_db->getScalar<int>( "accelerationRate" );
@@ -557,7 +562,7 @@ void ScaLBL_ColorModel::Run(){
 		tolerance = analysis_db->getScalar<double>( "tolerance" );
 	}
 	else{
-		tolerance = 0.02;
+		tolerance = 1e-6;
 	}
 	int analysis_interval = analysis_db->getScalar<int>( "analysis_interval" );
 	
@@ -590,6 +595,7 @@ void ScaLBL_ColorModel::Run(){
 
 	//runAnalysis analysis( analysis_db, rank_info, ScaLBL_Comm, Dm, Np, Regular, beta, Map );
 	//analysis.createThreads( analysis_method, 4 );
+
 	while (timestep < timestepMax ) {
 		//if ( rank==0 ) { printf("Running timestep %i (%i MB)\n",timestep+1,(int)(Utilities::getMemoryUsage()/1048576)); }
 		//PROFILE_START("Update");
@@ -856,8 +862,8 @@ void ScaLBL_ColorModel::Run(){
             double countB = 0.;// = Averages->Volume_n();
             double countA_H = 0.;// = Averages->Volume_w();
             double countB_H = 0.;// = Averages->Volume_n();
-            double current_saturation;
-            double current_saturation_H;
+            double current_saturation=0.;
+            double current_saturation_H=0.;
             double settlingParam = 0.;
             double phiDiff = 0.;
 			// sum velocities, volumes, differences
@@ -946,7 +952,9 @@ void ScaLBL_ColorModel::Run(){
             //scale the settling parameter by the domain size
             settlingParam = sqrt(settlingParam)/(double((Nx-2)*(Ny-2)*(Nz-2)*nprocs))/poro;
             current_saturation = volB/(volA+volB);
-            current_saturation_H = volB_H/(volA_H+volB_H);
+            if (volA_H+volB_H > 0.0){ // avoid 0/0 - which happens when both phases are disconnected (elongated samples/venturi samples)
+                current_saturation_H = volB_H/(volA_H+volB_H);
+            }
             // calculate the hydraulically connected capillary number if necessary...
 //            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double((Nx-2)*(Ny-2)*(Nz-2))*nprocs*poro);
             double Ca = (muA*flow_rate_A)/(alpha);
@@ -966,11 +974,14 @@ void ScaLBL_ColorModel::Run(){
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Dm->Comm); 
             //printf("Rank: %d, MLUPS: %f\n",rank, MLUPS);
 			if (rank==0) {
-				printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1, absperm2,absperm1_H, absperm2_H);
+				printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1,absperm2,absperm1_H,absperm2_H);
 				printf("EMA: Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1_EMA, absperm2_EMA,absperm1_H_EMA, absperm2_H_EMA);
 	            printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e\nNca = (%e, %e), EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca, Ca2, Ca_EMA, dCadtEMA, settlingParam);
-			}
 
+                FILE * log_file = fopen("log.csv","a");
+	            fprintf(log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n", timestep,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,vA_x_H,vA_y_H,vA_z_H,vB_x_H,vB_y_H,vB_z_H,flow_rate_A,flow_rate_B,flow_rate_A_H,flow_rate_B_H, force_magnitude,absperm1,absperm2,absperm1_H,absperm2_H,absperm1_EMA,absperm2_EMA,absperm1_H_EMA,absperm2_H_EMA, MLUPSGlob,current_saturation,flux,gradP,Ca,Ca2,Ca_EMA,dCadtEMA,settlingParam);
+	            fclose(log_file);
+            }
             // rampup the component affinities - functionalise this for better code
             if (affinityRampupFlag && timestep < affinityRampSteps){
             	size_t NLABELS=0;
@@ -1146,32 +1157,33 @@ void ScaLBL_ColorModel::Run(){
 			
             //AUTOMORPH routine
 			if (timestep > ramp_timesteps && autoMorphFlag){
-//			    if (current_saturation*((injectionType-1)*2-1)<satInit*((injectionType-1)*2-1) && satInit > 0.0){
-//			        // initially, use flux conditions to push the system along
-//				    if (rank==0) printf("[AUTOMORPH]: Initial Flux injection to target %f (current: %f) \n", satInit, current_saturation);
-//                    flux = 0.01*double((Nx-2)*(Ny-2)*(Nz-2)*nprocs)*poro/accelerationRate;
-//                    BoundaryCondition = 4;
-//			        if (injectionType==1){ //flux morph will temporarily activate flux boundary conditions
-//                        inletA=1.0; //a is nwp
-//                        inletB=0.0;
-//                        outletA=0.0;
-//                        outletB=1.0;
-//	                } else if (injectionType==2){
-//                        inletA=0.0; //a is nwp
-//                        inletB=1.0;
-//                        outletA=1.0;
-//                        outletB=0.0;
-//	                }
-//	                stabilityCounter = -10*analysis_interval;
-//	                accelerationCounter = -analysis_interval;
-//			    } else {
-//			        BoundaryCondition = 0;
-//			        flux = 0;
-//			    }
+			    if (current_saturation*((injectionType-1)*2-1)<satInit*((injectionType-1)*2-1) && satInit > 0.0){
+			        // initially, use flux conditions to push the system along
+				    if (rank==0) printf("[AUTOMORPH]: Initial Flux injection to target %f (current: %f) \n", satInit, current_saturation);
+                    flux = 0.01*double((Nx-2)*(Ny-2)*(Nz-2)*nprocs)*poro/accelerationRate;
+                    BoundaryCondition = 4;
+			        if (injectionType==1){ //flux morph will temporarily activate flux boundary conditions
+                        inletA=1.0; //a is nwp
+                        inletB=0.0;
+                        outletA=0.0;
+                        outletB=1.0;
+	                } else if (injectionType==2){
+                        inletA=0.0; //a is nwp
+                        inletB=1.0;
+                        outletA=1.0;
+                        outletB=0.0;
+	                }
+	                stabilityCounter = -10*analysis_interval;
+	                accelerationCounter = -analysis_interval;
+			    } else {
+			        BoundaryCondition = 0;
+			        flux = 0;
+			    }
                 // once rampup and init flux are done, run morph
 			    if (!autoMorphAdapt && stabilityCounter >= stabilisationRate){//if acceleration is currently off, (stabilisation is active)
-				    if (dCadtEMA < tolerance ){ //if the capillary number has stabilised, record, adjust, and activate acceleration
+				    if (dCadtEMA < tolerance || globStabilityCounter >= max_stabilisation){ //if the capillary number has stabilised, record, adjust, and activate acceleration
 	        		    WriteDebugYDW();
+	        		    globStabilityCounter = 0;
 					    if (rank==0){ //save the data as a rel perm point
 						    printf("[AUTOMORPH]: Steady state reached. WRITE STEADY POINT \n");
 						    
@@ -1212,6 +1224,7 @@ void ScaLBL_ColorModel::Run(){
 				    }
                 }
 			    stabilityCounter += analysis_interval;
+			    globStabilityCounter += analysis_interval;
 				if (autoMorphAdapt && accelerationCounter >= accelerationRate) { //if the system just stabilised, push forward to the next target
                     // check the state
 	                if (current_saturation*((injectionType-1)*2-1)>targetSaturation*((injectionType-1)*2-1)){
@@ -1262,6 +1275,7 @@ void ScaLBL_ColorModel::Run(){
 	//************************************************************************
 	ScaLBL_DeviceBarrier();
 	MPI_Barrier(Dm->Comm);
+
 //	stoptime = MPI_Wtime();
 //	if (rank==0) printf("-------------------------------------------------------------------\n");
 //	// Compute the walltime per timestep
