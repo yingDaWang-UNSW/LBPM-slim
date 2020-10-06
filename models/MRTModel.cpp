@@ -490,6 +490,12 @@ void ScaLBL_MRTModel::Run(){
 			double convRate = fabs((absperm-Kold)/Kold);
             double MLUPSGlob;
             double MLUPS;
+            double flow_rate;
+            flow_rate = sqrt(vax*vax+vay*vay+vaz*vaz);
+            if (std::isnan(flow_rate)) {
+			    if (rank==0) printf("Nan Flowrate detected, terminating simulation. \n");
+                break;
+            }
         	stoptime = MPI_Wtime();
     		cputime = (stoptime - starttime);
     		if (thermalFlag) {

@@ -943,6 +943,10 @@ void ScaLBL_ColorModel::Run(){
             double flow_rate_A_H = sqrt(vA_x_H*vA_x_H + vA_y_H*vA_y_H + vA_z_H*vA_z_H);
             double flow_rate_B_H = sqrt(vB_x_H*vB_x_H + vB_y_H*vB_y_H + vB_z_H*vB_z_H);
             double force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
+            if (std::isnan(flow_rate_B+flow_rate_A)) {
+			    if (rank==0) printf("Nan Flowrate detected, terminating simulation. \n");
+                break;
+            }
             //double Ca = fabs((1-current_saturation)*muA*flow_rate_A + current_saturation*muB*flow_rate_B)/(5.796*alpha);
 			double gradP=force_magnitude+(din-dout)/((Nz-2)*nprocz)/3;
 			double absperm1 = muA*flow_rate_A*9.87e11*voxelSize*voxelSize/gradP;
@@ -1080,7 +1084,7 @@ void ScaLBL_ColorModel::Run(){
             
             
             // adjust the force if capillary number is set
-			if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag){ // activate if capillary number is specified, and during morph, only after acceleration is done - will be active during the rampup to initial morph
+			if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag){ // activate if capillary number is specified, and/or during morph, only after acceleration is done - will be active during the rampup to initial morph
 			    // at each analysis step, 
                 if (Ca>0.f){
                     double caRatio = capillary_number / fabs(Ca); 
