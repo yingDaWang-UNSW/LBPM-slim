@@ -986,6 +986,7 @@ void ScaLBL_ColorModel::Run(){
 	            fprintf(log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n", timestep,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,vA_x_H,vA_y_H,vA_z_H,vB_x_H,vB_y_H,vB_z_H,flow_rate_A,flow_rate_B,flow_rate_A_H,flow_rate_B_H, force_magnitude,absperm1,absperm2,absperm1_H,absperm2_H,absperm1_EMA,absperm2_EMA,absperm1_H_EMA,absperm2_H_EMA, MLUPSGlob,current_saturation,flux,gradP,Ca,Ca2,Ca_EMA,dCadtEMA,settlingParam);
 	            fclose(log_file);
             }
+            MPI_Barrier(Dm->Comm);
             // rampup the component affinities - functionalise this for better code
             if (affinityRampupFlag && timestep < affinityRampSteps){
             	size_t NLABELS=0;
