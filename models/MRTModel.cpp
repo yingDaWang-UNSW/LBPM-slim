@@ -27,6 +27,7 @@ bool thermalFlag = false;
 //bool FDThermalFlag = false;
 double permTolerance = 1e-5;
 bool visTolerance = true;
+bool logFile = true;
 double DiffCoeff = 0.1;
 //int toleranceInterval = 10000;
 int analysis_interval = 1000;
@@ -100,6 +101,9 @@ void ScaLBL_MRTModel::ReadParams(string filename){
 	}
 	if (mrt_db->keyExists( "analysis_interval" )){
 		analysis_interval = mrt_db->getScalar<int>( "analysis_interval" );
+	}
+	if (mrt_db->keyExists( "logFile" )){
+		logFile = mrt_db->getScalar<bool>( "logFile" );
 	}
 	// Read domain parameters
 	auto L = domain_db->getVector<double>( "L" );
@@ -506,9 +510,11 @@ void ScaLBL_MRTModel::Run(){
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {
 				printf("Timestep: %d, MLUPS: %0.4f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt = %0.4e, gradP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*(Nx-2)*(Ny-2)*(Nz-2)*nprocs/((Nz-2)*nprocz));
-				FILE * log_file = fopen("Permeability.csv","a");
-				fprintf(log_file,"%i %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g\n",timestep, Fx, Fy, Fz, din, dout, mu, vax,vay,vaz, absperm);
-				fclose(log_file);
+				if (logFile) {
+				    FILE * log_file = fopen("Permeability.csv","a");
+				    fprintf(log_file,"%i %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g\n",timestep, Fx, Fy, Fz, din, dout, mu, vax,vay,vaz, absperm);
+				    fclose(log_file);
+				}
 			}
 			Kold=absperm;
 			if (convRate<permTolerance) {

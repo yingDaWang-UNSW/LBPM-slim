@@ -294,14 +294,14 @@ void ScaLBL_ColorModel::Create(){
 	for (int idx=0; idx<ScaLBL_Comm->LastExterior(); idx++){
 		int n = TmpMap[idx];
 		if (n > Nx*Ny*Nz){
-			printf("Bad value! idx=%i \n");
+			printf("Bad value! idx=%i \n",idx);
 			TmpMap[idx] = Nx*Ny*Nz-1;
 		}
 	}
 	for (int idx=ScaLBL_Comm->FirstInterior(); idx<ScaLBL_Comm->LastInterior(); idx++){
 		int n = TmpMap[idx];
 		if (n > Nx*Ny*Nz){
-			printf("Bad value! idx=%i \n");
+			printf("Bad value! idx=%i \n",idx);
 			TmpMap[idx] = Nx*Ny*Nz-1;
 		}
 	}
@@ -431,6 +431,7 @@ void ScaLBL_ColorModel::Run(){
     int visualisation_interval=0;
     // manual morph parameters
 	bool SET_CAPILLARY_NUMBER = false;
+	bool logFile = false;
 	int ramp_timesteps = 50000;
 	double capillary_number = 0;
 	double tolerance = 1.f;
@@ -474,6 +475,9 @@ void ScaLBL_ColorModel::Run(){
     int restart_interval = 0;
 
     double voxelSize = 0.0;
+	if (analysis_db->keyExists( "logFile" )){
+		logFile = analysis_db->getScalar<bool>( "logFile" );
+	}
 	if (analysis_db->keyExists( "autoMorphFlag" )){
 		autoMorphFlag = analysis_db->getScalar<bool>( "autoMorphFlag" );
 	}
@@ -977,14 +981,16 @@ void ScaLBL_ColorModel::Run(){
 		    MLUPS =  double(Np)*timestep/cputime/1000000;
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Dm->Comm); 
             //printf("Rank: %d, MLUPS: %f\n",rank, MLUPS);
+            MPI_Barrier(Dm->Comm);
 			if (rank==0) {
 				printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1,absperm2,absperm1_H,absperm2_H);
 				printf("EMA: Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1_EMA, absperm2_EMA,absperm1_H_EMA, absperm2_H_EMA);
 	            printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e\nNca = (%e, %e), EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca, Ca2, Ca_EMA, dCadtEMA, settlingParam);
-
-                FILE * log_file = fopen("log.csv","a");
-	            fprintf(log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n", timestep,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,vA_x_H,vA_y_H,vA_z_H,vB_x_H,vB_y_H,vB_z_H,flow_rate_A,flow_rate_B,flow_rate_A_H,flow_rate_B_H, force_magnitude,absperm1,absperm2,absperm1_H,absperm2_H,absperm1_EMA,absperm2_EMA,absperm1_H_EMA,absperm2_H_EMA, MLUPSGlob,current_saturation,flux,gradP,Ca,Ca2,Ca_EMA,dCadtEMA,settlingParam);
-	            fclose(log_file);
+                if (logFile) {
+                    FILE * log_file = fopen("log.csv","a");
+	                fprintf(log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n", timestep,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,vA_x_H,vA_y_H,vA_z_H,vB_x_H,vB_y_H,vB_z_H,flow_rate_A,flow_rate_B,flow_rate_A_H,flow_rate_B_H, force_magnitude,absperm1,absperm2,absperm1_H,absperm2_H,absperm1_EMA,absperm2_EMA,absperm1_H_EMA,absperm2_H_EMA, MLUPSGlob,current_saturation,flux,gradP,Ca,Ca2,Ca_EMA,dCadtEMA,settlingParam);
+	                fclose(log_file);
+	            }
             }
             MPI_Barrier(Dm->Comm);
             // rampup the component affinities - functionalise this for better code
