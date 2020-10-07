@@ -947,10 +947,7 @@ void ScaLBL_ColorModel::Run(){
             double flow_rate_A_H = sqrt(vA_x_H*vA_x_H + vA_y_H*vA_y_H + vA_z_H*vA_z_H);
             double flow_rate_B_H = sqrt(vB_x_H*vB_x_H + vB_y_H*vB_y_H + vB_z_H*vB_z_H);
             double force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
-            if (std::isnan(flow_rate_B+flow_rate_A)) {
-			    if (rank==0) printf("Nan Flowrate detected, terminating simulation. \n");
-                break;
-            }
+
             //double Ca = fabs((1-current_saturation)*muA*flow_rate_A + current_saturation*muB*flow_rate_B)/(5.796*alpha);
 			double gradP=force_magnitude+(din-dout)/((Nz-2)*nprocz)/3;
 			double absperm1 = muA*flow_rate_A*9.87e11*voxelSize*voxelSize/gradP;
@@ -962,6 +959,10 @@ void ScaLBL_ColorModel::Run(){
             current_saturation = volB/(volA+volB);
             if (volA_H+volB_H > 0.0){ // avoid 0/0 - which happens when both phases are disconnected (elongated samples/venturi samples)
                 current_saturation_H = volB_H/(volA_H+volB_H);
+            }
+            if (std::isnan(flow_rate_B+flow_rate_A) || (flow_rate_B+flow_rate_A) == 0.0 || std::isnan(gradP)) {
+			    if (rank==0) printf("Nan/zero Flowrate-Force detected, terminating simulation. \n");
+                break;
             }
             // calculate the hydraulically connected capillary number if necessary...
 //            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double((Nx-2)*(Ny-2)*(Nz-2))*nprocs*poro);

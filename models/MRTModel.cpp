@@ -496,8 +496,8 @@ void ScaLBL_MRTModel::Run(){
             double MLUPS;
             double flow_rate;
             flow_rate = sqrt(vax*vax+vay*vay+vaz*vaz);
-            if (std::isnan(flow_rate)) {
-			    if (rank==0) printf("Nan Flowrate detected, terminating simulation. \n");
+            if (std::isnan(flow_rate) || flow_rate == 0.0) {
+			    if (rank==0) printf("Nan/zero Flowrate detected, terminating simulation. \n");
                 break;
             }
         	stoptime = MPI_Wtime();
