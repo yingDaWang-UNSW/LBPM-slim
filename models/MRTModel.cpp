@@ -316,7 +316,7 @@ void ScaLBL_MRTModel::Run(){
 	if (BoundaryCondition == 3 && !restartFq) { // this reduces pressure oscillation due to zero init
 	    tempdin=din;
 	    din=dout;
-	    flux=1000*Porosity*Porosity; //arbitrary number, needs to be lower for tighter, smaller domains, and vice versa
+	    flux=1000*Porosity*Porosity*Porosity; //arbitrary number, needs to be lower for tighter, smaller domains, and vice versa
     }
 	while (timestep < timestepMax) {
 	    // add pressure BC ramp up in a separate section here if you want
