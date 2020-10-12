@@ -434,6 +434,7 @@ void ScaLBL_ColorModel::Run(){
 	bool logFile = false;
 	int ramp_timesteps = 50000;
 	double capillary_number = 0;
+	double morphTolerance = 1.f;
 	double tolerance = 1.f;
 	double Ca_previous = 0.f;
     double Ca_EMA = 0.f;
@@ -444,6 +445,9 @@ void ScaLBL_ColorModel::Run(){
     double absperm2_EMA = 0.0;
     double absperm1_H_EMA = 0.0;
     double absperm2_H_EMA = 0.0;
+    double absperm1_old = 0.0;
+    double absperm2_old = 0.0;
+    
 	int steadycounter=0;
 	// for mixed wetting problems
     bool affinityRampupFlag = false;
@@ -563,11 +567,12 @@ void ScaLBL_ColorModel::Run(){
 //	}
 
 	if (analysis_db->keyExists( "tolerance" )){
-		tolerance = analysis_db->getScalar<double>( "tolerance" );
+		morphTolerance = analysis_db->getScalar<double>( "tolerance" );
 	}
 	else{
-		tolerance = 1e-6;
+		morphTolerance = 1e-6;
 	}
+	tolerance = morphTolerance;
 	int analysis_interval = analysis_db->getScalar<int>( "analysis_interval" );
 	
 	if (analysis_db->keyExists( "raw_visualisation_interval" )){
@@ -1198,7 +1203,23 @@ void ScaLBL_ColorModel::Run(){
 	        		    globStabilityCounter = 0;
 					    if (rank==0){ //save the data as a rel perm point
 						    printf("[AUTOMORPH]: Steady state reached. WRITE STEADY POINT \n");
-						    
+						    if (absperm1_old+absperm2_old > 0.0) {
+					            if (injectionType==1){
+		                            if (absperm1_old < absperm1 || absperm2_old > absperm2){
+            						    if (rank==0) printf("[AUTOMORPH]: WARNING: MorphDrain at current steady state has reported a rising relperm. Continuing stabilisation. \n");
+            						    globStabilityCounter = max_stabilisation/2;
+            						    tolerance = 1e-10;
+            						    continue;
+						            }
+			                    } else if (injectionType==2){
+		                            if (absperm1_old > absperm1 || absperm2_old < absperm2){
+                                        if (rank==0) printf("[AUTOMORPH]: WARNING: MorphImb at current steady state has reported a rising relperm. Continuing stabilisation. \n");
+            						    globStabilityCounter = max_stabilisation/2;
+            						    tolerance = 1e-10;
+            						    continue;
+						            }
+			                    }
+						    }
 						    // here, take the blobmaps - generate new Dm and run singlephase lbm for hydraulically connected phases
 						    // take blob maps and get new ID maps
 						    // use new DmPh1 and DmPh2 (initialise earlier), populate them appropriately
@@ -1209,8 +1230,11 @@ void ScaLBL_ColorModel::Run(){
 						    volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
 						    FILE * kr_log_file = fopen("relperm.csv","a");
 						    fprintf(kr_log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g ",timestep,muA,muB,alpha,Fx,Fy,Fz);
-					        fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,inletA,inletB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2,current_saturation_H,absperm1_H,absperm2_H);
+					        fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,inletA,inletB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2,absperm1_EMA,absperm2_EMA,current_saturation_H,absperm1_H,absperm2_H,absperm1_H_EMA,absperm2_H_EMA);
 						    fclose(kr_log_file);
+                            absperm1_old = absperm1;
+                            absperm2_old = absperm2;
+                            tolerance = morphTolerance;
 					    }
 	                    MPI_Barrier(Dm->Comm);				    
 					    if (injectionType==1){

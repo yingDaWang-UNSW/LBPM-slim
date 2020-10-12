@@ -588,18 +588,18 @@ extern "C" void ScaLBL_D3Q19_AAeven_MRT(double *dist, int start, int finish, int
 	// non-conserved moments
 	double m1,m2,m4,m6,m8,m9,m10,m11,m12,m13,m14,m15,m16,m17,m18;
 
-	constexpr double mrt_V1=0.05263157894736842;
-	constexpr double mrt_V2=0.012531328320802;
-	constexpr double mrt_V3=0.04761904761904762;
-	constexpr double mrt_V4=0.004594820384294068;
-	constexpr double mrt_V5=0.01587301587301587;
-	constexpr double mrt_V6=0.0555555555555555555555555;
-	constexpr double mrt_V7=0.02777777777777778;
-	constexpr double mrt_V8=0.08333333333333333;
-	constexpr double mrt_V9=0.003341687552213868;
-	constexpr double mrt_V10=0.003968253968253968;
-	constexpr double mrt_V11=0.01388888888888889;
-	constexpr double mrt_V12=0.04166666666666666;
+	const double mrt_V1=0.05263157894736842;
+	const double mrt_V2=0.012531328320802;
+	const double mrt_V3=0.04761904761904762;
+	const double mrt_V4=0.004594820384294068;
+	const double mrt_V5=0.01587301587301587;
+	const double mrt_V6=0.0555555555555555555555555;
+	const double mrt_V7=0.02777777777777778;
+	const double mrt_V8=0.08333333333333333;
+	const double mrt_V9=0.003341687552213868;
+	const double mrt_V10=0.003968253968253968;
+	const double mrt_V11=0.01388888888888889;
+	const double mrt_V12=0.04166666666666666;
 
 	for (int n=start; n<finish; n++){
 		// q=0
@@ -1016,18 +1016,19 @@ extern "C" void ScaLBL_D3Q19_AAodd_MRT(int *neighborList, double *dist, int star
 	double rho,jx,jy,jz;
 	// non-conserved moments
 	double m1,m2,m4,m6,m8,m9,m10,m11,m12,m13,m14,m15,m16,m17,m18;
-	constexpr double mrt_V1=0.05263157894736842;
-	constexpr double mrt_V2=0.012531328320802;
-	constexpr double mrt_V3=0.04761904761904762;
-	constexpr double mrt_V4=0.004594820384294068;
-	constexpr double mrt_V5=0.01587301587301587;
-	constexpr double mrt_V6=0.0555555555555555555555555;
-	constexpr double mrt_V7=0.02777777777777778;
-	constexpr double mrt_V8=0.08333333333333333;
-	constexpr double mrt_V9=0.003341687552213868;
-	constexpr double mrt_V10=0.003968253968253968;
-	constexpr double mrt_V11=0.01388888888888889;
-	constexpr double mrt_V12=0.04166666666666666;
+
+	const double mrt_V1=0.05263157894736842;
+	const double mrt_V2=0.012531328320802;
+	const double mrt_V3=0.04761904761904762;
+	const double mrt_V4=0.004594820384294068;
+	const double mrt_V5=0.01587301587301587;
+	const double mrt_V6=0.0555555555555555555555555;
+	const double mrt_V7=0.02777777777777778;
+	const double mrt_V8=0.08333333333333333;
+	const double mrt_V9=0.003341687552213868;
+	const double mrt_V10=0.003968253968253968;
+	const double mrt_V11=0.01388888888888889;
+	const double mrt_V12=0.04166666666666666;
 
 
 	int nread;

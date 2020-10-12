@@ -84,6 +84,9 @@ void ScaLBL_MRTModel::ReadParams(string filename){
 	if (mrt_db->keyExists( "visInterval" )){
 		visInterval = mrt_db->getScalar<int>( "visInterval" );
 	}
+	if (visInterval == 0) {
+	    visInterval = 1e10;
+	}
 	if (mrt_db->keyExists( "fqFlag" )){
 		fqFlag = mrt_db->getScalar<bool>( "fqFlag" );
 	}
@@ -494,8 +497,7 @@ void ScaLBL_MRTModel::Run(){
 			double convRate = fabs((absperm-Kold)/Kold);
             double MLUPSGlob;
             double MLUPS;
-            double flow_rate;
-            flow_rate = sqrt(vax*vax+vay*vay+vaz*vaz);
+            double flow_rate = sqrt(vax*vax+vay*vay+vaz*vaz);
             if (std::isnan(flow_rate) || flow_rate == 0.0) {
 			    if (rank==0) printf("Nan/zero Flowrate detected, terminating simulation. \n");
                 break;

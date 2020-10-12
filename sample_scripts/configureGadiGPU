@@ -15,8 +15,6 @@ rm -rf CMake*
 cmake                                    \
     -D CMAKE_BUILD_TYPE:STRING=Release    \
     -D CMAKE_CXX_COMPILER:PATH=mpicxx        \
-    -D CMAKE_C_FLAGS="-fPIC"            \
-    -D CMAKE_CXX_FLAGS="-fPIC"          \
     -D USE_MPI=1            \
     -D USE_CUDA=1                           \
     -D CMAKE_CUDA_FLAGS="-arch sm_70" \
