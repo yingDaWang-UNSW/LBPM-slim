@@ -33,9 +33,16 @@ int main(int argc, char **argv)
 //    std::cerr << "Warning: Failed to start MPI with necessary thread support, thread support will be disabled" << std::endl;
 	int rank,nprocs;
 	MPI_Init(&argc,&argv);
+	
 	MPI_Comm comm = MPI_COMM_WORLD;
 	MPI_Comm_rank(comm,&rank);
 	MPI_Comm_size(comm,&nprocs);
+	
+	int rankLoc;
+	MPI_Comm commLoc;
+	MPI_Comm_split_type(comm,MPI_COMM_TYPE_SHARED,rankLoc,MPI_INFO_NULL,&commLoc);
+	MPI_Comm_rank(commLoc,&rankLoc);
+	MPI_Comm_free(&commLoc);
     if (rank==0) printf("MPI Initialised\n");
   { // Limit scope so variables that contain communicators will free before MPI_Finialize
 
@@ -45,7 +52,7 @@ int main(int argc, char **argv)
 		printf("********************************************************\n");
 	}
 		// Initialize compute device
-	int device=ScaLBL_SetDevice(rank);
+	int device=ScaLBL_SetDevice(rankLoc);
 	ScaLBL_DeviceBarrier();
 	MPI_Barrier(comm);
     //PROFILE_ENABLE(1);
