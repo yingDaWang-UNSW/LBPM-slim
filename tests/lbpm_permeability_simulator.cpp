@@ -25,7 +25,9 @@ int main(int argc, char **argv)
 	// Initialize MPI
 	int rank,nprocs;
 	MPI_Init(&argc,&argv);
-	MPI_Comm comm = MPI_COMM_WORLD;
+
+	MPI_Comm comm;
+	MPI_Comm_split_type(MPI_COMM_WORLD,MPI_COMM_TYPE_SHARED,rank,MPI_INFO_NULL,&comm);
 	MPI_Comm_rank(comm,&rank);
 	MPI_Comm_size(comm,&nprocs);
 	{
