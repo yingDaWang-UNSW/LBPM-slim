@@ -1201,25 +1201,25 @@ void ScaLBL_ColorModel::Run(){
 				    if (dCadtEMA < tolerance || globStabilityCounter >= max_stabilisation){ //if the capillary number has stabilised, record, adjust, and activate acceleration
 	        		    WriteDebugYDW();
 	        		    globStabilityCounter = 0;
+					    if (rank==0) printf("[AUTOMORPH]: Steady state reached. WRITE STEADY POINT \n");
+					    if (absperm1_old+absperm2_old > 0.0) {
+				            if (injectionType==1){
+	                            if (absperm1_old > absperm1 || absperm2_old < absperm2){
+        						    if (rank==0) printf("[AUTOMORPH]: WARNING: MorphDrain at current steady state has reported a rising relperm. Continuing stabilisation. \n");
+        						    globStabilityCounter = max_stabilisation/2;
+        						    tolerance = 1e-10;
+        						    continue;
+					            }
+		                    } else if (injectionType==2){
+	                            if (absperm1_old < absperm1 || absperm2_old > absperm2){
+                                    if (rank==0) printf("[AUTOMORPH]: WARNING: MorphImb at current steady state has reported a rising relperm. Continuing stabilisation. \n");
+        						    globStabilityCounter = max_stabilisation/2;
+        						    tolerance = 1e-10;
+        						    continue;
+					            }
+		                    }
+					    }
 					    if (rank==0){ //save the data as a rel perm point
-						    printf("[AUTOMORPH]: Steady state reached. WRITE STEADY POINT \n");
-						    if (absperm1_old+absperm2_old > 0.0) {
-					            if (injectionType==1){
-		                            if (absperm1_old < absperm1 || absperm2_old > absperm2){
-            						    if (rank==0) printf("[AUTOMORPH]: WARNING: MorphDrain at current steady state has reported a rising relperm. Continuing stabilisation. \n");
-            						    globStabilityCounter = max_stabilisation/2;
-            						    tolerance = 1e-10;
-            						    continue;
-						            }
-			                    } else if (injectionType==2){
-		                            if (absperm1_old > absperm1 || absperm2_old < absperm2){
-                                        if (rank==0) printf("[AUTOMORPH]: WARNING: MorphImb at current steady state has reported a rising relperm. Continuing stabilisation. \n");
-            						    globStabilityCounter = max_stabilisation/2;
-            						    tolerance = 1e-10;
-            						    continue;
-						            }
-			                    }
-						    }
 						    // here, take the blobmaps - generate new Dm and run singlephase lbm for hydraulically connected phases
 						    // take blob maps and get new ID maps
 						    // use new DmPh1 and DmPh2 (initialise earlier), populate them appropriately
