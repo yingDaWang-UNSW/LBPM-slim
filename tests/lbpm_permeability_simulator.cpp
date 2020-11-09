@@ -29,11 +29,11 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(comm,&rank);
 	MPI_Comm_size(comm,&nprocs);
 	
-	int rankLoc;
-	MPI_Comm commLoc;
-	MPI_Comm_split_type(comm,MPI_COMM_TYPE_SHARED,rank,MPI_INFO_NULL,&commLoc);
-	MPI_Comm_rank(commLoc,&rankLoc);
-	MPI_Comm_free(&commLoc);
+//	int rankLoc;
+//	MPI_Comm commLoc;
+//	MPI_Comm_split_type(comm,MPI_COMM_TYPE_SHARED,rank,MPI_INFO_NULL,&commLoc);
+//	MPI_Comm_rank(commLoc,&rankLoc);
+//	MPI_Comm_free(&commLoc);
 	{
 		// parallel domain size (# of sub-domains)
 		int nprocx,nprocy,nprocz;
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
 			printf("********************************************************\n");
 		}
 			// Initialize compute device
-	    int device=ScaLBL_SetDevice(rankLoc);
+	    int device=ScaLBL_SetDevice(rank);
 	    ScaLBL_DeviceBarrier();
 	    MPI_Barrier(comm);
 		ScaLBL_MRTModel MRT(rank,nprocs,comm);

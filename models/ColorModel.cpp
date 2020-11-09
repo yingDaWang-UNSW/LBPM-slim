@@ -465,6 +465,7 @@ void ScaLBL_ColorModel::Run(){
 	bool spinoMorphFlag = false;
     bool fluxMorphFlag = false; // this will replace shell aggregation with traditional flux injection
     bool coinjectionFlag = false;
+    bool writeSteady = false;
     double satInit = -5.0;
     double satInc = 0.05; // a replacement for the saturation vector, the increment to use during automorph
     int injectionType = 1; // 1 for drainage and 2 for imbibition
@@ -1202,24 +1203,28 @@ void ScaLBL_ColorModel::Run(){
 	        		    WriteDebugYDW();
 	        		    globStabilityCounter = 0;
 					    if (rank==0) printf("[AUTOMORPH]: Steady state reached. WRITE STEADY POINT \n");
+					    writeSteady = true;
+			            autoMorphAdapt = true; // turn on acceleration immediately
 					    if (absperm1_old+absperm2_old > 0.0) {
 				            if (injectionType==1){
 	                            if (absperm1_old > absperm1 || absperm2_old < absperm2){
         						    if (rank==0) printf("[AUTOMORPH]: WARNING: MorphDrain at current steady state has reported a rising relperm. Continuing stabilisation. \n");
         						    globStabilityCounter = max_stabilisation/2;
         						    tolerance = 1e-10;
-        						    continue;
+        						    writeSteady = false;
+                                    autoMorphAdapt = false; 
 					            }
 		                    } else if (injectionType==2){
 	                            if (absperm1_old < absperm1 || absperm2_old > absperm2){
                                     if (rank==0) printf("[AUTOMORPH]: WARNING: MorphImb at current steady state has reported a rising relperm. Continuing stabilisation. \n");
         						    globStabilityCounter = max_stabilisation/2;
         						    tolerance = 1e-10;
-        						    continue;
+        						    writeSteady = false;
+        						    autoMorphAdapt = false; 
 					            }
 		                    }
 					    }
-					    if (rank==0){ //save the data as a rel perm point
+					    if (rank==0 && writeSteady){ //save the data as a rel perm point
 						    // here, take the blobmaps - generate new Dm and run singlephase lbm for hydraulically connected phases
 						    // take blob maps and get new ID maps
 						    // use new DmPh1 and DmPh2 (initialise earlier), populate them appropriately
@@ -1252,7 +1257,6 @@ void ScaLBL_ColorModel::Run(){
     						    break; 
 						    }
 			            }
-			            autoMorphAdapt = true; // turn on acceleration immediately
 			            accelerationCounter = accelerationRate+1;
 				    } else { //if the system is unstable, continue stabilisation
 					    if (rank==0) printf("[AUTOMORPH]: System is unstable, continuing LBM stabilisation.\n");
