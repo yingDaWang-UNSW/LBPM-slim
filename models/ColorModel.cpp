@@ -743,7 +743,7 @@ void ScaLBL_ColorModel::Run(){
 			double vax_loc_H, vay_loc_H, vaz_loc_H, vbx_loc_H, vby_loc_H, vbz_loc_H;
 			vax_loc_H = vay_loc_H = vaz_loc_H = 0.f;
 			vbx_loc_H = vby_loc_H = vbz_loc_H = 0.f;
-			if (BoundaryCondition == 0){
+			if (BoundaryCondition == 0 && nprocs<8){
 			    // find the NWP blobs
 			    ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,PhaseField,Distance,vF,vS,NWP_blob_label,Dm->Comm);
 	            MPI_Barrier(Dm->Comm);
