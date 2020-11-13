@@ -18,7 +18,7 @@
 //#include "IO/MeshDatabase.h"
 //#include "IO/Mesh.h"
 //#include "IO/Writer.h"
-#include "IO/netcdf.h"
+//#include "IO/netcdf.h"
 #include "analysis/analysis.h"
 #include "analysis/filters.h"
 #include "analysis/uCT.h"
@@ -73,7 +73,6 @@ int main(int argc, char **argv)
         int nprocy = nproc[1];
         int nprocz = nproc[2];
 
-        auto InputFile    = uct_db->getScalar<std::string>( "InputFile" );
         auto target       = uct_db->getScalar<float>("target");
         auto background   = uct_db->getScalar<float>("background");
         auto rough_cutoff = uct_db->getScalar<float>( "rough_cutoff" );    
@@ -171,29 +170,31 @@ int main(int argc, char **argv)
             fillChar[i].reset(new fillHalo<char>(Dm[i]->Comm,Dm[i]->rank_info,{Nx[i],Ny[i],Nz[i]},{1,1,1},0,1) );
         }
 
-        // Read the subvolume of interest on each processor
-        //SLIM: replace this with raw data reading from ID files generated from serial decomp
-        //PROFILE_START("ReadVolume");
-        int fid = netcdf::open(InputFile,netcdf::READ);
-        std::string varname("VOLUME");
-        auto type = netcdf::getVarType( fid, varname );
-        auto dim = netcdf::getVarDim( fid, varname );
-        if ( rank == 0 ) {
-            printf("Reading %s (%s)\n",varname.c_str(),netcdf::VariableTypeName(type).c_str());
-            printf("   dims =  %i x %i x %i \n",int(dim[0]),int(dim[1]),int(dim[2]));
-        }
-        {
-            // Read the local data
-            int x = Dm[0]->iproc()*nx + offset[0];
-            int y = Dm[0]->jproc()*ny + offset[1];
-            int z = Dm[0]->kproc()*nz + offset[2];
-            Array<short> VOLUME = netcdf::getVar<short>( fid, varname, {x,y,z}, {nx,ny,nz}, {1,1,1} );
-            // Copy the data and fill the halos
-            LOCVOL[0].fill(0);
-            fillFloat[0]->copy( VOLUME, LOCVOL[0] );
-            fillFloat[0]->fill( LOCVOL[0] );
-        }
-        netcdf::close( fid );
+        Array<short> readVol(Nx[0]+2,Ny[0]+2,Nz[0]+2);
+        size_t readID;
+        char LocalRankString[8];
+        char LocalRankFilename[40];
+        if (rank == 0)    printf("Read input media... \n");
+        sprintf(LocalRankString,"%05d",rank);
+        sprintf(LocalRankFilename,"%s%s","ID.",LocalRankString);
+        if (rank==0) printf("Initialize from decomposed data ID.%05i\n",rank);
+        sprintf(LocalRankFilename,"ID.%05i",rank);
+        FILE *IDFILE = fopen(LocalRankFilename,"rb");
+        if (IDFILE==NULL) ERROR("Domain::ReadIDs --  Error opening file: ID.xxxxx");
+        short int id;
+        for (int k=0;k<Nz[0]+2;k++) {
+            for (int j=0;j<Ny[0]+2;j++) {
+                for (int i=0;i<Nx[0]+2;i++) {
+    	            fread(&id,sizeof(short int),1,IDFILE);
+                    readVol(i,j,k)=id;
+		        }
+	        }
+        }       
+        fclose(IDFILE);
+        LOCVOL[0].fill(0);
+        fillFloat[0]->copy( readVol, LOCVOL[0] );
+        fillFloat[0]->fill( LOCVOL[0] );
+        
         MPI_Barrier(comm);
         //PROFILE_STOP("ReadVolume");
         if (rank==0) printf("Read complete\n");
@@ -234,7 +235,7 @@ int main(int argc, char **argv)
                 for (int i=1;i<Nx[0]+1;i++) {
                   //LOCVOL[0](i,j,k) = MASK(i,j,k);
                  if (MASK(i,j,k) < CylRad ){
-                      auto tmp = LOCVOL[0](i,j,k);
+                      float tmp = LOCVOL[0](i,j,k);
                         /*                        if ((tmp-background)*(tmp-target) > 0){
                             // direction to background / target is the same
                             if (fabs(tmp-target) > fabs(tmp-background)) tmp=background; // tmp closer to background
@@ -257,7 +258,7 @@ int main(int argc, char **argv)
         }
         count_plus=sumReduce( Dm[0]->Comm, count_plus);
         count_minus=sumReduce( Dm[0]->Comm, count_minus);
-              if (rank==0) printf("minimum value=%f, max value=%f \n",min_value,max_value);
+        if (rank==0) printf("minimum value=%f, max value=%f \n",min_value,max_value);
         if (rank==0) printf("plus=%i, minus=%i \n",count_plus,count_minus);
         ASSERT( count_plus > 0 && count_minus > 0 );
         MPI_Barrier(comm);
@@ -329,152 +330,127 @@ int main(int argc, char **argv)
 
         // Perform a final filter
         //PROFILE_START("Filtering final domains");
-	if (FILTER_CONNECTED_COMPONENTS){
-        if (rank==0)
-            printf("Filtering final domains\n");
-        Array<float> filter_Mean, filter_Dist1, filter_Dist2;
-        filter_final( ID[0], Dist[0], *fillFloat[0], *Dm[0], filter_Mean, filter_Dist1, filter_Dist2 );
-        //PROFILE_STOP("Filtering final domains");
-	}
-	
-	// SLIM: dump results as raw, reconstruct outside lbpm
-	    	//create the folder
-    if (rank==0) printf("Dumping visualization structure \n");
-	char LocalRankFoldername[100];
-	if (rank==0) {
-		sprintf(LocalRankFoldername,"./segResult"); 
-	    mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    }
-	MPI_Barrier(comm);
-	
-    for (size_t n=0; n<N_levels; n++) {
-	//create the file
-	    FILE *OUTFILE;
-	    char LocalRankFilename[100];
-	    sprintf(LocalRankFilename,"segResult/nlmf_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
-	    OUTFILE = fopen(LocalRankFilename,"wb");
-
-        char temp;
-        for (int k=0;k<Nz[n]+2;k++) {
-            for (int j=0;j<Ny[n]+2;j++) {
-                for (int i=0;i<Nx[n]+2;i++) {
-		            temp = ID[n](i,j,k);
-		            //printf("%f\n",temp);
-                    fwrite(&temp,sizeof(char),1,OUTFILE);
-		        }
-	        }
+	    if (FILTER_CONNECTED_COMPONENTS){
+            if (rank==0)
+                printf("Filtering final domains\n");
+            Array<float> filter_Mean, filter_Dist1, filter_Dist2;
+            filter_final( ID[0], Dist[0], *fillFloat[0], *Dm[0], filter_Mean, filter_Dist1, filter_Dist2 );
+            //PROFILE_STOP("Filtering final domains");
+	    }
+	    
+	    // SLIM: dump results as raw, reconstruct outside lbpm
+	        	//create the folder
+        if (rank==0) printf("Dumping visualization structure \n");
+	    char LocalRankFoldername[100];
+	    if (rank==0) {
+		    sprintf(LocalRankFoldername,"./segResult"); 
+	        mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
         }
-    	fclose(OUTFILE);
 	    MPI_Barrier(comm);
-    }
-        // Write the results
-//        if (rank==0) printf("Setting up visualization structure \n");
-//        std::vector<IO::MeshDataStruct> meshData(N_levels);
-//        for (size_t i=0; i<Nx.size(); i++) {
-//            // Mesh
-//            meshData[i].meshName = "image_" + std::to_string( i );
-//            meshData[i].mesh = std::make_shared<IO::DomainMesh>(Dm[i]->rank_info,Nx[i],Ny[i],Nz[i],Lx,Ly,Lz);
-//            // Source data
-//            auto OrigData = std::make_shared<IO::Variable>();
-//            OrigData->name = "Source_Data_" + std::to_string( i );
-//            OrigData->type = IO::VariableType::VolumeVariable;
-//            OrigData->dim = 1;
-//            OrigData->data.resize(Nx[i],Ny[i],Nz[i]);
-//            meshData[i].vars.push_back(OrigData);
-//            fillDouble[i]->copy( LOCVOL[i], OrigData->data );
-//            // Non-Local Mean
-//            auto NonLocMean = std::make_shared<IO::Variable>();
-//            NonLocMean->name = "NonLocal_Mean_" + std::to_string( i );
-//            NonLocMean->type = IO::VariableType::VolumeVariable;
-//            NonLocMean->dim = 1;
-//            NonLocMean->data.resize(Nx[i],Ny[i],Nz[i]);
-//            meshData[i].vars.push_back(NonLocMean);
-//            fillDouble[i]->copy( NonLocalMean[i], NonLocMean->data );
-//            // Segmented Data
-//            auto SegData = std::make_shared<IO::Variable>();
-//            SegData->name = "Segmented_Data_" + std::to_string( i );
-//            SegData->type = IO::VariableType::VolumeVariable;
-//            SegData->dim = 1;
-//            SegData->data.resize(Nx[i],Ny[i],Nz[i]);
-//            meshData[i].vars.push_back(SegData);
-//            fillDouble[i]->copy( ID[i], SegData->data );
-//            // Signed Distance
-//            auto DistData = std::make_shared<IO::Variable>();
-//            DistData->name = "Signed_Distance_" + std::to_string( i );
-//            DistData->type = IO::VariableType::VolumeVariable;
-//            DistData->dim = 1;
-//            DistData->data.resize(Nx[i],Ny[i],Nz[i]);
-//            meshData[i].vars.push_back(DistData);
-//            fillDouble[i]->copy( Dist[i], DistData->data );
-//            // Smoothed Data
-//            auto SmoothData = std::make_shared<IO::Variable>();
-//            SmoothData->name = "Smoothed_Data_" + std::to_string( i );
-//            SmoothData->type = IO::VariableType::VolumeVariable;
-//            SmoothData->dim = 1;
-//            SmoothData->data.resize(Nx[i],Ny[i],Nz[i]);
-//            meshData[i].vars.push_back(SmoothData);
-//            fillDouble[i]->copy( MultiScaleSmooth[i], SmoothData->data );
+	    
+        for (size_t n=0; n<N_levels; n++) {
+	    //create the file
+	        FILE *OUTFILE;
+	        char LocalRankFilename[100];
+	        sprintf(LocalRankFilename,"segResult/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+	        OUTFILE = fopen(LocalRankFilename,"wb");
 
-//        }
-//        #if 0
-//            std::shared_ptr<IO::Variable> filter_Mean_var( new IO::Variable() );
-//            filter_Mean_var->name = "Mean";
-//            filter_Mean_var->type = IO::VariableType::VolumeVariable;
-//            filter_Mean_var->dim = 1;
-//            filter_Mean_var->data.resize(Nx[0],Ny[0],Nz[0]);
-//            meshData[0].vars.push_back(filter_Mean_var);
-//            fillDouble[0]->copy( filter_Mean, filter_Mean_var->data );
-//            std::shared_ptr<IO::Variable> filter_Dist1_var( new IO::Variable() );
-//            filter_Dist1_var->name = "Dist1";
-//            filter_Dist1_var->type = IO::VariableType::VolumeVariable;
-//            filter_Dist1_var->dim = 1;
-//            filter_Dist1_var->data.resize(Nx[0],Ny[0],Nz[0]);
-//            meshData[0].vars.push_back(filter_Dist1_var);
-//            fillDouble[0]->copy( filter_Dist1, filter_Dist1_var->data );
-//            std::shared_ptr<IO::Variable> filter_Dist2_var( new IO::Variable() );
-//            filter_Dist2_var->name = "Dist2";
-//            filter_Dist2_var->type = IO::VariableType::VolumeVariable;
-//            filter_Dist2_var->dim = 1;
-//            filter_Dist2_var->data.resize(Nx[0],Ny[0],Nz[0]);
-//            meshData[0].vars.push_back(filter_Dist2_var);
-//            fillDouble[0]->copy( filter_Dist2, filter_Dist2_var->data );
-//        #endif
-//        MPI_Barrier(comm);
-//        if (rank==0) printf("Writing output \n");
-//        // Write visulization data
-//        IO::writeData( 0, meshData, comm );
-//        if (rank==0) printf("Finished. \n");
-//    
-//        // Compute the Minkowski functionals
-//        MPI_Barrier(comm);
-//        auto Averages = std::make_shared<Minkowski>(Dm[0]);
-//        
-//        Array <char> phase_label(Nx[0]+2,Ny[0]+2,Nz[0]+2);
-//        Array <double> phase_distance(Nx[0]+2,Ny[0]+2,Nz[0]+2);
-//        // Analyze the wetting fluid
-//        for (int k=1;k<Nz[0]+1;k++) {
-//            for (int j=1;j<Ny[0]+1;j++) {
-//                for (int i=1;i<Nx[0]+1;i++) {
-//                    int n = k*Nx[0]*Ny[0]+j*Nx[0]+i;
-//                    if (!(Dm[0]->id[n] > 0)){
-//                        // Solid phase
-//                        phase_label(i,j,k) = 0;
-//                    }
-//                    else if (Dist[0](i,j,k) < 0.0){
-//                        // wetting phase
-//                        phase_label(i,j,k) = 1;
-//                    }
-//                    else {
-//                        // non-wetting phase
-//                        phase_label(i,j,k) = 0;
-//                    }
-//                    phase_distance(i,j,k) =2.0*double(phase_label(i,j,k))-1.0;
-//                }
-//            }
-//        }    
-//        CalcDist(phase_distance,phase_label,*Dm[0]);
-//        Averages->ComputeScalar(phase_distance,0.f);
-//        Averages->PrintAll();
+            char temp;
+            for (int k=0;k<Nz[n]+2;k++) {
+                for (int j=0;j<Ny[n]+2;j++) {
+                    for (int i=0;i<Nx[n]+2;i++) {
+		                temp = ID[n](i,j,k);
+		                //printf("%f\n",temp);
+                        fwrite(&temp,sizeof(char),1,OUTFILE);
+		            }
+	            }
+            }
+        	fclose(OUTFILE);
+	        MPI_Barrier(comm);
+        }
+        
+        for (size_t n=0; n<N_levels; n++) {
+	    //create the file
+	        FILE *OUTFILE;
+	        char LocalRankFilename[100];
+	        sprintf(LocalRankFilename,"segResult/nlmf_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+	        OUTFILE = fopen(LocalRankFilename,"wb");
+
+            float temp;
+            for (int k=0;k<Nz[n]+2;k++) {
+                for (int j=0;j<Ny[n]+2;j++) {
+                    for (int i=0;i<Nx[n]+2;i++) {
+		                temp = NonLocalMean[n](i,j,k);
+		                //printf("%f\n",temp);
+                        fwrite(&temp,sizeof(float),1,OUTFILE);
+		            }
+	            }
+            }
+        	fclose(OUTFILE);
+	        MPI_Barrier(comm);
+        }
+        
+            for (size_t n=0; n<N_levels; n++) {
+	    //create the file
+	        FILE *OUTFILE;
+	        char LocalRankFilename[100];
+	        sprintf(LocalRankFilename,"segResult/dist_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+	        OUTFILE = fopen(LocalRankFilename,"wb");
+
+            float temp;
+            for (int k=0;k<Nz[n]+2;k++) {
+                for (int j=0;j<Ny[n]+2;j++) {
+                    for (int i=0;i<Nx[n]+2;i++) {
+		                temp = Dist[n](i,j,k);
+		                //printf("%f\n",temp);
+                        fwrite(&temp,sizeof(float),1,OUTFILE);
+		            }
+	            }
+            }
+        	fclose(OUTFILE);
+	        MPI_Barrier(comm);
+        }
+        
+        for (size_t n=0; n<N_levels; n++) {
+	    //create the file
+	        FILE *OUTFILE;
+	        char LocalRankFilename[100];
+	        sprintf(LocalRankFilename,"segResult/smooth_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+	        OUTFILE = fopen(LocalRankFilename,"wb");
+
+            float temp;
+            for (int k=0;k<Nz[n]+2;k++) {
+                for (int j=0;j<Ny[n]+2;j++) {
+                    for (int i=0;i<Nx[n]+2;i++) {
+		                temp = MultiScaleSmooth[n](i,j,k);
+		                //printf("%f\n",temp);
+                        fwrite(&temp,sizeof(float),1,OUTFILE);
+		            }
+	            }
+            }
+        	fclose(OUTFILE);
+	        MPI_Barrier(comm);
+        }
+        for (size_t n=0; n<N_levels; n++) {
+	    //create the file
+	        FILE *OUTFILE;
+	        char LocalRankFilename[100];
+	        sprintf(LocalRankFilename,"segResult/locvol_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+	        OUTFILE = fopen(LocalRankFilename,"wb");
+
+            float temp;
+            for (int k=0;k<Nz[n]+2;k++) {
+                for (int j=0;j<Ny[n]+2;j++) {
+                    for (int i=0;i<Nx[n]+2;i++) {
+		                temp = LOCVOL[n](i,j,k);
+		                //printf("%f\n",temp);
+                        fwrite(&temp,sizeof(float),1,OUTFILE);
+		            }
+	            }
+            }
+        	fclose(OUTFILE);
+	        MPI_Barrier(comm);
+        }
     }
     //PROFILE_STOP("Main");
     //PROFILE_SAVE("lbpm_uCT_pp",true);
