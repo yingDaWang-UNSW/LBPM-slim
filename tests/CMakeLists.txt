@@ -5,6 +5,7 @@ ADD_LBPM_EXECUTABLE( lbpm_permeability_simulator )
 ADD_LBPM_EXECUTABLE( lbpm_dfh_simulator )
 ADD_LBPM_EXECUTABLE( lbpm_serial_decomp )
 ADD_LBPM_EXECUTABLE( lbpm_morphopen_pp )
+ADD_LBPM_EXECUTABLE( lbpm_uCT_pp )
 ADD_LBPM_EXECUTABLE( checkGPUs )
 # Add the tests
 ADD_LBPM_TEST( TestFluxBC )

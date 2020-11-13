@@ -2,6 +2,8 @@
 #load the module for cmake
 export LBPM_SOURCE="/home/user/LBPMYDW/LBPM-slim/"
 export LBPM_DIR="/home/user/LBPMYDW/lbpmSlimGPUBuild"
+export NCDF_BASE="/home/user/LBPMYDW/tpls/tplBuild/netcdf/"
+export HDF5_BASE="/home/user/LBPMYDW/tpls/tplBuild/hdf5/"
 mkdir $LBPM_DIR
 cd $LBPM_DIR
 # configure
@@ -13,11 +15,11 @@ cmake                                    \
     -D USE_CUDA=1                           \
         -D CMAKE_CUDA_FLAGS="-arch sm_75" \
         -D CMAKE_CUDA_HOST_COMPILER="/usr/bin/gcc" \
+    -D USE_HDF5=1			 \
+    -D HDF5_DIRECTORY=${HDF5_BASE} \
+    -D USE_NETCDF=1 \
+    -D NETCDF_DIRECTORY=${NCDF_BASE} \
     $LBPM_SOURCE
 
 make -j32 && make install && ctest
-
-
-
-
 

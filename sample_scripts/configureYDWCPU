@@ -2,6 +2,9 @@
 #load the module for cmake
 export LBPM_SOURCE="/home/user/LBPMYDW/LBPM-slim/"
 export LBPM_DIR="/home/user/LBPMYDW/lbpmSlimBuild"
+export NCDF_BASE="/home/user/LBPMYDW/tpls/tplBuild/netcdf/"
+export HDF5_BASE="/home/user/LBPMYDW/tpls/tplBuild/hdf5/"
+
 mkdir $LBPM_DIR
 cd $LBPM_DIR
 # configure
@@ -10,6 +13,10 @@ cmake                                    \
     -D CMAKE_BUILD_TYPE:STRING=Release    \
     -D CMAKE_CXX_COMPILER:PATH=mpicxx        \
     -D USE_MPI=1            \
+    -D USE_HDF5=1			 \
+    -D HDF5_DIRECTORY=${HDF5_BASE} \
+    -D USE_NETCDF=1 \
+    -D NETCDF_DIRECTORY=${NCDF_BASE} \
     $LBPM_SOURCE
 
 make -j32 && make install && ctest

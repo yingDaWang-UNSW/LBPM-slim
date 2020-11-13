@@ -77,6 +77,7 @@ ENDIF()
 # Configure external packages
 
 CONFIGURE_MPI()     # MPI must be before other libraries
+CONFIGURE_NETCDF()
 CONFIGURE_LBPM()
 CONFIGURE_LINE_COVERAGE()
 INCLUDE( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/SharedPtr.cmake" )
@@ -95,6 +96,7 @@ ENDMACRO()
 BEGIN_PACKAGE_CONFIG( lbpm-slim-library )
 ADD_PACKAGE_SUBDIRECTORY( common )
 ADD_PACKAGE_SUBDIRECTORY( analysis )
+ADD_PACKAGE_SUBDIRECTORY( IO )
 #ADD_PACKAGE_SUBDIRECTORY( threadpool )
 ADD_PACKAGE_SUBDIRECTORY( models )
 IF ( USE_CUDA )
