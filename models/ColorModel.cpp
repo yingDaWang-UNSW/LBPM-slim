@@ -948,11 +948,35 @@ void ScaLBL_ColorModel::Run(){
             vB_z_H /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;
             double muA = rhoA*(tauA-0.5)/3.f;
             double muB = rhoB*(tauB-0.5)/3.f;
-            double flow_rate_A = sqrt(vA_x*vA_x + vA_y*vA_y + vA_z*vA_z);
-            double flow_rate_B = sqrt(vB_x*vB_x + vB_y*vB_y + vB_z*vB_z);
-            double flow_rate_A_H = sqrt(vA_x_H*vA_x_H + vA_y_H*vA_y_H + vA_z_H*vA_z_H);
-            double flow_rate_B_H = sqrt(vB_x_H*vB_x_H + vB_y_H*vB_y_H + vB_z_H*vB_z_H);
+            
             double force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
+			double dir_x = Fx/force_magnitude;
+			double dir_y = Fy/force_magnitude;
+			double dir_z = Fz/force_magnitude;
+			if (force_magnitude == 0.0){
+				// default to z direction
+				dir_x = 0.0;
+				dir_y = 0.0;
+				dir_z = 1.0;
+			}
+
+			double flow_rate_A = volA*(vA_x*dir_x + vA_y*dir_y + vA_z*dir_z);
+			double flow_rate_B = volB*(vB_x*dir_x + vB_y*dir_y + vB_z*dir_z);
+            double flow_rate_A_H = sqrt(vA_x_H*dir_x + vA_y_H*dir_y + vA_z_H*dir_z);
+            double flow_rate_B_H = sqrt(vB_x_H*dir_x + vB_y_H*dir_y + vB_z_H*dir_x);
+			double Ca = fabs(muA*flow_rate_A + muB*flow_rate_B)/(5.796*alpha);
+            double Ca1 = fabs(muA*flow_rate_A)/(5.796*alpha);
+            double Ca2 = fabs(muB*flow_rate_B)/(5.796*alpha);
+            
+            
+            
+            //double flow_rate_A = sqrt(vA_x*vA_x + vA_y*vA_y + vA_z*vA_z);
+            //double flow_rate_B = sqrt(vB_x*vB_x + vB_y*vB_y + vB_z*vB_z);
+            //double flow_rate_A_H = sqrt(vA_x_H*vA_x_H + vA_y_H*vA_y_H + vA_z_H*vA_z_H);
+            //double flow_rate_B_H = sqrt(vB_x_H*vB_x_H + vB_y_H*vB_y_H + vB_z_H*vB_z_H);
+            //double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double((Nx-2)*(Ny-2)*(Nz-2))*nprocs*poro);
+            //double Ca1 = (muA*flow_rate_A)/(alpha);
+            //double Ca2 = (muB*flow_rate_B)/(alpha);
 
             //double Ca = fabs((1-current_saturation)*muA*flow_rate_A + current_saturation*muB*flow_rate_B)/(5.796*alpha);
             double gradP=force_magnitude+(din-dout)/((Nz-2)*nprocz)/3;
@@ -971,9 +995,7 @@ void ScaLBL_ColorModel::Run(){
                 break;
             }
             // calculate the hydraulically connected capillary number if necessary...
-//            double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double((Nx-2)*(Ny-2)*(Nz-2))*nprocs*poro);
-            double Ca = (muA*flow_rate_A)/(alpha);
-            double Ca2 = (muB*flow_rate_B)/(alpha);
+
             Ca_EMA = approxRollingAverage(Ca_EMA, Ca, timestep);
             dCadt = fabs((Ca - Ca_previous)/Ca_previous);
             dCadtEMA = fabs((Ca_EMA - Ca_EMA_previous)/Ca_EMA_previous);
@@ -992,7 +1014,7 @@ void ScaLBL_ColorModel::Run(){
             if (rank==0) {
                 printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1,absperm2,absperm1_H,absperm2_H);
                 printf("EMA: Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1_EMA, absperm2_EMA,absperm1_H_EMA, absperm2_H_EMA);
-                printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e\nNca = (%e, %e), EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca, Ca2, Ca_EMA, dCadtEMA, settlingParam);
+                printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e\nNca = (%e, %e), EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca1, Ca2, Ca_EMA, dCadtEMA, settlingParam);
                 if (logFile) {
                     FILE * log_file = fopen("log.csv","a");
                     fprintf(log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n", timestep,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,vA_x_H,vA_y_H,vA_z_H,vB_x_H,vB_y_H,vB_z_H,flow_rate_A,flow_rate_B,flow_rate_A_H,flow_rate_B_H, force_magnitude,absperm1,absperm2,absperm1_H,absperm2_H,absperm1_EMA,absperm2_EMA,absperm1_H_EMA,absperm2_H_EMA, MLUPSGlob,current_saturation,flux,gradP,Ca,Ca2,Ca_EMA,dCadtEMA,settlingParam);
@@ -1609,6 +1631,7 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
         sprintf(LocalRankFoldername,"./rawVis%d",timestep); 
         mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     }
+    MPI_Barrier(Dm->Comm);
     // Copy back final phase indicator field and convert to regular layout
     //DoubleArray PhaseField(Nx,Ny,Nz);
     //ScaLBL_Comm->RegularLayout(Map,Phi,PhaseField);

@@ -186,7 +186,9 @@ int main(int argc, char **argv)
             for (int j=0;j<Ny[0]+2;j++) {
                 for (int i=0;i<Nx[0]+2;i++) {
                     fread(&id,sizeof(short int),1,IDFILE);
-                    readVol(i,j,k)=id;
+                    //if (i>0 || j>0 ||k>0 ||i<Nx[0]+1||j<Ny[0]+1||k<Nz[0]+1) {
+                        readVol(i,j,k)=id;
+                    //}
                 }
             }
         }       
@@ -487,7 +489,7 @@ int main(int argc, char **argv)
                 MPI_Barrier(comm);
             }
             
-                for (size_t n=0; n<N_levels; n++) {
+            for (size_t n=0; n<N_levels; n++) {
             //create the file
                 FILE *OUTFILE;
                 char LocalRankFilename[100];
@@ -549,12 +551,11 @@ int main(int argc, char **argv)
                 MPI_Barrier(comm);
             }
         }
-        return 0; // because im lazy
+        MPI_Barrier(comm);
+        if (rank==0) printf("Segmentation Complete\n");
     }
     //PROFILE_STOP("Main");
     //PROFILE_SAVE("lbpm_uCT_pp",true);
-    MPI_Barrier(comm);
     MPI_Finalize();
-    return 0;
 }
 

@@ -20,7 +20,6 @@ int main(int argc, char **argv)
     else{
         ERROR("lbpm_serial_decomp: no in put database provided \n");
     }
-    int rank_offset=0;
 
     //.......................................................................
     // Reading the domain information file
@@ -30,8 +29,7 @@ int main(int argc, char **argv)
     int64_t Nx,Ny,Nz;
     int64_t i,j,k,n;
     int BC=0;
-    int64_t xStart,yStart,zStart;
-    xStart=yStart=zStart=0;
+
     // read the input database 
     auto db = std::make_shared<Database>( filename );
     auto domain_db = db->getDatabase( "Domain" );
@@ -41,12 +39,7 @@ int main(int argc, char **argv)
     auto size = domain_db->getVector<int>( "n" );
     auto SIZE = domain_db->getVector<int>( "N" );
     auto nproc = domain_db->getVector<int>( "nproc" );
-    if (domain_db->keyExists( "offset" )){
-        auto offset = domain_db->getVector<int>( "offset" );
-        xStart = offset[0];
-        yStart = offset[1];
-        zStart = offset[2];
-    }
+
     nx = size[0];
     ny = size[1];
     nz = size[2];
@@ -58,7 +51,8 @@ int main(int argc, char **argv)
     Nz = SIZE[2];
 
     nprocs=nprocx*nprocy*nprocz;
-
+    auto uct_db = db->getDatabase( "uCT" );
+    auto nlm_depth    = uct_db->getScalar<int>( "nlm_depth" );    
     short int *SegData = NULL;
     // Rank=0 reads the entire data and distributes to worker processes
     if (rank==0){
@@ -77,7 +71,7 @@ int main(int argc, char **argv)
 
     char LocalRankFilename[40];
     short int *loc_id;
-    loc_id = new short int [(nx+2)*(ny+2)*(nz+2)];
+    loc_id = new short int [(nx+nlm_depth*2)*(ny+nlm_depth*2)*(nz+nlm_depth*2)];
     // Set up the sub-domains
     if (rank==0){
         printf("Distributing subdomains across %i processors \n",nprocs);
@@ -90,28 +84,31 @@ int main(int argc, char **argv)
                     int rnk = kp*nprocx*nprocy + jp*nprocx + ip;
                     //printf("Distributing rank %i\n",rnk);
                     // Pack and send the subdomain for rnk
-                    for (k=0;k<nz+2;k++){
-                        for (j=0;j<ny+2;j++){
-                            for (i=0;i<nx+2;i++){
-                                int64_t x = xStart + ip*nx + i-1;
-                                int64_t y = yStart + jp*ny + j-1;
-                                int64_t z = zStart + kp*nz + k-1;
-                                if (x<xStart)     x=xStart;
+                    for (k=0;k<nz+nlm_depth*2;k++){
+                        for (j=0;j<ny+nlm_depth*2;j++){
+                            for (i=0;i<nx+nlm_depth*2;i++){
+                            
+                                int64_t x = ip*nx + i-nlm_depth;
+                                int64_t y = jp*ny + j-nlm_depth;
+                                int64_t z = kp*nz + k-nlm_depth;
+                                
+                                if (x<0)     x=0;
                                 if (!(x<Nx))    x=Nx-1;
-                                if (y<yStart)     y=yStart;
+                                if (y<0)     y=0;
                                 if (!(y<Ny))    y=Ny-1;
-                                if (z<zStart)     z=zStart;
+                                if (z<0)     z=0;
                                 if (!(z<Nz))    z=Nz-1;
-                                int64_t nlocal = k*(nx+2)*(ny+2) + j*(nx+2) + i;
+                                
+                                int64_t nlocal = k*(nx+nlm_depth*2)*(ny+nlm_depth*2) + j*(nx+nlm_depth*2) + i;
                                 int64_t nglobal = z*Nx*Ny+y*Nx+x;
                                 loc_id[nlocal] = SegData[nglobal];
                             }
                         }
                     }
                     // Write the data for this rank data 
-                    sprintf(LocalRankFilename,"ID.%05i",rnk+rank_offset);
+                    sprintf(LocalRankFilename,"ID.%05i",rnk);
                     FILE *ID = fopen(LocalRankFilename,"wb");
-                    fwrite(loc_id,sizeof(short int),(nx+2)*(ny+2)*(nz+2),ID);
+                    fwrite(loc_id,sizeof(short int),(nx+nlm_depth*2)*(ny+nlm_depth*2)*(nz+nlm_depth*2),ID);
                     fclose(ID);
                 }
             }
