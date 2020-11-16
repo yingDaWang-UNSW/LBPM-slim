@@ -82,7 +82,7 @@ int main(int argc, char **argv)
         auto center       = uct_db->getVector<int>( "center" );
         auto CylRad       = uct_db->getScalar<float>( "cylinder_radius" );
         auto maxLevels    = uct_db->getScalar<int>( "max_levels" );
-	
+        bool debugDump       = uct_db->getScalar<bool>( "debugDump" );
         std::vector<int> offset( 3, 0 );
         if ( uct_db->keyExists( "offset" ) )
             offset = uct_db->getVector<int>( "offset" );
@@ -185,10 +185,10 @@ int main(int argc, char **argv)
         for (int k=0;k<Nz[0]+2;k++) {
             for (int j=0;j<Ny[0]+2;j++) {
                 for (int i=0;i<Nx[0]+2;i++) {
-    	            fread(&id,sizeof(short int),1,IDFILE);
+                    fread(&id,sizeof(short int),1,IDFILE);
                     readVol(i,j,k)=id;
-		        }
-	        }
+                }
+            }
         }       
         fclose(IDFILE);
         LOCVOL[0].fill(0);
@@ -330,127 +330,226 @@ int main(int argc, char **argv)
 
         // Perform a final filter
         //PROFILE_START("Filtering final domains");
-	    if (FILTER_CONNECTED_COMPONENTS){
+        if (FILTER_CONNECTED_COMPONENTS){
             if (rank==0)
                 printf("Filtering final domains\n");
             Array<float> filter_Mean, filter_Dist1, filter_Dist2;
             filter_final( ID[0], Dist[0], *fillFloat[0], *Dm[0], filter_Mean, filter_Dist1, filter_Dist2 );
             //PROFILE_STOP("Filtering final domains");
-	    }
-	    
-	    // SLIM: dump results as raw, reconstruct outside lbpm
-	        	//create the folder
-        if (rank==0) printf("Dumping visualization structure \n");
-	    char LocalRankFoldername[100];
-	    if (rank==0) {
-		    sprintf(LocalRankFoldername,"./segResult"); 
-	        mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
         }
-	    MPI_Barrier(comm);
-	    
-        for (size_t n=0; n<N_levels; n++) {
-	    //create the file
-	        FILE *OUTFILE;
-	        char LocalRankFilename[100];
-	        sprintf(LocalRankFilename,"segResult/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
-	        OUTFILE = fopen(LocalRankFilename,"wb");
+        
+        
+        
+        
+        // SLIM: dump results as raw, reconstruct outside lbpm
+        if (rank==0) printf("Saving segmented subdomains \n");
+        char LocalRankFoldername[100];
+        if (rank==0) {
+            sprintf(LocalRankFoldername,"./segmented"); 
+            mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        }
+        MPI_Barrier(comm);
+        
+        int n=0;
+        //create the file
+        FILE *OUTFILE;
+        char LocalRankFilenameSeg[100];
+        sprintf(LocalRankFilenameSeg,"segmented/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+        OUTFILE = fopen(LocalRankFilenameSeg,"wb");
 
+        char temp;
+        for (int k=0;k<Nz[n]+2;k++) {
+            for (int j=0;j<Ny[n]+2;j++) {
+                for (int i=0;i<Nx[n]+2;i++) {
+                    temp = ID[n](i,j,k);
+                    //printf("%f\n",temp);
+                    fwrite(&temp,sizeof(char),1,OUTFILE);
+                }
+            }
+        }
+        fclose(OUTFILE);
+        MPI_Barrier(comm);
+        
+
+        //create the folder
+        if (rank==0) {
+            printf("Stitching segmented domain \n");
+            // create seg domain
+            Array<char> segFull(Nx[0]*nprocx,Ny[0]*nprocy,Nz[0]*nprocz);
+            segFull.fill(0);
+            // read the files in a loop
+            char LocalRankFoldername[100];
+            sprintf(LocalRankFoldername,"./segmented"); 
+            MPI_Barrier(comm);
+            for (int r=0;r<nprocs;r++) {
+                int n=0;
+                //read the file
+                FILE *OUTFILE;
+                char LocalRankFilenameSeg2[100];
+                sprintf(LocalRankFilenameSeg2,"segmented/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",r,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                OUTFILE = fopen(LocalRankFilenameSeg2,"r");
+                char temp;
+                Array<char> segTemp(Nx[0]+2,Ny[0]+2,Nz[0]+2);
+                segTemp.fill(0);
+                for (int k=0;k<Nz[n]+2;k++) {
+                    for (int j=0;j<Ny[n]+2;j++) {
+                        for (int i=0;i<Nx[n]+2;i++) {
+                            //printf("%f\n",temp);
+                            fread(&temp,sizeof(char),1,OUTFILE);
+                            segTemp(i,j,k) = temp;
+                        }
+                    }
+                }
+                fclose(OUTFILE);
+                
+                // copy into sfull seg
+            	int ix = r%nprocx;
+	            int jy = (r/nprocx)%nprocy;
+	            int kz = r/(nprocx*nprocy);
+                int originX = ix*Nx[n];
+                int originY = jy*Ny[n];
+                int originZ = kz*Nz[n];
+                for (int k=0;k<Nz[n];k++) {
+                    for (int j=0;j<Ny[n];j++) {
+                        for (int i=0;i<Nx[n];i++) {
+                            segFull(originX+i,originY+j,originZ+k)=segTemp(i+1,j+1,k+1);
+                        }
+                    }
+                }
+            }
+            //save full seg
+            FILE *OUTFILE;
+            char GlobalRankFilenameSeg[100];
+            sprintf(GlobalRankFilenameSeg,"segmented/fullseg_%d_%d_%d.raw",Nx[n]*nprocx,Ny[n]*nprocy,Nz[n]*nprocz); //change this file name to include the size
+            OUTFILE = fopen(GlobalRankFilenameSeg,"wb");
             char temp;
-            for (int k=0;k<Nz[n]+2;k++) {
-                for (int j=0;j<Ny[n]+2;j++) {
-                    for (int i=0;i<Nx[n]+2;i++) {
-		                temp = ID[n](i,j,k);
-		                //printf("%f\n",temp);
-                        fwrite(&temp,sizeof(char),1,OUTFILE);
-		            }
-	            }
+            for (int k=0;k<Nz[n]*nprocz;k++) {
+                for (int j=0;j<Ny[n]*nprocy;j++) {
+                    for (int i=0;i<Nx[n]*nprocx;i++) {
+                            temp = segFull(i,j,k);
+                            //printf("%f\n",temp);
+                            fwrite(&temp,sizeof(char),1,OUTFILE);
+                    }
+                }
             }
-        	fclose(OUTFILE);
-	        MPI_Barrier(comm);
+            fclose(OUTFILE);
         }
+        MPI_Barrier(comm);
         
-        for (size_t n=0; n<N_levels; n++) {
-	    //create the file
-	        FILE *OUTFILE;
-	        char LocalRankFilename[100];
-	        sprintf(LocalRankFilename,"segResult/nlmf_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
-	        OUTFILE = fopen(LocalRankFilename,"wb");
-
-            float temp;
-            for (int k=0;k<Nz[n]+2;k++) {
-                for (int j=0;j<Ny[n]+2;j++) {
-                    for (int i=0;i<Nx[n]+2;i++) {
-		                temp = NonLocalMean[n](i,j,k);
-		                //printf("%f\n",temp);
-                        fwrite(&temp,sizeof(float),1,OUTFILE);
-		            }
-	            }
+        if (debugDump) {
+            if (rank==0) printf("Dumping entire visualization structure \n");
+            char LocalRankFoldername[100];
+            if (rank==0) {
+                sprintf(LocalRankFoldername,"./segResult"); 
+                mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
             }
-        	fclose(OUTFILE);
-	        MPI_Barrier(comm);
-        }
-        
+            MPI_Barrier(comm);
+            
             for (size_t n=0; n<N_levels; n++) {
-	    //create the file
-	        FILE *OUTFILE;
-	        char LocalRankFilename[100];
-	        sprintf(LocalRankFilename,"segResult/dist_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
-	        OUTFILE = fopen(LocalRankFilename,"wb");
+            //create the file
+                FILE *OUTFILE;
+                char LocalRankFilename[100];
+                sprintf(LocalRankFilename,"segResult/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                OUTFILE = fopen(LocalRankFilename,"wb");
 
-            float temp;
-            for (int k=0;k<Nz[n]+2;k++) {
-                for (int j=0;j<Ny[n]+2;j++) {
-                    for (int i=0;i<Nx[n]+2;i++) {
-		                temp = Dist[n](i,j,k);
-		                //printf("%f\n",temp);
-                        fwrite(&temp,sizeof(float),1,OUTFILE);
-		            }
-	            }
+                char temp;
+                for (int k=0;k<Nz[n]+2;k++) {
+                    for (int j=0;j<Ny[n]+2;j++) {
+                        for (int i=0;i<Nx[n]+2;i++) {
+                            temp = ID[n](i,j,k);
+                            //printf("%f\n",temp);
+                            fwrite(&temp,sizeof(char),1,OUTFILE);
+                        }
+                    }
+                }
+                fclose(OUTFILE);
+                MPI_Barrier(comm);
             }
-        	fclose(OUTFILE);
-	        MPI_Barrier(comm);
-        }
-        
-        for (size_t n=0; n<N_levels; n++) {
-	    //create the file
-	        FILE *OUTFILE;
-	        char LocalRankFilename[100];
-	        sprintf(LocalRankFilename,"segResult/smooth_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
-	        OUTFILE = fopen(LocalRankFilename,"wb");
+            
+            for (size_t n=0; n<N_levels; n++) {
+            //create the file
+                FILE *OUTFILE;
+                char LocalRankFilename[100];
+                sprintf(LocalRankFilename,"segResult/nlmf_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                OUTFILE = fopen(LocalRankFilename,"wb");
 
-            float temp;
-            for (int k=0;k<Nz[n]+2;k++) {
-                for (int j=0;j<Ny[n]+2;j++) {
-                    for (int i=0;i<Nx[n]+2;i++) {
-		                temp = MultiScaleSmooth[n](i,j,k);
-		                //printf("%f\n",temp);
-                        fwrite(&temp,sizeof(float),1,OUTFILE);
-		            }
-	            }
+                float temp;
+                for (int k=0;k<Nz[n]+2;k++) {
+                    for (int j=0;j<Ny[n]+2;j++) {
+                        for (int i=0;i<Nx[n]+2;i++) {
+                            temp = NonLocalMean[n](i,j,k);
+                            //printf("%f\n",temp);
+                            fwrite(&temp,sizeof(float),1,OUTFILE);
+                        }
+                    }
+                }
+                fclose(OUTFILE);
+                MPI_Barrier(comm);
             }
-        	fclose(OUTFILE);
-	        MPI_Barrier(comm);
-        }
-        for (size_t n=0; n<N_levels; n++) {
-	    //create the file
-	        FILE *OUTFILE;
-	        char LocalRankFilename[100];
-	        sprintf(LocalRankFilename,"segResult/locvol_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
-	        OUTFILE = fopen(LocalRankFilename,"wb");
+            
+                for (size_t n=0; n<N_levels; n++) {
+            //create the file
+                FILE *OUTFILE;
+                char LocalRankFilename[100];
+                sprintf(LocalRankFilename,"segResult/dist_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                OUTFILE = fopen(LocalRankFilename,"wb");
 
-            float temp;
-            for (int k=0;k<Nz[n]+2;k++) {
-                for (int j=0;j<Ny[n]+2;j++) {
-                    for (int i=0;i<Nx[n]+2;i++) {
-		                temp = LOCVOL[n](i,j,k);
-		                //printf("%f\n",temp);
-                        fwrite(&temp,sizeof(float),1,OUTFILE);
-		            }
-	            }
+                float temp;
+                for (int k=0;k<Nz[n]+2;k++) {
+                    for (int j=0;j<Ny[n]+2;j++) {
+                        for (int i=0;i<Nx[n]+2;i++) {
+                            temp = Dist[n](i,j,k);
+                            //printf("%f\n",temp);
+                            fwrite(&temp,sizeof(float),1,OUTFILE);
+                        }
+                    }
+                }
+                fclose(OUTFILE);
+                MPI_Barrier(comm);
             }
-        	fclose(OUTFILE);
-	        MPI_Barrier(comm);
+            
+            for (size_t n=0; n<N_levels; n++) {
+            //create the file
+                FILE *OUTFILE;
+                char LocalRankFilename[100];
+                sprintf(LocalRankFilename,"segResult/smooth_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                OUTFILE = fopen(LocalRankFilename,"wb");
+
+                float temp;
+                for (int k=0;k<Nz[n]+2;k++) {
+                    for (int j=0;j<Ny[n]+2;j++) {
+                        for (int i=0;i<Nx[n]+2;i++) {
+                            temp = MultiScaleSmooth[n](i,j,k);
+                            //printf("%f\n",temp);
+                            fwrite(&temp,sizeof(float),1,OUTFILE);
+                        }
+                    }
+                }
+                fclose(OUTFILE);
+                MPI_Barrier(comm);
+            }
+            for (size_t n=0; n<N_levels; n++) {
+            //create the file
+                FILE *OUTFILE;
+                char LocalRankFilename[100];
+                sprintf(LocalRankFilename,"segResult/locvol_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                OUTFILE = fopen(LocalRankFilename,"wb");
+
+                float temp;
+                for (int k=0;k<Nz[n]+2;k++) {
+                    for (int j=0;j<Ny[n]+2;j++) {
+                        for (int i=0;i<Nx[n]+2;i++) {
+                            temp = LOCVOL[n](i,j,k);
+                            //printf("%f\n",temp);
+                            fwrite(&temp,sizeof(float),1,OUTFILE);
+                        }
+                    }
+                }
+                fclose(OUTFILE);
+                MPI_Barrier(comm);
+            }
         }
+        return 0; // because im lazy
     }
     //PROFILE_STOP("Main");
     //PROFILE_SAVE("lbpm_uCT_pp",true);
