@@ -324,6 +324,12 @@ void ScaLBL_ColorModel::Initialize(){
     /*
      * This function initializes model
      */
+     // initialize phi based on PhaseLabel (include solid component labels)
+    if (rank==0)    printf ("Initializing phase field and solid affinities\n");
+    double *PhaseLabel;
+    PhaseLabel = new double[N];
+    AssignComponentLabels(PhaseLabel);
+    ScaLBL_CopyToDevice(Phi, PhaseLabel, N*sizeof(double));
     if (Restart == true){
         if (rank==0) printf("Reading restart file! \n");
         ifstream restart("Restart.txt");
@@ -344,6 +350,7 @@ void ScaLBL_ColorModel::Initialize(){
         ScaLBL_CopyToHost(cPhi, Phi, N*sizeof(double));
         FILE *OUTFILERestart;
         OUTFILERestart = fopen(LocalRestartFile,"r");
+        //printf("Reading restart file %s \n",LocalRestartFile);
         //ifstream File(LocalRestartFile,ios::binary);
         int idx;
         double value,va,vb;
@@ -363,6 +370,7 @@ void ScaLBL_ColorModel::Initialize(){
         }
         //File.close();
         fclose(OUTFILERestart);
+        
         for (int n=0; n<ScaLBL_Comm->LastExterior(); n++){
             va = ccDen[n];
             vb = ccDen[Np + n];
@@ -370,6 +378,7 @@ void ScaLBL_ColorModel::Initialize(){
             idx = TmpMap[n];
             if (!(idx < 0) && idx<N)
                 cPhi[idx] = value;
+                //printf("Value %f \n",value);
         }
         for (int n=ScaLBL_Comm->FirstInterior(); n<ScaLBL_Comm->LastInterior(); n++){
           va = ccDen[n];
@@ -378,6 +387,7 @@ void ScaLBL_ColorModel::Initialize(){
               idx = TmpMap[n];
               if (!(idx < 0) && idx<N)
                   cPhi[idx] = value;
+                //printf("Value %f \n",value);
         }
         
         // Copy the restart data to the GPU
@@ -391,12 +401,7 @@ void ScaLBL_ColorModel::Initialize(){
         if (rank==0) printf("WARNING:No Restart.txt file\n");
     }
 
-    // initialize phi based on PhaseLabel (include solid component labels)
-    if (rank==0)    printf ("Initializing phase field and solid affinities\n");
-    double *PhaseLabel;
-    PhaseLabel = new double[N];
-    AssignComponentLabels(PhaseLabel);
-    ScaLBL_CopyToDevice(Phi, PhaseLabel, N*sizeof(double));
+
     
     Density_A_Cart.resize(Nx,Ny,Nz);
     Density_B_Cart.resize(Nx,Ny,Nz);
@@ -960,10 +965,11 @@ void ScaLBL_ColorModel::Run(){
 				dir_z = 1.0;
 			}
 
-			double flow_rate_A = volA*(vA_x*dir_x + vA_y*dir_y + vA_z*dir_z);
-			double flow_rate_B = volB*(vB_x*dir_x + vB_y*dir_y + vB_z*dir_z);
-            double flow_rate_A_H = sqrt(vA_x_H*dir_x + vA_y_H*dir_y + vA_z_H*dir_z);
-            double flow_rate_B_H = sqrt(vB_x_H*dir_x + vB_y_H*dir_y + vB_z_H*dir_x);
+			double flow_rate_A = volA*(vA_x*dir_x + vA_y*dir_y + vA_z*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
+			double flow_rate_B = volB*(vB_x*dir_x + vB_y*dir_y + vB_z*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
+            double flow_rate_A_H = volA*(vA_x_H*dir_x + vA_y_H*dir_y + vA_z_H*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
+            double flow_rate_B_H = volB*(vB_x_H*dir_x + vB_y_H*dir_y + vB_z_H*dir_x)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
+			
 			double Ca = fabs(muA*flow_rate_A + muB*flow_rate_B)/(5.796*alpha);
             double Ca1 = fabs(muA*flow_rate_A)/(5.796*alpha);
             double Ca2 = fabs(muB*flow_rate_B)/(5.796*alpha);
@@ -1197,7 +1203,7 @@ void ScaLBL_ColorModel::Run(){
             
             //AUTOMORPH routine
             if (timestep > ramp_timesteps && autoMorphFlag){
-                if (current_saturation*((injectionType-1)*2-1)<satInit*((injectionType-1)*2-1) && satInit > 0.0){
+                if (current_saturation*((injectionType-1)*2-1)<satInit*((injectionType-1)*2-1) && satInit > 0.0 && satInit < 1.0){
                     // initially, use flux conditions to push the system along
                     if (rank==0) printf("[AUTOMORPH]: Initial Flux injection to target %f (current: %f) \n", satInit, current_saturation);
                     flux = 0.01*double((Nx-2)*(Ny-2)*(Nz-2)*nprocs)*poro/accelerationRate;
@@ -1604,7 +1610,7 @@ void ScaLBL_ColorModel::WriteRestartYDW(){
     FILE *OUTFILERestart;
     sprintf(LocalRestartFilename,"Restart.%05d",rank);
     double value;
-    OUTFILERestart = fopen(LocalRestartFilename,"w");
+    OUTFILERestart = fopen(LocalRestartFilename,"wb");
     //ofstream File(LocalRestartFilename,ios::binary);
     for (int n=0; n<Np; n++){
         // Write the two density values
@@ -1641,7 +1647,7 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
     FILE *OUTFILE;
     char LocalRankFilename[100];
     sprintf(LocalRankFilename,"rawVis%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-    OUTFILE = fopen(LocalRankFilename,"w");
+    OUTFILE = fopen(LocalRankFilename,"wb");
     //td::fstream ofs(LocalRankFilename, ios::out | ios::binary );
     for (int k=0; k<Nz; k++){
         for (int j=0; j<Ny; j++){
@@ -1659,7 +1665,7 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
     FILE *OUTFILEVels;
     char LocalRankFilenameVels[100];
     sprintf(LocalRankFilenameVels,"rawVis%d/Vel_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-    OUTFILEVels = fopen(LocalRankFilenameVels,"w");
+    OUTFILEVels = fopen(LocalRankFilenameVels,"wb");
     for (int k=0; k<Nz; k++){
         for (int j=0; j<Ny; j++){
             for (int i=0; i<Nx; i++){
