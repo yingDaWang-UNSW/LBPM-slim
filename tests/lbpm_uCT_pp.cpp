@@ -29,7 +29,6 @@
 
 int main(int argc, char **argv)
 {
-
     // Initialize MPI
     int rank, nprocs;
     MPI_Init(&argc,&argv);
@@ -39,7 +38,6 @@ int main(int argc, char **argv)
     {
         Utilities::setErrorHandlers();
         //PROFILE_START("Main");
-
         //std::vector<std::string> filenames;
         if ( argc<2 ) {
             if ( rank == 0 ){
@@ -372,72 +370,6 @@ int main(int argc, char **argv)
         fclose(OUTFILE);
         MPI_Barrier(comm);
         
-
-        //create the folder
-        if (rank==0) {
-            printf("Stitching segmented domain \n");
-            // create seg domain
-            Array<char> segFull(Nx[0]*nprocx,Ny[0]*nprocy,Nz[0]*nprocz);
-            segFull.fill(0);
-            // read the files in a loop
-            char LocalRankFoldername[100];
-            sprintf(LocalRankFoldername,"./segmented"); 
-            MPI_Barrier(comm);
-            for (int r=0;r<nprocs;r++) {
-                int n=0;
-                //read the file
-                FILE *OUTFILE;
-                char LocalRankFilenameSeg2[100];
-                sprintf(LocalRankFilenameSeg2,"segmented/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",r,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
-                OUTFILE = fopen(LocalRankFilenameSeg2,"r");
-                char temp;
-                Array<char> segTemp(Nx[0]+2,Ny[0]+2,Nz[0]+2);
-                segTemp.fill(0);
-                for (int k=0;k<Nz[n]+2;k++) {
-                    for (int j=0;j<Ny[n]+2;j++) {
-                        for (int i=0;i<Nx[n]+2;i++) {
-                            //printf("%f\n",temp);
-                            fread(&temp,sizeof(char),1,OUTFILE);
-                            segTemp(i,j,k) = temp;
-                        }
-                    }
-                }
-                fclose(OUTFILE);
-                
-                // copy into sfull seg
-            	int ix = r%nprocx;
-	            int jy = (r/nprocx)%nprocy;
-	            int kz = r/(nprocx*nprocy);
-                int originX = ix*Nx[n];
-                int originY = jy*Ny[n];
-                int originZ = kz*Nz[n];
-                for (int k=0;k<Nz[n];k++) {
-                    for (int j=0;j<Ny[n];j++) {
-                        for (int i=0;i<Nx[n];i++) {
-                            segFull(originX+i,originY+j,originZ+k)=segTemp(i+1,j+1,k+1);
-                        }
-                    }
-                }
-            }
-            //save full seg
-            FILE *OUTFILE;
-            char GlobalRankFilenameSeg[100];
-            sprintf(GlobalRankFilenameSeg,"segmented/fullseg_%d_%d_%d.raw",Nx[n]*nprocx,Ny[n]*nprocy,Nz[n]*nprocz); //change this file name to include the size
-            OUTFILE = fopen(GlobalRankFilenameSeg,"wb");
-            char temp;
-            for (int k=0;k<Nz[n]*nprocz;k++) {
-                for (int j=0;j<Ny[n]*nprocy;j++) {
-                    for (int i=0;i<Nx[n]*nprocx;i++) {
-                            temp = segFull(i,j,k);
-                            //printf("%f\n",temp);
-                            fwrite(&temp,sizeof(char),1,OUTFILE);
-                    }
-                }
-            }
-            fclose(OUTFILE);
-        }
-        MPI_Barrier(comm);
-        
         if (debugDump) {
             if (rank==0) printf("Dumping entire visualization structure \n");
             char LocalRankFoldername[100];
@@ -550,12 +482,76 @@ int main(int argc, char **argv)
                 fclose(OUTFILE);
                 MPI_Barrier(comm);
             }
+            printf("Dump complete for rank %i\n",rank);
+        }
+                //create the folder
+        if (rank==0) {
+            printf("Stitching segmented domain \n");
+            // create seg domain
+            Array<char> segFull(Nx[0]*nprocx,Ny[0]*nprocy,Nz[0]*nprocz);
+            segFull.fill(0);
+            // read the files in a loop
+            char LocalRankFoldername[100];
+            sprintf(LocalRankFoldername,"./segmented"); 
+            for (int r=0;r<nprocs;r++) {
+                int n=0;
+                //read the file
+                FILE *OUTFILE;
+                char LocalRankFilenameSeg2[100];
+                sprintf(LocalRankFilenameSeg2,"segmented/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",r,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                OUTFILE = fopen(LocalRankFilenameSeg2,"r");
+                char temp;
+                Array<char> segTemp(Nx[0]+2,Ny[0]+2,Nz[0]+2);
+                segTemp.fill(0);
+                for (int k=0;k<Nz[n]+2;k++) {
+                    for (int j=0;j<Ny[n]+2;j++) {
+                        for (int i=0;i<Nx[n]+2;i++) {
+                            //printf("%f\n",temp);
+                            fread(&temp,sizeof(char),1,OUTFILE);
+                            segTemp(i,j,k) = temp;
+                        }
+                    }
+                }
+                fclose(OUTFILE);
+                
+                // copy into sfull seg
+            	int ix = r%nprocx;
+	            int jy = (r/nprocx)%nprocy;
+	            int kz = r/(nprocx*nprocy);
+                int originX = ix*Nx[n];
+                int originY = jy*Ny[n];
+                int originZ = kz*Nz[n];
+                for (int k=0;k<Nz[n];k++) {
+                    for (int j=0;j<Ny[n];j++) {
+                        for (int i=0;i<Nx[n];i++) {
+                            segFull(originX+i,originY+j,originZ+k)=segTemp(i+1,j+1,k+1);
+                        }
+                    }
+                }
+            }
+            //save full seg
+            FILE *OUTFILE;
+            char GlobalRankFilenameSeg[100];
+            sprintf(GlobalRankFilenameSeg,"segmented/fullseg_%d_%d_%d.raw",Nx[n]*nprocx,Ny[n]*nprocy,Nz[n]*nprocz); //change this file name to include the size
+            OUTFILE = fopen(GlobalRankFilenameSeg,"wb");
+            char temp;
+            for (int k=0;k<Nz[n]*nprocz;k++) {
+                for (int j=0;j<Ny[n]*nprocy;j++) {
+                    for (int i=0;i<Nx[n]*nprocx;i++) {
+                            temp = segFull(i,j,k);
+                            //printf("%f\n",temp);
+                            fwrite(&temp,sizeof(char),1,OUTFILE);
+                    }
+                }
+            }
+            fclose(OUTFILE);
+            printf("Segmentation Complete\n");
+            return 0;
         }
         MPI_Barrier(comm);
         if (rank==0) printf("Segmentation Complete\n");
     }
-    //PROFILE_STOP("Main");
-    //PROFILE_SAVE("lbpm_uCT_pp",true);
     MPI_Finalize();
+    return 0;
 }
 

@@ -452,7 +452,7 @@ void ScaLBL_ColorModel::Run(){
     double absperm2_H_EMA = 0.0;
     double absperm1_old = 0.0;
     double absperm2_old = 0.0;
-    
+    double interfaceThreshold = 0;
     int steadycounter=0;
     // for mixed wetting problems
     bool affinityRampupFlag = false;
@@ -881,6 +881,7 @@ void ScaLBL_ColorModel::Run(){
             double current_saturation_H=0.;
             double settlingParam = 0.;
             double phiDiff = 0.;
+
             // sum velocities, volumes, differences
             for (int k=1; k<Nz-1; k++){
                 for (int j=1; j<Ny-1; j++){
@@ -888,7 +889,7 @@ void ScaLBL_ColorModel::Run(){
                         if (Distance(i,j,k) > 0){
                             phiDiff = phiDiff + (PhaseField(i,j,k) - oldPhase(i,j,k))*(PhaseField(i,j,k) - oldPhase(i,j,k));
                             oldPhase(i,j,k) = PhaseField(i,j,k);
-                            if (PhaseField(i,j,k)>0){
+                            if (PhaseField(i,j,k)>interfaceThreshold){
                                 vax_loc += Velocity_x(i,j,k);
                                 vay_loc += Velocity_y(i,j,k);
                                 vaz_loc += Velocity_z(i,j,k);
@@ -899,7 +900,7 @@ void ScaLBL_ColorModel::Run(){
                                     vaz_loc_H += Velocity_z(i,j,k);
                                     countA_H+=1.0;                                
                                 }
-                            } else if (PhaseField(i,j,k)<0) {
+                            } else if (PhaseField(i,j,k)<-1*interfaceThreshold) {
                                 vbx_loc += Velocity_x(i,j,k);
                                 vby_loc += Velocity_y(i,j,k);
                                 vbz_loc += Velocity_z(i,j,k);
@@ -964,17 +965,15 @@ void ScaLBL_ColorModel::Run(){
 				dir_y = 0.0;
 				dir_z = 1.0;
 			}
-
-			double flow_rate_A = volA*(vA_x*dir_x + vA_y*dir_y + vA_z*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
-			double flow_rate_B = volB*(vB_x*dir_x + vB_y*dir_y + vB_z*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
-            double flow_rate_A_H = volA*(vA_x_H*dir_x + vA_y_H*dir_y + vA_z_H*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
-            double flow_rate_B_H = volB*(vB_x_H*dir_x + vB_y_H*dir_y + vB_z_H*dir_x)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
+            // this is really questionable.
+			double flow_rate_A = volA*(vA_x*dir_x + vA_y*dir_y + vA_z*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs*poro);
+			double flow_rate_B = volB*(vB_x*dir_x + vB_y*dir_y + vB_z*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs*poro);
+            double flow_rate_A_H = volA*(vA_x_H*dir_x + vA_y_H*dir_y + vA_z_H*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs*poro);
+            double flow_rate_B_H = volB*(vB_x_H*dir_x + vB_y_H*dir_y + vB_z_H*dir_x)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs*poro);
 			
 			double Ca = fabs(muA*flow_rate_A + muB*flow_rate_B)/(5.796*alpha);
             double Ca1 = fabs(muA*flow_rate_A)/(5.796*alpha);
             double Ca2 = fabs(muB*flow_rate_B)/(5.796*alpha);
-            
-            
             
             //double flow_rate_A = sqrt(vA_x*vA_x + vA_y*vA_y + vA_z*vA_z);
             //double flow_rate_B = sqrt(vB_x*vB_x + vB_y*vB_y + vB_z*vB_z);
@@ -1124,7 +1123,6 @@ void ScaLBL_ColorModel::Run(){
                 }
             }
             
-            
             // adjust the force if capillary number is set
             if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag){ // activate if capillary number is specified, and/or during morph, only after acceleration is done - will be active during the rampup to initial morph
                 // at each analysis step, 
@@ -1163,7 +1161,6 @@ void ScaLBL_ColorModel::Run(){
                 }
             }
             
-            
             //co-injeciton stabilisation routine
             if (timestep > ramp_timesteps && coinjectionFlag){
                 if (stabilityCounter >= stabilisationRate){ // theres no adaptation phase, so no extra flag here
@@ -1199,7 +1196,6 @@ void ScaLBL_ColorModel::Run(){
                 }
                 stabilityCounter += analysis_interval;
             }
-            
             
             //AUTOMORPH routine
             if (timestep > ramp_timesteps && autoMorphFlag){
@@ -1632,6 +1628,7 @@ void ScaLBL_ColorModel::WriteRestartYDW(){
 
 void ScaLBL_ColorModel::WriteDebugYDW(){
     //create the folder
+
     char LocalRankFoldername[100];
     if (rank==0) {
         sprintf(LocalRankFoldername,"./rawVis%d",timestep); 
@@ -1644,6 +1641,7 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
     ScaLBL_CopyToHost(PhaseField.data(), Phi, sizeof(double)*N);
     //create the file
     double temp = 0.0;
+    double phiLoc = 0.0;
     FILE *OUTFILE;
     char LocalRankFilename[100];
     sprintf(LocalRankFilename,"rawVis%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
@@ -1670,7 +1668,10 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
         for (int j=0; j<Ny; j++){
             for (int i=0; i<Nx; i++){
                 //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
-                temp = Velocity_x(i,j,k);
+                phiLoc = PhaseField(i,j,k);
+
+                    temp = Velocity_x(i,j,k);
+
                 fwrite(&temp,sizeof(double),1,OUTFILEVels);
             }
         }
@@ -1680,7 +1681,10 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
         for (int j=0; j<Ny; j++){
             for (int i=0; i<Nx; i++){
                 //fprintf(OUTFILEY,"%f\n",Velocity_y(i, j, k));
-                temp = Velocity_y(i,j,k);
+                phiLoc = PhaseField(i,j,k);
+
+                    temp = Velocity_y(i,j,k);
+
                 fwrite(&temp,sizeof(double),1,OUTFILEVels);
             }
         }
@@ -1690,7 +1694,10 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
         for (int j=0; j<Ny; j++){
             for (int i=0; i<Nx; i++){
                 //fprintf(OUTFILEZ,"%f\n",Velocity_z(i, j, k));
-                temp = Velocity_z(i,j,k);
+                phiLoc = PhaseField(i,j,k);
+
+                    temp = Velocity_z(i,j,k);
+
                 fwrite(&temp,sizeof(double),1,OUTFILEVels);
             }
         }
