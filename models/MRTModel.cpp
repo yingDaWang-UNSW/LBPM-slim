@@ -306,10 +306,10 @@ void ScaLBL_MRTModel::Run(){
 	}
 
 	//.......create and start timer............
-	double starttime,stoptime,cputime;
+	double starttime,stoptime,cputime,deltatime,temptime;
 	ScaLBL_DeviceBarrier(); MPI_Barrier(comm);
 	starttime = MPI_Wtime();
-	
+	temptime = starttime;
 	if (rank==0) printf("No. of timesteps: %i , Boundary Condition: %i \n", timestepMax, BoundaryCondition);
 	if (rank==0) printf("********************************************************\n");
 	timestep=0;
@@ -498,16 +498,19 @@ void ScaLBL_MRTModel::Run(){
             double MLUPSGlob;
             double MLUPS;
             double flow_rate = sqrt(vax*vax+vay*vay+vaz*vaz);
-            if (std::isnan(flow_rate) || flow_rate == 0.0) {
-			    if (rank==0) printf("Nan/zero Flowrate detected, terminating simulation. \n");
+            if (std::isnan(flow_rate) || flow_rate == 0.0 || std::isnan(gradP)) {
+                if (rank==0) printf("Nan/zero Flowrate-Force detected, terminating simulation. \n");
                 break;
             }
         	stoptime = MPI_Wtime();
     		cputime = (stoptime - starttime);
+    		deltatime = stoptime - temptime;
+    		temptime = stoptime;
+    		
     		if (thermalFlag) {
-			    MLUPS =  double(Np)*2*timestep/cputime/1000000;
+			    MLUPS =  double(Np)*2*analysis_interval/deltatime/1000000;
 			} else {
-			    MLUPS =  double(Np)*timestep/cputime/1000000;
+			    MLUPS =  double(Np)*analysis_interval/deltatime/1000000;
 			}
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {

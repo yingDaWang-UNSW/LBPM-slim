@@ -597,10 +597,11 @@ void ScaLBL_ColorModel::Run(){
         fflush(stdout);
     }
     //.......create and start timer............
-    double starttime,stoptime,cputime;
+	double starttime,stoptime,cputime,deltatime,temptime;
     ScaLBL_DeviceBarrier();
     MPI_Barrier(Dm->Comm);
     starttime = MPI_Wtime();
+	temptime = starttime;
     //.........................................
     
     //************ MAIN ITERATION LOOP ***************************************/
@@ -702,8 +703,10 @@ void ScaLBL_ColorModel::Run(){
         // allow initial ramp-up to get closer to steady state
         if (timestep%analysis_interval == 0){
             steadycounter+=analysis_interval;
-            stoptime = MPI_Wtime();
-            cputime = (stoptime - starttime);
+        	stoptime = MPI_Wtime();
+    		cputime = (stoptime - starttime);
+    		deltatime = stoptime - temptime;
+    		temptime = stoptime;
             if (rank==0) {
                 printf("=================TimeStep: %d, Elapsed time = %f=================\n", timestep, cputime);
             }
@@ -995,10 +998,7 @@ void ScaLBL_ColorModel::Run(){
             if (volA_H+volB_H > 0.0){ // avoid 0/0 - which happens when both phases are disconnected (elongated samples/venturi samples)
                 current_saturation_H = volB_H/(volA_H+volB_H);
             }
-            if (std::isnan(flow_rate_B+flow_rate_A) || (flow_rate_B+flow_rate_A) == 0.0 || std::isnan(gradP)) {
-                if (rank==0) printf("Nan/zero Flowrate-Force detected, terminating simulation. \n");
-                break;
-            }
+
             // calculate the hydraulically connected capillary number if necessary...
 
             Ca_EMA = approxRollingAverage(Ca_EMA, Ca, timestep);
@@ -1012,7 +1012,7 @@ void ScaLBL_ColorModel::Run(){
             absperm2_H_EMA = approxRollingAverage(absperm2_H_EMA, absperm2_H, timestep);
             double MLUPSGlob = 0.;
             double MLUPS = 0.;
-            MLUPS =  double(Np)*timestep/cputime/1000000;
+		    MLUPS =  double(Np)*analysis_interval/deltatime/1000000;
             MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Dm->Comm); 
             //printf("Rank: %d, MLUPS: %f\n",rank, MLUPS);
             MPI_Barrier(Dm->Comm);
@@ -1027,6 +1027,11 @@ void ScaLBL_ColorModel::Run(){
                 }
             }
             MPI_Barrier(Dm->Comm);
+            
+            if (std::isnan(flow_rate_B+flow_rate_A) || (flow_rate_B+flow_rate_A) == 0.0 || std::isnan(gradP)) {
+                if (rank==0) printf("Nan/zero Flowrate-Force detected, terminating simulation. \n");
+                break;
+            }
             // rampup the component affinities - functionalise this for better code
             if (affinityRampupFlag && timestep < affinityRampSteps){
                 size_t NLABELS=0;
@@ -1102,20 +1107,22 @@ void ScaLBL_ColorModel::Run(){
                     if (autoMorphFlag) { //if automorph is active, reverse the morph direction, and reverse the force if thats an active flag
                         injectionType = fabs(injectionType-3); //1-2 switch
                         satInit=1.0-satInit;
-                        if (rank==0) printf("[AUTOMORPH], Flux reversal conditions have been met, the injection type has been switched to %d\n", injectionType);
-                    }
-                    if (fluxReversalType==1){
-                        inletA=fabs(inletA-1.0); //a is nwp
-                        inletB=fabs(inletB-1.0);
-                        outletA=fabs(outletA-1.0);
-                        outletB=fabs(outletB-1.0);
-                        if (rank==0) printf("Flux Reversal Type: Phases flipped\n");
-                    } else if (fluxReversalType==2){
-                        flux=flux*-1;
-                        Fx=Fx*-1;
-                        Fy=Fy*-1;
-                        Fz=Fz*-1;
-                        if (rank==0) printf("Flux Reversal Type: Flow direction flipped\n");
+                        if (rank==0) printf("[AUTOMORPH], Flux reversal conditions have been met, the morph direction has been switched to %d\n", injectionType);
+                        autoMorphAdapt=false;
+                    } else {
+                        if (fluxReversalType==1){
+                            inletA=fabs(inletA-1.0); //a is nwp
+                            inletB=fabs(inletB-1.0);
+                            outletA=fabs(outletA-1.0);
+                            outletB=fabs(outletB-1.0);
+                            if (rank==0) printf("Flux Reversal Type: Phases flipped\n");
+                        } else if (fluxReversalType==2){
+                            flux=flux*-1;
+                            Fx=Fx*-1;
+                            Fy=Fy*-1;
+                            Fz=Fz*-1;
+                            if (rank==0) printf("Flux Reversal Type: Flow direction flipped\n");
+                        }
                     }
                     if (rank==0 && current_saturation < fluxReversalSat) printf("Current Saturation of %f is less than the flux reversal saturation of %f. \nFluxes have been reversed. \nThis will not carry on to restart. \nPlease manually change the inputfile at end of simulation.\n", current_saturation, fluxReversalSat);
                     if (rank==0 && settlingParam < settlingTolerance) printf("Current Saturation of %f has reached steady state, so flux reversal has been activated. \nFluxes have been reversed. \nThis will not carry on to restart. \nPlease manually change the inputfile at end of simulation.\n", current_saturation);
@@ -1124,7 +1131,7 @@ void ScaLBL_ColorModel::Run(){
             }
             
             // adjust the force if capillary number is set
-            if (SET_CAPILLARY_NUMBER && !autoMorphAdapt && stabilityCounter <= 0 && !coinjectionFlag){ // activate if capillary number is specified, and/or during morph, only after acceleration is done - will be active during the rampup to initial morph
+            if (SET_CAPILLARY_NUMBER && autoMorphAdapt || timestep < ramp_timesteps){ // activate if capillary number is specified, and during morph - let the system relax after
                 // at each analysis step, 
                 if (Ca>0.f){
                     double caRatio = capillary_number / fabs(Ca); 
@@ -1713,7 +1720,7 @@ double ScaLBL_ColorModel::approxRollingAverage(double avg, double new_sample, in
 
     return avg;
 }
-
+// there is a memory corruption issue here....
 int ScaLBL_ColorModel::collateBoundaryBlobs(int *&inletNWPBlobsGlob, vector<int>inletNWPBlobsLoc) {
     int *recvcounts;
     recvcounts = (int *) malloc( nprocs * sizeof(int));
