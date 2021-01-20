@@ -101,7 +101,7 @@ void ScaLBL_MRTModel::ReadParams(string filename){
 		permTolerance = mrt_db->getScalar<double>( "permTolerance" );
 	}
 	if (mrt_db->keyExists( "velDeltaTrackingFlag" )){
-		permTolerance = mrt_db->getScalar<bool>( "velDeltaTrackingFlag" );
+		velDeltaTrackingFlag = mrt_db->getScalar<bool>( "velDeltaTrackingFlag" );
 	}
 	if (mrt_db->keyExists( "visTolerance" )){
 		visTolerance = mrt_db->getScalar<bool>( "visTolerance" );
@@ -448,7 +448,7 @@ void ScaLBL_MRTModel::Run(){
 			double meandeltavmagglob=0.f;
 			double deltavmag=0.f;
 			int count = 0;
-			int count glob=0;
+			int countglob=0;
 			vax_loc = vay_loc = vaz_loc = 0.f;
 			for (int k=1; k<Nz-1; k++){
 				for (int j=1; j<Ny-1; j++){
