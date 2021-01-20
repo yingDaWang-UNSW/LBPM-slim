@@ -71,20 +71,24 @@ public:
     IntArray Map;
     DoubleArray Geom;
     int *NeighborList;
+    
     double *fq;
-    double *cq; //concentration
     double *Velocity;
-    double *VelocityOld; //for pnmsaslbm
     double *Pressure;
-    double *Concentration;
+
     //Minkowski Morphology;
 	DoubleArray P;
     DoubleArray Velocity_x;
     DoubleArray Velocity_y;
     DoubleArray Velocity_z;
+    
+    double *VelocityOld; //for pnmsaslbm
     DoubleArray Velocity_x_old;
     DoubleArray Velocity_y_old;
     DoubleArray Velocity_z_old;
+    
+    double *cq; //concentration
+    double *Concentration;
     DoubleArray ConcentrationCart;
     DoubleArray fqTemp;
     

@@ -25,6 +25,7 @@ bool restartFq = false;
 bool bgkFlag = false;
 bool thermalFlag = false;
 //bool FDThermalFlag = false;
+bool velDeltaTrackingFlag = false;
 double permTolerance = 1e-5;
 bool visTolerance = true;
 bool logFile = true;
@@ -99,6 +100,9 @@ void ScaLBL_MRTModel::ReadParams(string filename){
 	if (mrt_db->keyExists( "permTolerance" )){
 		permTolerance = mrt_db->getScalar<double>( "permTolerance" );
 	}
+	if (mrt_db->keyExists( "velDeltaTrackingFlag" )){
+		permTolerance = mrt_db->getScalar<bool>( "velDeltaTrackingFlag" );
+	}
 	if (mrt_db->keyExists( "visTolerance" )){
 		visTolerance = mrt_db->getScalar<bool>( "visTolerance" );
 	}
@@ -142,14 +146,20 @@ void ScaLBL_MRTModel::SetDomain(){
 	Velocity_x.resize(Nx,Ny,Nz);
 	Velocity_y.resize(Nx,Ny,Nz);
 	Velocity_z.resize(Nx,Ny,Nz);
-	Velocity_x_old.resize(Nx,Ny,Nz);
-	Velocity_y_old.resize(Nx,Ny,Nz);
-	Velocity_z_old.resize(Nx,Ny,Nz);
     fqTemp.resize(Nx, Ny, Nz);
     P.resize(Nx, Ny, Nz);
+    
+	if (velDeltaTrackingFlag) {
+	    Velocity_x_old.resize(Nx,Ny,Nz);
+	    Velocity_y_old.resize(Nx,Ny,Nz);
+	    Velocity_z_old.resize(Nx,Ny,Nz);
+    }
 
-	if (thermalFlag) ConcentrationCart.resize(Nx,Ny,Nz);
-    if (rank == 0) cout << "Domain set." << endl;
+	if (thermalFlag) {
+	    ConcentrationCart.resize(Nx,Ny,Nz);
+    }
+    
+    if (rank == 0) cout << "Cartesian Memory Domain Set." << endl;
 	//for (int i=0; i<Nx*Ny*Nz; i++) Dm->id[i] = 1;               // initialize this way
 	//Averages = std::shared_ptr<TwoPhase> ( new TwoPhase(Dm) ); // TwoPhase analysis object
 //	MPI_Barrier(comm);
@@ -222,7 +232,9 @@ void ScaLBL_MRTModel::Create(){
 	ScaLBL_AllocateDeviceMemory((void **) &fq, 19*Np*sizeof(double));  
 	ScaLBL_AllocateDeviceMemory((void **) &Pressure, Np*sizeof(double));
 	ScaLBL_AllocateDeviceMemory((void **) &Velocity, 3*Np*sizeof(double));
-	ScaLBL_AllocateDeviceMemory((void **) &VelocityOld, 3*Np*sizeof(double));
+	if (velDeltaTrackingFlag) {
+	    ScaLBL_AllocateDeviceMemory((void **) &VelocityOld, 3*Np*sizeof(double));
+	}
 	if (thermalFlag) {
     	ScaLBL_AllocateDeviceMemory((void **) &cq, 19*Np*sizeof(double));  
 		ScaLBL_AllocateDeviceMemory((void **) &Concentration, Np*sizeof(double));  
@@ -280,11 +292,13 @@ void ScaLBL_MRTModel::Initialize(){
 	    ScaLBL_DeviceBarrier();
 	    MPI_Barrier(comm);
     }
+    if (velDeltaTrackingFlag) {
+		ScaLBL_D3Q19_Momentum(fq,VelocityOld,Np); //init old vel
+    }
     if (thermalFlag) {
         if (rank==0)    printf ("Initializing Lattice Boltzmann cq distribution and initial velocity field \n");
         ScaLBL_D3Q19_Init(cq, Np);
 		ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity (does velocity exist in odd time?)
-		ScaLBL_D3Q19_Momentum(fq,VelocityOld,Np); //get velocity (does velocity exist in odd time?)
 		// add option to read velocity fields in directly instead of from fq format
 		// add option to read in cq file or concentration file
     }
@@ -419,9 +433,11 @@ void ScaLBL_MRTModel::Run(){
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[0],Velocity_x);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],Velocity_y);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],Velocity_z);
-			ScaLBL_Comm->RegularLayout(Map,&VelocityOld[0],Velocity_x_old);
-			ScaLBL_Comm->RegularLayout(Map,&VelocityOld[Np],Velocity_y_old);
-			ScaLBL_Comm->RegularLayout(Map,&VelocityOld[2*Np],Velocity_z_old);
+			if (velDeltaTrackingFlag) {
+			    ScaLBL_Comm->RegularLayout(Map,&VelocityOld[0],Velocity_x_old);
+			    ScaLBL_Comm->RegularLayout(Map,&VelocityOld[Np],Velocity_y_old);
+			    ScaLBL_Comm->RegularLayout(Map,&VelocityOld[2*Np],Velocity_z_old);
+			}
 			double vax,vay,vaz;
 			double vax_loc,vay_loc,vaz_loc;
 			double vmag;
@@ -442,25 +458,30 @@ void ScaLBL_MRTModel::Run(){
 							vax_loc += Velocity_x(i,j,k);
 							vay_loc += Velocity_y(i,j,k);
 							vaz_loc += Velocity_z(i,j,k);
-							vmagold = sqrt(Velocity_x_old(i,j,k)*Velocity_x_old(i,j,k)+Velocity_y_old(i,j,k)*Velocity_y_old(i,j,k)+Velocity_z_old(i,j,k)*Velocity_z_old(i,j,k));
-							vmag = sqrt(Velocity_x(i,j,k)*Velocity_x(i,j,k)+Velocity_y(i,j,k)*Velocity_y(i,j,k)+Velocity_z(i,j,k)*Velocity_z(i,j,k));
-                            deltavmag = fabs(vmagold-vmag)/fabs(vmagold);
-                            if (deltavmag>maxdeltavmag) {
-                                maxdeltavmag = deltavmag;
+							if (velDeltaTrackingFlag) {
+							    vmagold = sqrt(Velocity_x_old(i,j,k)*Velocity_x_old(i,j,k)+Velocity_y_old(i,j,k)*Velocity_y_old(i,j,k)+Velocity_z_old(i,j,k)*Velocity_z_old(i,j,k));
+							    vmag = sqrt(Velocity_x(i,j,k)*Velocity_x(i,j,k)+Velocity_y(i,j,k)*Velocity_y(i,j,k)+Velocity_z(i,j,k)*Velocity_z(i,j,k));
+                                deltavmag = fabs(vmagold-vmag)/fabs(vmagold);
+                                if (deltavmag>maxdeltavmag) {
+                                    maxdeltavmag = deltavmag;
+                                }
+                                meandeltavmag=meandeltavmag+deltavmag;
                             }
-                            meandeltavmag=meandeltavmag+deltavmag;
 						}
 					}
 				}
 			}
-			ScaLBL_D3Q19_Momentum(fq,VelocityOld,Np);
+
 			MPI_Allreduce(&vax_loc,&vax,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			MPI_Allreduce(&vay_loc,&vay,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			MPI_Allreduce(&vaz_loc,&vaz,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			MPI_Allreduce(&maxdeltavmag,&maxdeltavmagglob,1,MPI_DOUBLE,MPI_MAX,Mask->Comm);
-			MPI_Allreduce(&meandeltavmag,&meandeltavmagglob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			MPI_Allreduce(&count,&countglob,1,MPI_INT,MPI_SUM,Mask->Comm);
-			meandeltavmagglob = meandeltavmagglob/countglob;
+			if (velDeltaTrackingFlag) {
+			    ScaLBL_D3Q19_Momentum(fq,VelocityOld,Np);
+			    MPI_Allreduce(&maxdeltavmag,&maxdeltavmagglob,1,MPI_DOUBLE,MPI_MAX,Mask->Comm);
+			    MPI_Allreduce(&meandeltavmag,&meandeltavmagglob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
+			    MPI_Allreduce(&count,&countglob,1,MPI_INT,MPI_SUM,Mask->Comm);
+			    meandeltavmagglob = meandeltavmagglob/countglob;
+			}
 			vax /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;;
 			vay /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;;
 			vaz /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;;
