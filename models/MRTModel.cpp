@@ -142,6 +142,9 @@ void ScaLBL_MRTModel::SetDomain(){
 	Velocity_x.resize(Nx,Ny,Nz);
 	Velocity_y.resize(Nx,Ny,Nz);
 	Velocity_z.resize(Nx,Ny,Nz);
+	Velocity_x_old.resize(Nx,Ny,Nz);
+	Velocity_y_old.resize(Nx,Ny,Nz);
+	Velocity_z_old.resize(Nx,Ny,Nz);
     fqTemp.resize(Nx, Ny, Nz);
     P.resize(Nx, Ny, Nz);
 
@@ -219,6 +222,7 @@ void ScaLBL_MRTModel::Create(){
 	ScaLBL_AllocateDeviceMemory((void **) &fq, 19*Np*sizeof(double));  
 	ScaLBL_AllocateDeviceMemory((void **) &Pressure, Np*sizeof(double));
 	ScaLBL_AllocateDeviceMemory((void **) &Velocity, 3*Np*sizeof(double));
+	ScaLBL_AllocateDeviceMemory((void **) &VelocityOld, 3*Np*sizeof(double));
 	if (thermalFlag) {
     	ScaLBL_AllocateDeviceMemory((void **) &cq, 19*Np*sizeof(double));  
 		ScaLBL_AllocateDeviceMemory((void **) &Concentration, Np*sizeof(double));  
@@ -280,6 +284,7 @@ void ScaLBL_MRTModel::Initialize(){
         if (rank==0)    printf ("Initializing Lattice Boltzmann cq distribution and initial velocity field \n");
         ScaLBL_D3Q19_Init(cq, Np);
 		ScaLBL_D3Q19_Momentum(fq,Velocity,Np); //get velocity (does velocity exist in odd time?)
+		ScaLBL_D3Q19_Momentum(fq,VelocityOld,Np); //get velocity (does velocity exist in odd time?)
 		// add option to read velocity fields in directly instead of from fq format
 		// add option to read in cq file or concentration file
     }
@@ -414,25 +419,48 @@ void ScaLBL_MRTModel::Run(){
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[0],Velocity_x);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],Velocity_y);
 			ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],Velocity_z);
+			ScaLBL_Comm->RegularLayout(Map,&VelocityOld[0],Velocity_x_old);
+			ScaLBL_Comm->RegularLayout(Map,&VelocityOld[Np],Velocity_y_old);
+			ScaLBL_Comm->RegularLayout(Map,&VelocityOld[2*Np],Velocity_z_old);
 			double vax,vay,vaz;
 			double vax_loc,vay_loc,vaz_loc;
+			double vmag;
+			double vmagold;
+			double maxdeltavmag=0.f;
+			double maxdeltavmagglob=0.f;
+			double meandeltavmag=0.f;
+			double meandeltavmagglob=0.f;
+			double deltavmag=0.f;
+			int count = 0;
+			int count glob=0;
 			vax_loc = vay_loc = vaz_loc = 0.f;
 			for (int k=1; k<Nz-1; k++){
 				for (int j=1; j<Ny-1; j++){
 					for (int i=1; i<Nx-1; i++){
 						if (Geom(i,j,k) > 0){
+						    count++;
 							vax_loc += Velocity_x(i,j,k);
 							vay_loc += Velocity_y(i,j,k);
 							vaz_loc += Velocity_z(i,j,k);
-
+							vmagold = sqrt(Velocity_x_old(i,j,k)*Velocity_x_old(i,j,k)+Velocity_y_old(i,j,k)*Velocity_y_old(i,j,k)+Velocity_z_old(i,j,k)*Velocity_z_old(i,j,k));
+							vmag = sqrt(Velocity_x(i,j,k)*Velocity_x(i,j,k)+Velocity_y(i,j,k)*Velocity_y(i,j,k)+Velocity_z(i,j,k)*Velocity_z(i,j,k));
+                            deltavmag = fabs(vmagold-vmag)/fabs(vmagold);
+                            if (deltavmag>maxdeltavmag) {
+                                maxdeltavmag = deltavmag;
+                            }
+                            meandeltavmag=meandeltavmag+deltavmag;
 						}
 					}
 				}
 			}
+			ScaLBL_D3Q19_Momentum(fq,VelocityOld,Np);
 			MPI_Allreduce(&vax_loc,&vax,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			MPI_Allreduce(&vay_loc,&vay,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			MPI_Allreduce(&vaz_loc,&vaz,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
-			
+			MPI_Allreduce(&maxdeltavmag,&maxdeltavmagglob,1,MPI_DOUBLE,MPI_MAX,Mask->Comm);
+			MPI_Allreduce(&meandeltavmag,&meandeltavmagglob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
+			MPI_Allreduce(&count,&countglob,1,MPI_INT,MPI_SUM,Mask->Comm);
+			meandeltavmagglob = meandeltavmagglob/countglob;
 			vax /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;;
 			vay /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;;
 			vaz /= (Nx-2)*(Ny-2)*(Nz-2)*nprocs;;
@@ -514,7 +542,7 @@ void ScaLBL_MRTModel::Run(){
 			}
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {
-				printf("Timestep: %d, MLUPS: %0.4f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt = %0.4e, gradP: %0.4e, fluxBar: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*(Nx-2)*(Ny-2)*(Nz-2)*nprocs/((Nz-2)*nprocz));
+				printf("Timestep: %d, MLUPS: %0.4f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt = %0.4e, gradP: %0.4e, fluxBar: %0.4e, maxDeltaVMag: %0.4e, meanDeltaVMag: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*(Nx-2)*(Ny-2)*(Nz-2)*nprocs/((Nz-2)*nprocz), maxdeltavmagglob, meandeltavmagglob);
 				if (logFile) {
 				    FILE * log_file = fopen("Permeability.csv","a");
 				    fprintf(log_file,"%i %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g\n",timestep, Fx, Fy, Fz, din, dout, mu, vax,vay,vaz, absperm);

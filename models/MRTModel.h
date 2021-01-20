@@ -74,6 +74,7 @@ public:
     double *fq;
     double *cq; //concentration
     double *Velocity;
+    double *VelocityOld; //for pnmsaslbm
     double *Pressure;
     double *Concentration;
     //Minkowski Morphology;
@@ -81,6 +82,9 @@ public:
     DoubleArray Velocity_x;
     DoubleArray Velocity_y;
     DoubleArray Velocity_z;
+    DoubleArray Velocity_x_old;
+    DoubleArray Velocity_y_old;
+    DoubleArray Velocity_z_old;
     DoubleArray ConcentrationCart;
     DoubleArray fqTemp;
     
