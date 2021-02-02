@@ -1333,6 +1333,12 @@ void ScaLBL_ColorModel::Run(){
                                 if (shellRadius < -1.f) shellRadius = -1.f;
                             }
                         }                        
+                        if (injectionType==1){
+                            if ((delta_volume-delta_volume_target) / delta_volume > 0.f){
+                                shellRadius *= 1.01*min((delta_volume - delta_volume_target) / delta_volume, 3.0);
+                                if (shellRadius > 2.f) shellRadius = 2.f;
+                            }
+                        }                        
                     }
                     MPI_Barrier(Dm->Comm);
                 }
@@ -1540,8 +1546,8 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
     } else {// YDW modification: use a simpler and more aggresive method for drainage
         for (int k=0; k<Nz; k++){
             for (int j=0; j<Ny; j++){
-                for (int i=0; i<Nx; i++){ // if the distance from the largest blob is within the morph delta, and the wall distance is larger than 1
-                    if (phase_distance(i,j,k) < morph_delta && phase_distance(i,j,k) > -morph_delta && Distance(i,j,k) > 1.f){
+                for (int i=0; i<Nx; i++){ // if the distance from the largest blob is within the morph delta, and the wall distance is larger than 0
+                    if (phase_distance(i,j,k) < morph_delta && phase_distance(i,j,k) > -morph_delta && Distance(i,j,k) > 0.f){
                         PhaseField(i,j,k) = 1.0*fabs(morph_delta)/morph_delta ; // relax and flip the value    
                     }
                                                         
