@@ -1673,49 +1673,49 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
     MPI_Barrier(Dm->Comm);
     
     
-    FILE *OUTFILEVels;
-    char LocalRankFilenameVels[100];
-    sprintf(LocalRankFilenameVels,"rawVis%d/Vel_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-    OUTFILEVels = fopen(LocalRankFilenameVels,"wb");
-    for (int k=0; k<Nz; k++){
-        for (int j=0; j<Ny; j++){
-            for (int i=0; i<Nx; i++){
-                //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
-                phiLoc = PhaseField(i,j,k);
+//    FILE *OUTFILEVels;
+//    char LocalRankFilenameVels[100];
+//    sprintf(LocalRankFilenameVels,"rawVis%d/Vel_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+//    OUTFILEVels = fopen(LocalRankFilenameVels,"wb");
+//    for (int k=0; k<Nz; k++){
+//        for (int j=0; j<Ny; j++){
+//            for (int i=0; i<Nx; i++){
+//                //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
+//                phiLoc = PhaseField(i,j,k);
 
-                    temp = Velocity_x(i,j,k);
+//                    temp = Velocity_x(i,j,k);
 
-                fwrite(&temp,sizeof(double),1,OUTFILEVels);
-            }
-        }
-    }
-    
-    for (int k=0; k<Nz; k++){
-        for (int j=0; j<Ny; j++){
-            for (int i=0; i<Nx; i++){
-                //fprintf(OUTFILEY,"%f\n",Velocity_y(i, j, k));
-                phiLoc = PhaseField(i,j,k);
+//                fwrite(&temp,sizeof(double),1,OUTFILEVels);
+//            }
+//        }
+//    }
+//    
+//    for (int k=0; k<Nz; k++){
+//        for (int j=0; j<Ny; j++){
+//            for (int i=0; i<Nx; i++){
+//                //fprintf(OUTFILEY,"%f\n",Velocity_y(i, j, k));
+//                phiLoc = PhaseField(i,j,k);
 
-                    temp = Velocity_y(i,j,k);
+//                    temp = Velocity_y(i,j,k);
 
-                fwrite(&temp,sizeof(double),1,OUTFILEVels);
-            }
-        }
-    }
-    
-    for (int k=0; k<Nz; k++){
-        for (int j=0; j<Ny; j++){
-            for (int i=0; i<Nx; i++){
-                //fprintf(OUTFILEZ,"%f\n",Velocity_z(i, j, k));
-                phiLoc = PhaseField(i,j,k);
+//                fwrite(&temp,sizeof(double),1,OUTFILEVels);
+//            }
+//        }
+//    }
+//    
+//    for (int k=0; k<Nz; k++){
+//        for (int j=0; j<Ny; j++){
+//            for (int i=0; i<Nx; i++){
+//                //fprintf(OUTFILEZ,"%f\n",Velocity_z(i, j, k));
+//                phiLoc = PhaseField(i,j,k);
 
-                    temp = Velocity_z(i,j,k);
+//                    temp = Velocity_z(i,j,k);
 
-                fwrite(&temp,sizeof(double),1,OUTFILEVels);
-            }
-        }
-    }
-    fclose(OUTFILEVels);
+//                fwrite(&temp,sizeof(double),1,OUTFILEVels);
+//            }
+//        }
+//    }
+//    fclose(OUTFILEVels);
     MPI_Barrier(Dm->Comm);
 }
 

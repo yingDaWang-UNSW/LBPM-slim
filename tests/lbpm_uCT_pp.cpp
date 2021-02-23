@@ -354,7 +354,7 @@ int main(int argc, char **argv)
         //create the file
         FILE *OUTFILE;
         char LocalRankFilenameSeg[100];
-        sprintf(LocalRankFilenameSeg,"segmented/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+        sprintf(LocalRankFilenameSeg,"segmented/seg_%d_%d_%d_%d_%d_%d_%d_%d.raw",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
         OUTFILE = fopen(LocalRankFilenameSeg,"wb");
 
         char temp;
@@ -383,7 +383,7 @@ int main(int argc, char **argv)
             //create the file
                 FILE *OUTFILE;
                 char LocalRankFilename[100];
-                sprintf(LocalRankFilename,"segResult/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                sprintf(LocalRankFilename,"segResult/seg_%d_%d_%d_%d_%d_%d_%d_%d.raw",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
                 OUTFILE = fopen(LocalRankFilename,"wb");
 
                 char temp;
@@ -404,7 +404,7 @@ int main(int argc, char **argv)
             //create the file
                 FILE *OUTFILE;
                 char LocalRankFilename[100];
-                sprintf(LocalRankFilename,"segResult/nlmf_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                sprintf(LocalRankFilename,"segResult/nlmf_%d_%d_%d_%d_%d_%d_%d_%d.raw",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
                 OUTFILE = fopen(LocalRankFilename,"wb");
 
                 float temp;
@@ -425,7 +425,7 @@ int main(int argc, char **argv)
             //create the file
                 FILE *OUTFILE;
                 char LocalRankFilename[100];
-                sprintf(LocalRankFilename,"segResult/dist_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                sprintf(LocalRankFilename,"segResult/dist_%d_%d_%d_%d_%d_%d_%d_%d.raw",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
                 OUTFILE = fopen(LocalRankFilename,"wb");
 
                 float temp;
@@ -446,7 +446,7 @@ int main(int argc, char **argv)
             //create the file
                 FILE *OUTFILE;
                 char LocalRankFilename[100];
-                sprintf(LocalRankFilename,"segResult/smooth_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                sprintf(LocalRankFilename,"segResult/smooth_%d_%d_%d_%d_%d_%d_%d_%d.raw",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
                 OUTFILE = fopen(LocalRankFilename,"wb");
 
                 float temp;
@@ -466,7 +466,7 @@ int main(int argc, char **argv)
             //create the file
                 FILE *OUTFILE;
                 char LocalRankFilename[100];
-                sprintf(LocalRankFilename,"segResult/locvol_%d_%d_%d_%d_%d_%d_%d_%d.txt",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                sprintf(LocalRankFilename,"segResult/locvol_%d_%d_%d_%d_%d_%d_%d_%d.raw",rank,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
                 OUTFILE = fopen(LocalRankFilename,"wb");
 
                 float temp;
@@ -484,6 +484,8 @@ int main(int argc, char **argv)
             }
             printf("Dump complete for rank %i\n",rank);
         }
+        
+        
                 //create the folder
         if (rank==0) {
             printf("Stitching segmented domain \n");
@@ -498,7 +500,7 @@ int main(int argc, char **argv)
                 //read the file
                 FILE *OUTFILE;
                 char LocalRankFilenameSeg2[100];
-                sprintf(LocalRankFilenameSeg2,"segmented/seg_%d_%d_%d_%d_%d_%d_%d_%d.txt",r,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
+                sprintf(LocalRankFilenameSeg2,"segmented/seg_%d_%d_%d_%d_%d_%d_%d_%d.raw",r,n,Nx[n]+2,Ny[n]+2,Nz[n]+2,nprocx,nprocy,nprocz); //change this file name to include the size
                 OUTFILE = fopen(LocalRankFilenameSeg2,"r");
                 char temp;
                 Array<char> segTemp(Nx[0]+2,Ny[0]+2,Nz[0]+2);
