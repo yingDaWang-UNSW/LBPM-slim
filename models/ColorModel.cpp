@@ -272,7 +272,7 @@ void ScaLBL_ColorModel::Create(){
     ScaLBL_AllocateDeviceMemory((void **) &Bq, 7*dist_mem_size);
     ScaLBL_AllocateDeviceMemory((void **) &Den, 2*dist_mem_size);
     ScaLBL_AllocateDeviceMemory((void **) &Phi, sizeof(double)*Nx*Ny*Nz);        
-    //ScaLBL_AllocateDeviceMemory((void **) &Pressure, sizeof(double)*Np);
+    ScaLBL_AllocateDeviceMemory((void **) &Pressure, sizeof(double)*Np);
     ScaLBL_AllocateDeviceMemory((void **) &Velocity, 3*dist_mem_size);
     //ScaLBL_AllocateDeviceMemory((void **) &ColorGrad, 3*dist_mem_size);
     //...........................................................................
@@ -402,7 +402,7 @@ void ScaLBL_ColorModel::Initialize(){
     }
 
 
-    
+    Pressure_Cart.resize(Nx,Ny,Nz);    
     Density_A_Cart.resize(Nx,Ny,Nz);
     Density_B_Cart.resize(Nx,Ny,Nz);
     Velocity_x.resize(Nx,Ny,Nz);
@@ -710,14 +710,15 @@ void ScaLBL_ColorModel::Run(){
             if (rank==0) {
                 printf("=================TimeStep: %d, Elapsed time = %f=================\n", timestep, cputime);
             }
-            //ScaLBL_D3Q19_Pressure(fq,Pressure,Np);
+            ScaLBL_D3Q19_Pressure(fq,Pressure,Np);
+            ScaLBL_Comm->RegularLayout(Map,&Pressure[0],Pressure_Cart);
             //ScaLBL_DeviceBarrier(); MPI_Barrier(Dm->Comm);
             // i think these can be done in vector layout?
             ScaLBL_Comm->RegularLayout(Map,&Velocity[0],Velocity_x);
             ScaLBL_Comm->RegularLayout(Map,&Velocity[Np],Velocity_y);
             ScaLBL_Comm->RegularLayout(Map,&Velocity[2*Np],Velocity_z);
-            ScaLBL_Comm->RegularLayout(Map,&Den[0],Density_A_Cart);
-            ScaLBL_Comm->RegularLayout(Map,&Den[Np],Density_B_Cart);
+//            ScaLBL_Comm->RegularLayout(Map,&Den[0],Density_A_Cart);
+//            ScaLBL_Comm->RegularLayout(Map,&Den[Np],Density_B_Cart);
             
             ScaLBL_CopyToHost(PhaseField.data(), Phi, N*sizeof(double));
             
@@ -751,6 +752,104 @@ void ScaLBL_ColorModel::Run(){
             double vax_loc_H, vay_loc_H, vaz_loc_H, vbx_loc_H, vby_loc_H, vbz_loc_H;
             vax_loc_H = vay_loc_H = vaz_loc_H = 0.f;
             vbx_loc_H = vby_loc_H = vbz_loc_H = 0.f;
+            
+            
+            // get the actual pressure difference, inlet and outlet flow rate
+            int kproc = Dm->kproc();
+            
+            double PinA, PinB;
+            double PoutA, PoutB;
+            double qinA,qinB;
+            double qoutA,qoutB;
+            
+            double PinALoc, PinBLoc;
+            double PoutALoc, PoutBLoc;
+            double qinALoc,qinBLoc;
+            double qoutALoc,qoutBLoc;
+            double countAInLoc = 0.;
+            double countBInLoc = 0.;
+            double countAOutLoc = 0.;
+            double countBOutLoc = 0.;
+            double countAIn = 0.;
+            double countBIn = 0.;
+            double countAOut = 0.;
+            double countBOut = 0.;
+            PinALoc = PinBLoc = PoutALoc = PoutBLoc = qinALoc = qinBLoc = qoutALoc = qoutBLoc = 0.f;
+            
+            if (kproc == 0){
+                // if inlet domain
+                int k=1;
+                for (int j=1;j<Ny-1;j++){
+                    for (int i=1;i<Nx-1;i++){
+                        int n = k*Nx*Ny+j*Nx+i;
+                        if (Distance(i,j,k) > 0){
+                            if (PhaseField(i,j,k)>interfaceThreshold){
+                                qinALoc += Velocity_z(i,j,k);
+                                PinALoc += Pressure_Cart(i,j,k);
+                                countAInLoc+=1.0;
+                            } else if (PhaseField(i,j,k)<-1*interfaceThreshold) {
+                                qinBLoc += Velocity_z(i,j,k);
+                                PinBLoc += Pressure_Cart(i,j,k);
+                                countBInLoc+=1.0;
+                            }
+                        }
+                    }                    
+                }
+            }    
+            //now check outlet domain
+            if (kproc == nprocz-1){
+                int k=Nz-2;
+                for (int j=1;j<Ny-1;j++){
+                    for (int i=1;i<Nx-1;i++){
+                        int n = k*Nx*Ny+j*Nx+i;
+                        if (Distance(i,j,k) > 0){
+                            if (PhaseField(i,j,k)>interfaceThreshold){
+                                qoutALoc += Velocity_z(i,j,k);
+                                PoutALoc += Pressure_Cart(i,j,k);
+                                countAOutLoc+=1.0;
+                            } else if (PhaseField(i,j,k)<-1*interfaceThreshold) {
+                                qoutBLoc += Velocity_z(i,j,k);
+                                PoutBLoc += Pressure_Cart(i,j,k);
+                                countBOutLoc+=1.0;
+                            }
+                        }
+                    }                    
+                }
+            }
+        
+            MPI_Barrier(Dm->Comm);
+            MPI_Allreduce(&qoutALoc,&qoutA,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            MPI_Allreduce(&qoutBLoc,&qoutB,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            MPI_Allreduce(&qinALoc,&qinA,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            MPI_Allreduce(&qinBLoc,&qinB,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            
+            MPI_Allreduce(&PoutALoc,&PoutA,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            MPI_Allreduce(&PoutBLoc,&PoutB,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            MPI_Allreduce(&PinALoc,&PinA,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            MPI_Allreduce(&PinBLoc,&PinB,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            
+            MPI_Allreduce(&countBOutLoc,&countBOut,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            MPI_Allreduce(&countAOutLoc,&countAOut,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            MPI_Allreduce(&countBInLoc,&countBIn,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+            MPI_Allreduce(&countAInLoc,&countAIn,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+
+            MPI_Barrier(Dm->Comm);
+            double internalDeltaP;
+            internalDeltaP = ((PinA+PinB)/(countAIn+countBIn) - (PoutA+PoutB)/(countAOut+countBOut))/((Nz-2)*nprocz);
+            PoutA /= countAOut;
+            PoutB /= countBOut;
+            PinA /= countAIn;
+            PinB /= countBIn;
+            qinA *= rhoA;
+            qinB *= rhoB;
+            qoutA *= rhoA;
+            qoutB *= rhoB;
+            double accumulation;
+            accumulation = (qinA + qinB - qoutA - qoutB)/(qinA + qinB) * 100;
+            if (rank==0) printf("Inlet Flow A|B: %e | %e, Outlet Flow A|B: %e | %e \n", qinA, qinB, qoutA, qoutB);
+            if (rank==0) printf("Inlet Pressure A|B: %e | %e, Outlet Pressure A|B: %e | %e \n", PinA, PinB, PoutA, PoutB);
+            if (rank==0) printf("Internal Pressure Gradient: %e, Accumulation Flux: %f% \n", internalDeltaP, accumulation);
+            
             if (BoundaryCondition == 0 && nprocs<8 && inletA+inletB+outletA+outletB == 0){ // 
                 // find the NWP blobs
                 ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,PhaseField,Distance,vF,vS,NWP_blob_label,Dm->Comm);
@@ -770,7 +869,7 @@ void ScaLBL_ColorModel::Run(){
                 if (rank==0) printf("Phase 1 Bodies: %d, Phase 2 Bodies: %d | ", numGlobNWPBlobs, numGlobWPBlobs);
                 // for each blob, check if it is hydraulically connected
                 // sweep the inlet and outlet ranks to see if a blob exists
-                int kproc = Dm->kproc();
+
                 vector<int> inletNWPBlobsLoc{-1,-2};
                 //vector<int> inletNWPBlobsGlob;
                 int *inletNWPBlobsGlob;
@@ -988,6 +1087,9 @@ void ScaLBL_ColorModel::Run(){
 
             //double Ca = fabs((1-current_saturation)*muA*flow_rate_A + current_saturation*muB*flow_rate_B)/(5.796*alpha);
             double gradP=force_magnitude+(din-dout)/((Nz-2)*nprocz)/3;
+            if (gradP==0){
+                gradP=internalDeltaP;
+            }
             double absperm1 = muA*flow_rate_A*9.87e11*voxelSize*voxelSize/gradP;
             double absperm2 = muB*flow_rate_B*9.87e11*voxelSize*voxelSize/gradP;
             double absperm1_H = muA*flow_rate_A_H*9.87e11*voxelSize*voxelSize/gradP;
@@ -1672,6 +1774,52 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
     fclose(OUTFILE);
     MPI_Barrier(Dm->Comm);
     
+    FILE *OUTFILEPress;
+    char LocalRankFilenameVels[100];
+    sprintf(LocalRankFilenameVels,"rawVis%d/Press_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+    OUTFILEPress = fopen(LocalRankFilenameVels,"wb");
+    for (int k=0; k<Nz; k++){
+        for (int j=0; j<Ny; j++){
+            for (int i=0; i<Nx; i++){
+                //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
+                //phiLoc = PhaseField(i,j,k);
+                temp = Pressure_Cart(i,j,k);
+                fwrite(&temp,sizeof(double),1,OUTFILEPress);
+            }
+        }
+    }
+    fclose(OUTFILEPress);
+
+//    FILE *OUTFILEDens;
+//    char LocalRankFilenameVels[100];
+//    sprintf(LocalRankFilenameVels,"rawVis%d/Den_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+//    OUTFILEDens = fopen(LocalRankFilenameVels,"wb");
+//    for (int k=0; k<Nz; k++){
+//        for (int j=0; j<Ny; j++){
+//            for (int i=0; i<Nx; i++){
+//                //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
+//                //phiLoc = PhaseField(i,j,k);
+
+//                    temp = Density_A_Cart(i,j,k);
+
+//                fwrite(&temp,sizeof(double),1,OUTFILEDens);
+//            }
+//        }
+//    }
+//    
+//    for (int k=0; k<Nz; k++){
+//        for (int j=0; j<Ny; j++){
+//            for (int i=0; i<Nx; i++){
+//                //fprintf(OUTFILEY,"%f\n",Velocity_y(i, j, k));
+//                //phiLoc = PhaseField(i,j,k);
+
+//                    temp = Density_B_Cart(i,j,k);
+
+//                fwrite(&temp,sizeof(double),1,OUTFILEDens);
+//            }
+//        }
+//    }
+//    fclose(OUTFILEDens);
     
 //    FILE *OUTFILEVels;
 //    char LocalRankFilenameVels[100];

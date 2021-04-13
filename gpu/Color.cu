@@ -60,7 +60,7 @@ __global__  void dvc_ScaLBL_Color_Init(char *ID, double *Den, double *Phi, doubl
 
 __global__  void dvc_ScaLBL_Color_BC(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np)
 {
-	int idx,n;
+	int idx,n,nm;
 	// Fill the outlet with component b
 	idx = blockIdx.x*blockDim.x + threadIdx.x;
 	if (idx < count){
@@ -68,9 +68,9 @@ __global__  void dvc_ScaLBL_Color_BC(int *list, int *Map, double *Phi, double *D
 		Den[n] = vA;
 		Den[Np+n] = vB;
 		
-		//nm = Map[n];
-		//Phi[nm] = (vA-vB)/(vA+vB);
-		Phi[n] = (vA-vB)/(vA+vB);
+		nm = Map[n];
+		Phi[nm] = (vA-vB)/(vA+vB);
+
 
 	}
 }

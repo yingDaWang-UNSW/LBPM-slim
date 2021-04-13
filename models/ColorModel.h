@@ -90,6 +90,7 @@ public:
 	double *Pressure;
 	// the cartesian arrays
     DoubleArray Distance;
+    DoubleArray Pressure_Cart;
     DoubleArray Density_A_Cart;
     DoubleArray Density_B_Cart;
     DoubleArray Velocity_x;
