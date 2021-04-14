@@ -597,7 +597,7 @@ void ScaLBL_ColorModel::Run(){
         fflush(stdout);
     }
     //.......create and start timer............
-	double starttime,stoptime,cputime,deltatime,temptime;
+	double starttime,stoptime,cputime,deltatime,temptime,analysistime;
     ScaLBL_DeviceBarrier();
     MPI_Barrier(Dm->Comm);
     starttime = MPI_Wtime();
@@ -1233,39 +1233,41 @@ void ScaLBL_ColorModel::Run(){
             }
             
             // adjust the force if capillary number is set
-            if (SET_CAPILLARY_NUMBER && autoMorphAdapt || timestep < ramp_timesteps){ // activate if capillary number is specified, and during morph - let the system relax after
-                // at each analysis step, 
-                if (Ca>0.f){
-                    double caRatio = capillary_number / fabs(Ca); 
-                    if (BoundaryCondition==0){
-                        Fx *= caRatio;
-                        Fy *= caRatio;
-                        Fz *= caRatio;
-                        force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
+            if (SET_CAPILLARY_NUMBER) {
+                if (autoMorphAdapt || timestep < ramp_timesteps){ // activate if capillary number is specified, and during morph - let the system relax after
+                    // at each analysis step, 
+                    if (Ca>0.f){
+                        double caRatio = capillary_number / fabs(Ca); 
+                        if (BoundaryCondition==0){
+                            Fx *= caRatio;
+                            Fy *= caRatio;
+                            Fz *= caRatio;
+                            force_magnitude = sqrt(Fx*Fx + Fy*Fy + Fz*Fz);
 
-                        if (force_magnitude > 1e-3){
-                            Fx *= 1e-3/force_magnitude;   // impose ceiling for stability
-                            Fy *= 1e-3/force_magnitude;
-                            Fz *= 1e-3/force_magnitude;
+                            if (force_magnitude > 1e-3){
+                                Fx *= 1e-3/force_magnitude;   // impose ceiling for stability
+                                Fy *= 1e-3/force_magnitude;
+                                Fz *= 1e-3/force_magnitude;
+                            }
+                            if (force_magnitude < 1e-6 && force_magnitude > 0){
+                                Fx *= 1e-6/force_magnitude;   // impose floor
+                                Fy *= 1e-6/force_magnitude;
+                                Fz *= 1e-6/force_magnitude;
+                            }
+                            if (rank == 0) printf("Adjusting force by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0),force_magnitude, Ca, capillary_number);
+                        } else if (BoundaryCondition ==4) {   
+                            flux *= min(max(0.5, caRatio), 2.0); //much more concise than if else bounding
+                            if (rank == 0) printf("Adjusting flux by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0), flux, Ca, capillary_number);
+                        } else if (BoundaryCondition ==3) {
+                            din = min(max(0.5, caRatio), 2.0)*(din - dout)+dout;
+                            if ((din-dout)/((Nz-2)*nprocz)/3 > 1e-3){
+                                din = 1e-3*3*((Nz-2)*nprocz)+dout;
+                            }
+                            if ((din-dout)/((Nz-2)*nprocz)/3 < 1e-6){
+                                din = 1e-6*3*((Nz-2)*nprocz)+dout;
+                            }
+                            if (rank == 0) printf("Adjusting gradP by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0), (din-dout)/((Nz-2)*nprocz)/3, Ca, capillary_number);
                         }
-                        if (force_magnitude < 1e-6 && force_magnitude > 0){
-                            Fx *= 1e-6/force_magnitude;   // impose floor
-                            Fy *= 1e-6/force_magnitude;
-                            Fz *= 1e-6/force_magnitude;
-                        }
-                        if (rank == 0) printf("Adjusting force by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0),force_magnitude, Ca, capillary_number);
-                    } else if (BoundaryCondition ==4) {   
-                        flux *= min(max(0.5, caRatio), 2.0); //much more concise than if else bounding
-                        if (rank == 0) printf("Adjusting flux by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0), flux, Ca, capillary_number);
-                    } else if (BoundaryCondition ==3) {
-                        din = min(max(0.5, caRatio), 2.0)*(din - dout)+dout;
-                        if ((din-dout)/((Nz-2)*nprocz)/3 > 1e-3){
-                            din = 1e-3*3*((Nz-2)*nprocz)+dout;
-                        }
-                        if ((din-dout)/((Nz-2)*nprocz)/3 < 1e-6){
-                            din = 1e-6*3*((Nz-2)*nprocz)+dout;
-                        }
-                        if (rank == 0) printf("Adjusting gradP by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0), (din-dout)/((Nz-2)*nprocz)/3, Ca, capillary_number);
                     }
                 }
             }
@@ -1446,6 +1448,11 @@ void ScaLBL_ColorModel::Run(){
                 }
                 accelerationCounter += analysis_interval; //increment the acceleration
             }
+        	analysistime = MPI_Wtime();
+        	analysistime = analysistime - stoptime;
+        	float analysisRatio;
+        	analysisRatio = analysistime/deltatime*100;
+            if (rank==0) printf("Analysis Overhead: %.2f %\n",analysisRatio);
         }
     }
     //analysis.finish();
