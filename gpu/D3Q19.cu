@@ -16,7 +16,7 @@
 #include <stdio.h>
 #include <cooperative_groups.h>
 
-#define NBLOCKS 1024
+#define NBLOCKS 8192
 #define NTHREADS 256
 
 /*

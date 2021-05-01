@@ -1258,6 +1258,7 @@ void ScaLBL_ColorModel::Run(){
                         } else if (BoundaryCondition ==4) {   
                             flux *= min(max(0.5, caRatio), 2.0); //much more concise than if else bounding
                             if (rank == 0) printf("Adjusting flux by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0), flux, Ca, capillary_number);
+                            // should have upper and lower limits here as well - but they need calculation of din
                         } else if (BoundaryCondition ==3) {
                             din = min(max(0.5, caRatio), 2.0)*(din - dout)+dout;
                             if ((din-dout)/((Nz-2)*nprocz)/3 > 1e-3){
@@ -1369,7 +1370,7 @@ void ScaLBL_ColorModel::Run(){
                             volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
                             volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
                             FILE * kr_log_file = fopen("relperm.csv","a");
-                            fprintf(kr_log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g ",timestep,muA,muB,alpha,Fx,Fy,Fz);
+                            fprintf(kr_log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g",timestep,muA,muB,alpha,Fx,Fy,Fz,Ca,Ca1,Ca2);
                             fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,inletA,inletB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2,absperm1_EMA,absperm2_EMA,current_saturation_H,absperm1_H,absperm2_H,absperm1_H_EMA,absperm2_H_EMA);
                             fclose(kr_log_file);
                             absperm1_old = absperm1;

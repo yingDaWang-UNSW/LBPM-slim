@@ -15,8 +15,8 @@
 */
 // GPU Functions for D3Q7 Lattice Boltzmann Methods
 
-#define NBLOCKS 560
-#define NTHREADS 128
+#define NBLOCKS 8192
+#define NTHREADS 256
 
 __global__  void dvc_ScaLBL_Scalar_Pack(int *list, int count, double *sendbuf, double *Data, int N){
 	//....................................................................................

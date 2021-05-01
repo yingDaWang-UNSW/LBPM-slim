@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <cuda_profiler_api.h>
 
-#define NBLOCKS 1024
+#define NBLOCKS 8192
 #define NTHREADS 256
 
 __global__  void dvc_ScaLBL_Color_Init(char *ID, double *Den, double *Phi, double das, double dbs, int Nx, int Ny, int Nz)

@@ -16,7 +16,7 @@
 //  Copyright 2020 Ying Da Wang, BGK needed to be fixed
 #include <stdio.h>
 
-#define NBLOCKS 1024
+#define NBLOCKS 8192
 #define NTHREADS 256
 
 __global__ void dvc_ScaLBL_D3Q19_AAeven_BGK(double *dist, int start, int finish, int Np, double rlx, double Fx, double Fy, double Fz){
