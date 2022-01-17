@@ -434,6 +434,8 @@ void ScaLBL_ColorModel::Run(){
     const RankInfoStruct rank_info(rank,nprocx,nprocy,nprocz);
     // raw visualisations
     int visualisation_interval=0;
+    double sat_visualisation_interval=0;
+    double prevSatVis=-1;
     // manual morph parameters
     bool SET_CAPILLARY_NUMBER = false;
     bool logFile = false;
@@ -587,12 +589,25 @@ void ScaLBL_ColorModel::Run(){
     else{
         visualisation_interval = 1e10;
     }
+    if (analysis_db->keyExists( "satVisInterval" )){
+        sat_visualisation_interval = analysis_db->getScalar<double>( "satVisInterval" );
+        if (injectionType==1) prevSatVis=1;
+        if (injectionType==2) prevSatVis=0;
+        
+    }
+    else{
+        sat_visualisation_interval = 0;
+    }
     
     if (rank==0){
         printf("********************************************************\n");
         printf("No. of timesteps: %i \n", timestepMax);
         if (autoMorphFlag){
-            printf("[Colour Model], Morphological Adaptation is Active. Ramp-up before Morphological Adaptation: %i \n", ramp_timesteps);
+            if (injectionType==1) {
+                printf("[Colour Model], Morphological Drainage (Phase 1 (+1)) Adaptation is Active. Ramp-up before Morphological Adaptation: %i \n", ramp_timesteps);
+            } else if (injectionType==2) {
+                printf("[Colour Model], Morphological Imbibition (Phase 2 (-1)) Adaptation is Active. Ramp-up before Morphological Adaptation: %i \n", ramp_timesteps);
+            } 
         }
         fflush(stdout);
     }
@@ -701,7 +716,7 @@ void ScaLBL_ColorModel::Run(){
        
         // analysis intervals
         // allow initial ramp-up to get closer to steady state
-        if (timestep%analysis_interval == 0){
+        if (timestep%analysis_interval == 0 || timestep ==2){
             steadycounter+=analysis_interval;
         	stoptime = MPI_Wtime();
     		cputime = (stoptime - starttime);
@@ -1134,6 +1149,19 @@ void ScaLBL_ColorModel::Run(){
                 if (rank==0) printf("Nan/zero Flowrate-Force detected, terminating simulation. \n");
                 break;
             }
+            
+            if (sat_visualisation_interval>0) {
+                if (injectionType==1 && prevSatVis>current_saturation+sat_visualisation_interval) {
+                    if (rank == 0) printf("Writing visualisation at Sat = %f from %f\n",current_saturation, prevSatVis);
+                    prevSatVis=current_saturation;
+                    WriteDebugYDW();
+                }
+                if (injectionType==2 && prevSatVis<current_saturation-sat_visualisation_interval) {
+                    if (rank == 0) printf("Writing visualisation at Sat = %f from %f\n",current_saturation, prevSatVis);
+                    prevSatVis=current_saturation;
+                    WriteDebugYDW();
+                }
+            }
             // rampup the component affinities - functionalise this for better code
             if (affinityRampupFlag && timestep < affinityRampSteps){
                 size_t NLABELS=0;
@@ -1254,10 +1282,10 @@ void ScaLBL_ColorModel::Run(){
                                 Fy *= 1e-6/force_magnitude;
                                 Fz *= 1e-6/force_magnitude;
                             }
-                            if (rank == 0) printf("Adjusting force by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0),force_magnitude, Ca, capillary_number);
+                            if (rank == 0) printf("Adjusting force by factor %f to %e, Nca = %e, Target: %e \n",min(max(0.5, caRatio), 2.0),force_magnitude, Ca, capillary_number);
                         } else if (BoundaryCondition ==4) {   
                             flux *= min(max(0.5, caRatio), 2.0); //much more concise than if else bounding
-                            if (rank == 0) printf("Adjusting flux by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0), flux, Ca, capillary_number);
+                            if (rank == 0) printf("Adjusting flux by factor %f to %e, Nca = %e, Target: %e \n",min(max(0.5, caRatio), 2.0), flux, Ca, capillary_number);
                             // should have upper and lower limits here as well - but they need calculation of din
                         } else if (BoundaryCondition ==3) {
                             din = min(max(0.5, caRatio), 2.0)*(din - dout)+dout;
@@ -1267,7 +1295,7 @@ void ScaLBL_ColorModel::Run(){
                             if ((din-dout)/((Nz-2)*nprocz)/3 < 1e-6){
                                 din = 1e-6*3*((Nz-2)*nprocz)+dout;
                             }
-                            if (rank == 0) printf("Adjusting gradP by factor %f to %e, Nca = %e, Target: %e \n ",min(max(0.5, caRatio), 2.0), (din-dout)/((Nz-2)*nprocz)/3, Ca, capillary_number);
+                            if (rank == 0) printf("Adjusting gradP by factor %f to %e, Nca = %e, Target: %e \n",min(max(0.5, caRatio), 2.0), (din-dout)/((Nz-2)*nprocz)/3, Ca, capillary_number);
                         }
                     }
                 }
@@ -1441,7 +1469,7 @@ void ScaLBL_ColorModel::Run(){
                         if (injectionType==1){
                             if ((delta_volume-delta_volume_target) / delta_volume > 0.f){
                                 shellRadius *= 1.01*min((delta_volume - delta_volume_target) / delta_volume, 3.0);
-                                if (shellRadius > 2.f) shellRadius = 2.f;
+                                if (shellRadius > 1.f) shellRadius = 1.f;
                             }
                         }                        
                     }
@@ -1571,7 +1599,7 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
 
     double vF = 0.f;
     double vS = 0.f;
-
+    double morphSign=1.0;
     IntArray phase_label(Nx,Ny,Nz);;
     DoubleArray phase_distance(Nx,Ny,Nz);
     Array<char> phase_id(Nx,Ny,Nz);
@@ -1579,7 +1607,10 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
     // Basic algorithm to 
     // 1. Copy phase field to CPU
     ScaLBL_CopyToHost(PhaseField.data(), Phi, N*sizeof(double));
-
+    if (morph_delta>0.0) { // YDW modification: FLIP PHASE FIELD FOR DRAINAGE
+        PhaseField.scale(-1);
+        morphSign=-1;
+    }
     double count,count_global,volume_initial,volume_final;
     count = 0.f;
     for (int k=0; k<Nz; k++){
@@ -1608,63 +1639,51 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
     }    
     // 3. Generate a distance map to the largest object -> phase_distance
     CalcDist(phase_distance,phase_id,*Dm);
-    if (morph_delta<0.0) { // YDW modification: only do this for imbibition
-        double temp,value;
-        double factor=0.5/beta;
-        for (int k=0; k<Nz; k++){
-            for (int j=0; j<Ny; j++){
-                for (int i=0; i<Nx; i++){
-                    if (phase_distance(i,j,k) < 3.f ){ //for voxels near the blob, define the distance using a diffuse interface value
-                        value = PhaseField(i,j,k);
-                        if (value > 1.f)   value=1.f;
-                        if (value < -1.f)  value=-1.f;
-                        // temp -- distance based on analytical form McClure, Prins et al, Comp. Phys. Comm.
-                        temp = -factor*log((1.0+value)/(1.0-value));
-                        /// use this approximation close to the object
-                        if (fabs(value) < 0.8 && Distance(i,j,k) > 1.f ){
-                            phase_distance(i,j,k) = temp;
-                        }
+
+    double temp,value;
+    double factor=0.5/beta;
+    for (int k=0; k<Nz; k++){
+        for (int j=0; j<Ny; j++){
+            for (int i=0; i<Nx; i++){
+                if (phase_distance(i,j,k) < 3.f ){ //for voxels near the blob, define the distance using a diffuse interface value
+                    value = PhaseField(i,j,k);
+                    if (value > 1.f)   value=1.f;
+                    if (value < -1.f)  value=-1.f;
+                    // temp -- distance based on analytical form McClure, Prins et al, Comp. Phys. Comm.
+                    temp = -factor*log((1.0+value)/(1.0-value));
+                    /// use this approximation close to the object
+                    if (fabs(value) < 0.8 && Distance(i,j,k) > 1.f ){
+                        phase_distance(i,j,k) = temp;
                     }
-                }
-            }
-        }
-        // 4. Apply erosion / dilation operation to phase_distance
-        for (int k=0; k<Nz; k++){
-            for (int j=0; j<Ny; j++){
-                for (int i=0; i<Nx; i++){
-                    double walldist=Distance(i,j,k);
-                    double wallweight = 1.f / (1+exp(-5.f*(walldist-1.f))); 
-                    phase_distance(i,j,k) -= wallweight*morph_delta;
-                }
-            }
-        }
-        // 5. Update phase indicator field based on new distnace
-        for (int k=0; k<Nz; k++){
-            for (int j=0; j<Ny; j++){
-                for (int i=0; i<Nx; i++){
-                    int n = k*Nx*Ny + j*Nx + i;
-                    double d = phase_distance(i,j,k);
-                    if (Distance(i,j,k) > 0.f){
-                        // only update phase field in immediate proximity of largest component
-                        if (d < 3.f){
-                            PhaseField(i,j,k) = (2.f*(exp(-2.f*beta*d))/(1.f+exp(-2.f*beta*d))-1.f);
-                        }
-                    }
-                } 
-            }
-        }
-    } else {// YDW modification: use a simpler and more aggresive method for drainage
-        for (int k=0; k<Nz; k++){
-            for (int j=0; j<Ny; j++){
-                for (int i=0; i<Nx; i++){ // if the distance from the largest blob is within the morph delta, and the wall distance is larger than 0
-                    if (phase_distance(i,j,k) < morph_delta && phase_distance(i,j,k) > -morph_delta && Distance(i,j,k) > 0.f){
-                        PhaseField(i,j,k) = 1.0*fabs(morph_delta)/morph_delta ; // relax and flip the value    
-                    }
-                                                        
                 }
             }
         }
     }
+    // 4. Apply erosion / dilation operation to phase_distance
+    for (int k=0; k<Nz; k++){
+        for (int j=0; j<Ny; j++){
+            for (int i=0; i<Nx; i++){
+                double walldist=Distance(i,j,k);
+                double wallweight = 1.f / (1+exp(-5.f*(walldist-1.f))); 
+                phase_distance(i,j,k) -= wallweight*morph_delta*morphSign;
+            }
+        }
+    }
+    // 5. Update phase indicator field based on new distnace
+    for (int k=0; k<Nz; k++){
+        for (int j=0; j<Ny; j++){
+            for (int i=0; i<Nx; i++){
+                int n = k*Nx*Ny + j*Nx + i;
+                double d = phase_distance(i,j,k);
+                if (Distance(i,j,k) > 0.f){
+                    // only update phase field in immediate proximity of largest component
+                    if (d < 3.f){
+                        PhaseField(i,j,k) = (2.f*(exp(-2.f*beta*d))/(1.f+exp(-2.f*beta*d))-1.f);
+                    }
+                }
+            } 
+        }
+    } 
     count = 0.f;
     for (int k=0; k<Nz; k++){
         for (int j=0; j<Ny; j++){
@@ -1677,6 +1696,10 @@ double ScaLBL_ColorModel::MorphInit(const double beta, const double morph_delta)
     volume_final=count_global;
 
     double delta_volume = (volume_final-volume_initial);
+    if (morph_delta>0.0) { // YDW modification: FLIP PHASE FIELD FOR DRAINAGE
+        PhaseField.scale(-1);
+        delta_volume=delta_volume*-1;
+    }
     if (rank == 0)  printf("MorphInit: change fluid volume fraction by %f% with shell radius %f \n", delta_volume/volume_initial*100,morph_delta);
 
     // 6. copy back to the device
@@ -1782,21 +1805,21 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
     fclose(OUTFILE);
     MPI_Barrier(Dm->Comm);
     
-    FILE *OUTFILEPress;
-    char LocalRankFilenameVels[100];
-    sprintf(LocalRankFilenameVels,"rawVis%d/Press_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-    OUTFILEPress = fopen(LocalRankFilenameVels,"wb");
-    for (int k=0; k<Nz; k++){
-        for (int j=0; j<Ny; j++){
-            for (int i=0; i<Nx; i++){
-                //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
-                //phiLoc = PhaseField(i,j,k);
-                temp = Pressure_Cart(i,j,k);
-                fwrite(&temp,sizeof(double),1,OUTFILEPress);
-            }
-        }
-    }
-    fclose(OUTFILEPress);
+//    FILE *OUTFILEPress;
+//    char LocalRankFilenameVels[100];
+//    sprintf(LocalRankFilenameVels,"rawVis%d/Press_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+//    OUTFILEPress = fopen(LocalRankFilenameVels,"wb");
+//    for (int k=0; k<Nz; k++){
+//        for (int j=0; j<Ny; j++){
+//            for (int i=0; i<Nx; i++){
+//                //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
+//                //phiLoc = PhaseField(i,j,k);
+//                temp = Pressure_Cart(i,j,k);
+//                fwrite(&temp,sizeof(double),1,OUTFILEPress);
+//            }
+//        }
+//    }
+//    fclose(OUTFILEPress);
 
 //    FILE *OUTFILEDens;
 //    char LocalRankFilenameVels[100];
@@ -1872,7 +1895,7 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
 //        }
 //    }
 //    fclose(OUTFILEVels);
-    MPI_Barrier(Dm->Comm);
+//    MPI_Barrier(Dm->Comm);
 }
 
 double ScaLBL_ColorModel::approxRollingAverage(double avg, double new_sample, int timestep) {

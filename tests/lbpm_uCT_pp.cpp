@@ -207,14 +207,15 @@ int main(int argc, char **argv)
         for (int k=0;k<Nz[0]+2;k++) {
             for (int j=0;j<Ny[0]+2;j++) {
                 for (int i=0;i<Nx[0]+2;i++) {
-                  //float x= float(Dm[0]->iproc()*Nx[0]+i-1);
+                  float x= float(Dm[0]->iproc()*Nx[0]+i-1);
                   float y= float (Dm[0]->jproc()*Ny[0]+j-1);
                   float z= float(Dm[0]->kproc()*Nz[0]+k-1);
-                  //float cx = float(center[0] - offset[0]);
+                  float cx = float(center[0] - offset[0]);
                   float cy = float(center[1] - offset[1]);
                   float cz = float(center[2] - offset[2]);
                     // distance from the center line 
-                    MASK(i,j,k) = sqrt((z-cz)*(z-cz) + (y-cy)*(y-cy));
+                    MASK(i,j,k) = sqrt((x-cx)*(x-cx) + (y-cy)*(y-cy));
+                    //MASK(i,j,k) = sqrt((z-cz)*(z-cz) + (y-cy)*(y-cy));
                     //if (sqrt(((z-cz)*(z-cz) + (y-cy)*(y-cy)) ) > CylRad) LOCVOL[0](i,j,k)=background;
                 }
             }

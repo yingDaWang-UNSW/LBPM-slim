@@ -44,6 +44,7 @@ void Med3D( const Array<float> &Input, Array<float> &Output );
  */
 int NLM3D( const Array<float> &Input, Array<float> &Mean, 
     const Array<float> &Distance, Array<float> &Output, const int d, const float h);
+    
 
 
 #endif

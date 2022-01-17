@@ -12,8 +12,9 @@ cd $LBPM_DIR
 # configure
 rm -rf CMake*
 cmake                                    \
-    -D CMAKE_BUILD_TYPE:STRING=Release    \
+    -D CMAKE_BUILD_TYPE:STRING=Debug    \
     -D CMAKE_CXX_COMPILER:PATH=mpicxx        \
+    -D CMAKE_CXX_FLAGS="-O3 -fPIC" \
     -D USE_MPI=1            \
     $LBPM_SOURCE
 

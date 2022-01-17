@@ -1,6 +1,6 @@
 
 #load the module for cmake
-export LBPM_SOURCE="/home/user/LBPMYDW/LBPM-slim/"
+export LBPM_SOURCE="/home/user/Insync/sourceCodes/LBPM-slim/"
 export LBPM_DIR="/home/user/LBPMYDW/lbpmSlimBuild"
 
 mkdir $LBPM_DIR
@@ -10,6 +10,7 @@ rm -rf CMake*
 cmake                                    \
     -D CMAKE_BUILD_TYPE:STRING=Release    \
     -D CMAKE_CXX_COMPILER:PATH=mpicxx        \
+    -D CMAKE_CXX_FLAGS="-O3 -fPIC" \
     -D USE_MPI=1            \
     $LBPM_SOURCE
 

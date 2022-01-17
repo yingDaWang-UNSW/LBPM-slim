@@ -7,6 +7,7 @@ ADD_LBPM_EXECUTABLE( lbpm_serial_decomp )
 ADD_LBPM_EXECUTABLE( lbpm_serial_uCT_decomp )
 ADD_LBPM_EXECUTABLE( lbpm_morphopen_pp )
 ADD_LBPM_EXECUTABLE( lbpm_uCT_pp )
+ADD_LBPM_EXECUTABLE( lbpm_NLMF_pp )
 ADD_LBPM_EXECUTABLE( checkGPUs )
 # Add the tests
 ADD_LBPM_TEST( TestFluxBC )
