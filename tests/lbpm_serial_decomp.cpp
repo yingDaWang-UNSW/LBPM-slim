@@ -12,7 +12,7 @@
 #include <sstream>
 #include "common/Array.h"
 #include "common/Domain.h"
-
+#include <inttypes.h>
 int main(int argc, char **argv)
 {
 
@@ -48,8 +48,8 @@ int main(int argc, char **argv)
 	// Reading the domain information file
 	//.......................................................................
 	int nprocs, nprocx, nprocy, nprocz, nx, ny, nz, nspheres;
-	double Lx, Ly, Lz;
-	int64_t Nx,Ny,Nz;
+	double Lx, Ly, Lz; 
+	int64_t Nx,Ny,Nz; //domain counting must be 64bit = indexes commonly exceed 2 billion
 	int64_t i,j,k,n;
 	int BC=0;
 	int64_t xStart,yStart,zStart;
@@ -147,7 +147,7 @@ int main(int argc, char **argv)
 	char *loc_id;
 	loc_id = new char [(nx+2)*(ny+2)*(nz+2)];
 
-	std::vector<int> LabelCount(ReadValues.size(),0);
+	std::vector<int64_t> LabelCount(ReadValues.size(),0);
 	// Set up the sub-domains
 	if (rank==0){
 		printf("Distributing subdomains across %i processors \n",nprocs);
@@ -228,8 +228,8 @@ int main(int argc, char **argv)
 	}
 	for (int idx=0; idx<ReadValues.size(); idx++){
 		char label=ReadValues[idx];
-		int count=LabelCount[idx];
-		printf("Label=%d, Count=%d \n",label,count);
+		int64_t count=LabelCount[idx];
+		printf("Label=%d, Count=%" PRId64 "\n",label,count);
 	}
 
 }

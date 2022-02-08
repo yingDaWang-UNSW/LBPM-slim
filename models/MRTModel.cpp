@@ -277,10 +277,10 @@ void ScaLBL_MRTModel::Initialize(){
 		        for (int j=0; j<Ny; j++){
 			        for (int i=0; i<Nx; i++){
                         //fscanf(OUTFILE,"%f\n",&locFq); //scan the value
-        	            fread(&locFq,sizeof(double),1,OUTFILE);
                         idx = Map(i,j,k);
                         if (idx >= 0) {
-                            // if in Np, save the value into dist
+                            // if in Np, read and save the value into dist
+        	                fread(&locFq,sizeof(double),1,OUTFILE);
                             mrtDist[d*Np+idx]=locFq;
                         }
 			        }

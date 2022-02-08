@@ -83,13 +83,18 @@ public:
     char *id;    
 	int *NeighborList;
 	int *dvcMap;
+	int *surfaceBCInds;
+	double *surfaceBCValsA;
+	double *surfaceBCValsB;
 	double *fq, *Aq, *Bq;
 	double *Den, *Phi;
 	double *ColorGrad;
 	double *Velocity;
 	double *Pressure;
+	
 	// the cartesian arrays
     DoubleArray Distance;
+    DoubleArray DistanceLabelBCs;
     DoubleArray Pressure_Cart;
     DoubleArray Density_A_Cart;
     DoubleArray Density_B_Cart;
@@ -113,6 +118,7 @@ private:
     //int rank,nprocs;
     void LoadParams(std::shared_ptr<Database> db0);
     void AssignComponentLabels(double *phase);
+    int IndexSurfaceBoundaries(int *surfaceInds);
     double MorphInit(const double beta, const double morph_delta);
     double SpinoInit(const double delta_sw);
 };

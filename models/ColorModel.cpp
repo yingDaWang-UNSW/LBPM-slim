@@ -23,6 +23,8 @@ color lattice boltzmann model
 #include <sys/stat.h>
 #include <bits/stdc++.h> 
 #include <algorithm>
+bool labelBCsFlag=false;
+int surfBCCount=0;
 using namespace std;
 ScaLBL_ColorModel::ScaLBL_ColorModel(int RANK, int NP, MPI_Comm COMM):
 rank(RANK), nprocs(NP),  Restart(0),timestep(0),timestepMax(0),tauA(0),tauB(0),rhoA(0),rhoB(0),alpha(0),beta(0),
@@ -85,6 +87,7 @@ void ScaLBL_ColorModel::ReadParams(string filename){
     else{
         outletB=1.0;
     }
+    
     // Read domain parameters
     auto L = domain_db->getVector<double>( "L" );
     auto size = domain_db->getVector<int>( "n" );
@@ -142,23 +145,156 @@ void ScaLBL_ColorModel::ReadInput(){
             }
         }
     }
-    // Initialize the signed distance function
-    for (int k=0;k<Nz;k++){
-        for (int j=0;j<Ny;j++){
-            for (int i=0;i<Nx;i++){
-                int n=k*Nx*Ny+j*Nx+i;
-                // Initialize distance to +/- 1
-                Distance(i,j,k) = 2.0*double(id_solid(i,j,k))-1.0;
-            }
-        }
-    }
-//    MeanFilter(Averages->SDs);
+
     if (rank==0) printf("Initialized solid phase -- Converting to Signed Distance function \n");
     CalcDist(Distance,id_solid,*Dm);
     
     if (rank == 0) cout << "Domain set." << endl;
     
     //Averages->SetParams(rhoA,rhoB,tauA,tauB,Fx,Fy,Fz,alpha);
+}
+
+int ScaLBL_ColorModel::IndexSurfaceBoundaries(int *surfaceInds)
+{
+    auto labelBCs = color_db->getVector<int>( "labelBCs" );
+    auto labelBCValsA = color_db->getVector<double>( "labelBCValsA" );    
+    auto labelBCValsB = color_db->getVector<double>( "labelBCValsB" );    
+    vector<int> counts;
+    vector<int> startInds;
+    int totSurfVoxels=0;
+    DistanceLabelBCs.resize(Nx,Ny,Nz);
+
+    size_t NLABELS=labelBCs.size();
+    printf("[DEBUG] --rank=%d, Entered Function\n",rank); 
+    for (int k=1;k<Nz-1;k++){
+        for (int j=1;j<Ny-1;j++){
+            for (int i=1;i<Nx-1;i++){
+                int n = k*Nx*Ny+j*Nx+i;
+                surfaceInds[n] = 1; // make so it can never be negative or zero (labelBCs is negative by convention)
+            }
+        }
+    }
+    for (int m=0;m<NLABELS;m++){
+        int label_count = 0;
+        int label_count_global = 0;
+        Array<char> id_solid(Nx,Ny,Nz);
+
+        // Solve for the position of the solid phase
+        for (int k=1;k<Nz-1;k++){
+            for (int j=1;j<Ny-1;j++){
+                for (int i=1;i<Nx-1;i++){
+                    int n = k*Nx*Ny+j*Nx+i;
+                    // Initialize the solid phase
+                    if (Dm->id[n] == labelBCs[m]){      
+                        id_solid(i,j,k) = 0;
+                        //if (rank==0) printf("rank 0 solid detected!");
+                    } else {
+                        id_solid(i,j,k) = 1;
+                    }
+                }
+            }
+        }
+        CalcDist(DistanceLabelBCs,id_solid,*Dm);
+        printf("[DEBUG] --rank=%d, Distance Calculated\n",rank); 
+        // identify the surface indexes 
+        for (int k=1;k<Nz-1;k++){
+            for (int j=1;j<Ny-1;j++){
+                for (int i=1;i<Nx-1;i++){
+                    int n = k*Nx*Ny+j*Nx+i;
+                    if (DistanceLabelBCs(i,j,k) < 1.8 && DistanceLabelBCs(i,j,k) >0){
+                        surfaceInds[n] = labelBCs[m];
+                        //printf("[DEBUG] --rank=%d, i=%d, j=%d, k=%d, label=%d, surfInd=%d, Dist=%f\n",rank,i,j,k,labelBCs[m],surfaceInds[n], DistanceLabelBCs(i,j,k)); 
+                        label_count++;
+                    } 
+                }
+            }
+        }
+        printf("[DEBUG] --rank=%d, Surfaces Calculated\n",rank); 
+        char VALUE=labelBCs[m];
+        totSurfVoxels+=label_count; //local surface counts and indexes will overlap in corners, and the oder of imposition will determine the effective BC
+        counts.push_back(label_count);
+        startInds.push_back(totSurfVoxels-label_count);
+        
+        printf("[DEBUG] --rank=%d, label=%i, totSurfVoxels=%d, counts=%d, startInds=%d\n",rank,int(VALUE),totSurfVoxels,counts[m],startInds[m]); 
+        
+        //gather to output to terminal
+        MPI_Allreduce(&label_count,&label_count_global,1,MPI_INT,MPI_SUM,Dm->Comm);
+        if (rank==0) printf("-- label=%i, surface count=%d\n",int(VALUE),label_count_global); 
+        
+
+    }
+    // convert the cartesian block into mapped indexes. thankfully lbpm has dm->map, which should work...
+    // loop around the labels and block, note the surfaceInds value, and append it to a vector in sorted order.
+
+    int count = 0;
+    for (int m=0;m<NLABELS;m++){
+        for (int k=1;k<Nz-1;k++){
+            for (int j=1;j<Ny-1;j++){
+                for (int i=1;i<Nx-1;i++){
+                    int n = k*Nx*Ny+j*Nx+i;
+                    if (surfaceInds[n] == labelBCs[m]){
+                        //surfaceIndsVec[count]=Dm;
+                        int idx=Map(i,j,k);
+                        if (!(idx < 0)) {
+                            count++;
+                        }
+                    }    
+                }
+            }
+        }
+    }
+    printf("[DEBUG] --rank=%d, Indexes Counted\n",rank); 
+    
+    int *surfaceIndsVec;
+    surfaceIndsVec = new int[count];
+    
+    double *surfaceValsVecA;
+    surfaceValsVecA = new double[count];
+    
+    double *surfaceValsVecB;
+    surfaceValsVecB = new double[count];
+
+    printf("[DEBUG] --rank=%d, Indexes Allocated\n",rank); 
+    count = 0;
+    for (int m=0;m<NLABELS;m++){
+        for (int k=1;k<Nz-1;k++){
+            for (int j=1;j<Ny-1;j++){
+                for (int i=1;i<Nx-1;i++){
+                    int n = k*Nx*Ny+j*Nx+i;
+                    if (surfaceInds[n] == labelBCs[m]){
+                        //surfaceIndsVec[count]=Dm;
+                        int idx=Map(i,j,k);
+                        if (!(idx < 0)) {
+                            surfaceIndsVec[count]=idx;
+                            surfaceValsVecA[count]=labelBCValsA[m];
+                            surfaceValsVecB[count]=labelBCValsB[m];
+                            printf("[DEBUG] --rank=%d, i=%d, j=%d, k=%d, label=%d, surfInd=%d, mapInd=%d, A=%f, B=%f\n",rank,i,j,k,labelBCs[m],surfaceInds[n], Map(i,j,k), surfaceValsVecA[count], surfaceValsVecB[count]); 
+                            count++;
+                        }
+                    }    
+                }
+            }
+        }
+    }
+
+
+    // allocate surfaceBCInds to device
+    ScaLBL_AllocateDeviceMemory((void **) &surfaceBCInds, sizeof(int)*count);        
+    // copy surfaceInds to surfaceBCInds in device
+    ScaLBL_CopyToDevice(surfaceBCInds, surfaceIndsVec, count*sizeof(int));
+    printf("[DEBUG] --rank=%d, Indexes Assigned\n",rank); 
+    
+    
+    ScaLBL_AllocateDeviceMemory((void **) &surfaceBCValsA, sizeof(double)*count);        
+    ScaLBL_CopyToDevice(surfaceBCValsA, surfaceValsVecA, count*sizeof(double));
+    printf("[DEBUG] --rank=%d, A Surfaces Assigned\n",rank); 
+    
+    
+    ScaLBL_AllocateDeviceMemory((void **) &surfaceBCValsB, sizeof(double)*count);        
+    ScaLBL_CopyToDevice(surfaceBCValsB, surfaceValsVecB, count*sizeof(double));
+    printf("[DEBUG] --rank=%d, B Surfaces Assigned\n",rank); 
+    
+    return count;
 }
 
 void ScaLBL_ColorModel::AssignComponentLabels(double *phase)
@@ -199,7 +335,7 @@ void ScaLBL_ColorModel::AssignComponentLabels(double *phase)
                     if (VALUE == LabelList[idx]){
                         AFFINITY=AffinityList[idx];
                         label_count[idx]++;
-                        idx = NLABELS;
+                        idx = NLABELS; // break the loop
                         Dm->id[n] = 0; // set mask to zero since this is an immobile component
                     }
                 }
@@ -216,13 +352,13 @@ void ScaLBL_ColorModel::AssignComponentLabels(double *phase)
 
     MPI_Allreduce(&label_count[0],&label_count_global[0],NLABELS,MPI_INT,MPI_SUM,Dm->Comm);
     //poro=0.0;
-    // because I am stupid, just do this for all cores
+
     if (rank==0) printf("Components labels: %lu \n",NLABELS);
     for (unsigned int idx=0; idx<NLABELS; idx++){
         VALUE=LabelList[idx];
         AFFINITY=AffinityList[idx];
         double volume_fraction  = double(label_count_global[idx])/double((Nx)*(Ny)*(Nz)*nprocz*nprocy*nprocx);
-        if (rank==0) printf("-- label=%i, affinity=%f, volume fraction==%f\n",int(VALUE),AFFINITY,volume_fraction); 
+        if (rank==0) printf("-- label=%i, affinity=%f, volume fraction=%f\n",int(VALUE),AFFINITY,volume_fraction); 
         poro=poro+volume_fraction;
     }
     if (rank==0) printf("Porosity: %f\n",1-poro); 
@@ -230,6 +366,7 @@ void ScaLBL_ColorModel::AssignComponentLabels(double *phase)
     //MPI_Scatter(&poro, 1, MPI_DOUBLE, &poro, 1, MPI_DOUBLE, 0, Dm->Comm);
     poro=1-poro;
     //printf("Core: %d, Porosity: %f\n",rank, 1-poro); 
+    ScaLBL_CopyToDevice(Phi, phase, N*sizeof(double));
 }
 
 
@@ -325,11 +462,27 @@ void ScaLBL_ColorModel::Initialize(){
      * This function initializes model
      */
      // initialize phi based on PhaseLabel (include solid component labels)
-    if (rank==0)    printf ("Initializing phase field and solid affinities\n");
+    if (rank==0)    printf ("Initializing phase field, solid affinities, and surface boundary conditions\n");
+
+    if (color_db->keyExists( "labelBCs" )){ //if a label is set to have a BC condition, set the BCs along its surface by pre-indexing the locations with distance under 1.8
+        auto labelBCs = color_db->getVector<int>( "labelBCs" );
+        if (labelBCs.size()>0) {
+            if (rank==0) printf("Internal surface color boundaries are specified -- indexing by distance\n");
+            labelBCsFlag=true;
+            int *surfaceInds;
+            surfaceInds = new int[N]; // fuck it, make surfaces inefficiently cartesian in memory for ease of access and use
+            surfBCCount = IndexSurfaceBoundaries(surfaceInds);
+        } else {
+            if (rank==0) printf("Internal surface color boundaries are not specified\n");
+        }
+    } else {
+        if (rank==0) printf("Internal surface color boundaries are not specified\n");
+    }
+
     double *PhaseLabel;
     PhaseLabel = new double[N];
-    AssignComponentLabels(PhaseLabel);
-    ScaLBL_CopyToDevice(Phi, PhaseLabel, N*sizeof(double));
+    AssignComponentLabels(PhaseLabel);    
+
     if (Restart == true){
         if (rank==0) printf("Reading restart file! \n");
         ifstream restart("Restart.txt");
@@ -485,6 +638,7 @@ void ScaLBL_ColorModel::Run(){
     int accelerationRate = 1000; // interval for doing automorph acceleration
     double shellRadius = 0.0;
     int restart_interval = 0;
+    vector<int> labelBCs;
 
     double voxelSize = 0.0;
     if (analysis_db->keyExists( "logFile" )){
@@ -645,6 +799,12 @@ void ScaLBL_ColorModel::Run(){
             ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
             ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
         }
+        
+        if (labelBCsFlag) {
+            //printf("[DEBUG] --rank=%d, assigning surface BCs %d, count %d\n",rank,labelBCs.size(),surfBCCount); 
+            ScaLBL_Color_BC_YDW(surfaceBCInds, dvcMap, Phi, Den, surfaceBCValsA, surfaceBCValsB, surfBCCount, Np);
+        }
+        
         // Halo exchange for phase field
         ScaLBL_Comm_Regular->SendHalo(Phi);
         // Perform the collision operation
@@ -682,6 +842,11 @@ void ScaLBL_ColorModel::Run(){
             ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
             ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
         }
+        
+        if (labelBCsFlag) {
+            ScaLBL_Color_BC_YDW(surfaceBCInds, dvcMap, Phi, Den, surfaceBCValsA, surfaceBCValsB, surfBCCount, Np);
+        }
+        
         ScaLBL_Comm_Regular->SendHalo(Phi);
         // Perform the collision operation
         ScaLBL_Comm->SendD3Q19AA(fq); //READ FORM NORMAL

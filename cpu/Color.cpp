@@ -56,6 +56,22 @@ extern "C" void ScaLBL_Color_BC(int *list, int *Map, double *Phi, double *Den, d
 	}
 }
 
+extern "C" void ScaLBL_Color_BC_YDW(int *list, int *Map, double *Phi, double *Den, double *vAv, double *vBv, int count, int Np)
+{
+	int idx,n,nm;
+	// Fill the outlet with component b
+
+	for (idx=0; idx<count; idx++){
+		n = list[idx];
+		Den[n] = vAv[idx];
+		Den[Np+n] = vBv[idx];
+		
+		nm = Map[n];
+		Phi[nm] = (vAv[idx]-vBv[idx])/(vAv[idx]+vBv[idx]);
+	}
+}
+
+
 extern "C" void ScaLBL_SetSlice_z(double *Phi, double value, int Nx, int Ny, int Nz, int Slice){
 	int n;
 	for (n=Slice*Nx*Ny; n<(Slice+1)*Nx*Ny; n++){

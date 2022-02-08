@@ -181,6 +181,8 @@ extern "C" double ScaLBL_D3Q19_AAeven_Flux_BC_z(int *list, double *dist, double 
 
 extern "C" void ScaLBL_Color_BC(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np);
 
+extern "C" void ScaLBL_Color_BC_YDW(int *list, int *Map, double *Phi, double *Den, double *vAv, double *vBv, int count, int Np);
+
 extern "C" void ScaLBL_D3Q19_Reflection_BC_z(int *list, double *dist, int count, int Np);
 
 extern "C" void ScaLBL_D3Q19_Reflection_BC_Z(int *list, double *dist, int count, int Np);

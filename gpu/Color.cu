@@ -75,6 +75,22 @@ __global__  void dvc_ScaLBL_Color_BC(int *list, int *Map, double *Phi, double *D
 	}
 }
 
+__global__  void dvc_ScaLBL_Color_BC_YDW(int *list, int *Map, double *Phi, double *Den, double *vAv, double *vBv, int count, int Np)
+{
+	int idx,n,nm;
+	// Fill the outlet with component b
+	idx = blockIdx.x*blockDim.x + threadIdx.x;
+	if (idx < count){
+		n = list[idx];
+		Den[n] = vAv[idx];
+		Den[Np+n] = vBv[idx];
+		
+		nm = Map[n];
+		Phi[nm] = (vAv[idx]-vBv[idx])/(vAv[idx]+vBv[idx]);
+
+
+	}
+}
 //*************************************************************************
 
 
@@ -1525,6 +1541,14 @@ extern "C" void ScaLBL_CopySlice_z(double *Phi, int Nx, int Ny, int Nz, int Sour
 extern "C" void ScaLBL_Color_BC(int *list, int *Map, double *Phi, double *Den, double vA, double vB, int count, int Np){
     int GRID = count / 512 + 1;
     dvc_ScaLBL_Color_BC<<<GRID,512>>>(list, Map, Phi, Den, vA, vB, count, Np);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_Color_BC: %s \n",cudaGetErrorString(err));
+	}
+}
+extern "C" void ScaLBL_Color_BC_YDW(int *list, int *Map, double *Phi, double *Den, double *vAv, double *vBv, int count, int Np){
+    int GRID = count / 512 + 1;
+    dvc_ScaLBL_Color_BC_YDW<<<GRID,512>>>(list, Map, Phi, Den, vAv, vBv, count, Np);
 	cudaError_t err = cudaGetLastError();
 	if (cudaSuccess != err){
 		printf("CUDA error in ScaLBL_Color_BC: %s \n",cudaGetErrorString(err));
