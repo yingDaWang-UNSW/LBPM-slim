@@ -165,7 +165,7 @@ int ScaLBL_ColorModel::IndexSurfaceBoundaries(int *surfaceInds)
     DistanceLabelBCs.resize(Nx,Ny,Nz);
 
     size_t NLABELS=labelBCs.size();
-    printf("[DEBUG] --rank=%d, Entered Function\n",rank); 
+    //printf("[DEBUG] --rank=%d, Entered Function\n",rank); 
     for (int k=1;k<Nz-1;k++){
         for (int j=1;j<Ny-1;j++){
             for (int i=1;i<Nx-1;i++){
@@ -195,13 +195,13 @@ int ScaLBL_ColorModel::IndexSurfaceBoundaries(int *surfaceInds)
             }
         }
         CalcDist(DistanceLabelBCs,id_solid,*Dm);
-        printf("[DEBUG] --rank=%d, Distance Calculated\n",rank); 
+        //printf("[DEBUG] --rank=%d, Distance Calculated\n",rank); 
         // identify the surface indexes 
         for (int k=1;k<Nz-1;k++){
             for (int j=1;j<Ny-1;j++){
                 for (int i=1;i<Nx-1;i++){
                     int n = k*Nx*Ny+j*Nx+i;
-                    if (DistanceLabelBCs(i,j,k) < 1.8 && DistanceLabelBCs(i,j,k) >0){
+                    if (DistanceLabelBCs(i,j,k) < 1 && DistanceLabelBCs(i,j,k) >0){
                         surfaceInds[n] = labelBCs[m];
                         //printf("[DEBUG] --rank=%d, i=%d, j=%d, k=%d, label=%d, surfInd=%d, Dist=%f\n",rank,i,j,k,labelBCs[m],surfaceInds[n], DistanceLabelBCs(i,j,k)); 
                         label_count++;
@@ -209,13 +209,13 @@ int ScaLBL_ColorModel::IndexSurfaceBoundaries(int *surfaceInds)
                 }
             }
         }
-        printf("[DEBUG] --rank=%d, Surfaces Calculated\n",rank); 
+        //printf("[DEBUG] --rank=%d, Surfaces Calculated\n",rank); 
         char VALUE=labelBCs[m];
         totSurfVoxels+=label_count; //local surface counts and indexes will overlap in corners, and the oder of imposition will determine the effective BC
         counts.push_back(label_count);
         startInds.push_back(totSurfVoxels-label_count);
         
-        printf("[DEBUG] --rank=%d, label=%i, totSurfVoxels=%d, counts=%d, startInds=%d\n",rank,int(VALUE),totSurfVoxels,counts[m],startInds[m]); 
+        //printf("[DEBUG] --rank=%d, label=%i, totSurfVoxels=%d, counts=%d, startInds=%d\n",rank,int(VALUE),totSurfVoxels,counts[m],startInds[m]); 
         
         //gather to output to terminal
         MPI_Allreduce(&label_count,&label_count_global,1,MPI_INT,MPI_SUM,Dm->Comm);
@@ -243,7 +243,7 @@ int ScaLBL_ColorModel::IndexSurfaceBoundaries(int *surfaceInds)
             }
         }
     }
-    printf("[DEBUG] --rank=%d, Indexes Counted\n",rank); 
+    //printf("[DEBUG] --rank=%d, Indexes Counted\n",rank); 
     
     int *surfaceIndsVec;
     surfaceIndsVec = new int[count];
@@ -254,7 +254,7 @@ int ScaLBL_ColorModel::IndexSurfaceBoundaries(int *surfaceInds)
     double *surfaceValsVecB;
     surfaceValsVecB = new double[count];
 
-    printf("[DEBUG] --rank=%d, Indexes Allocated\n",rank); 
+    //printf("[DEBUG] --rank=%d, Indexes Allocated\n",rank); 
     count = 0;
     for (int m=0;m<NLABELS;m++){
         for (int k=1;k<Nz-1;k++){
@@ -268,7 +268,7 @@ int ScaLBL_ColorModel::IndexSurfaceBoundaries(int *surfaceInds)
                             surfaceIndsVec[count]=idx;
                             surfaceValsVecA[count]=labelBCValsA[m];
                             surfaceValsVecB[count]=labelBCValsB[m];
-                            printf("[DEBUG] --rank=%d, i=%d, j=%d, k=%d, label=%d, surfInd=%d, mapInd=%d, A=%f, B=%f\n",rank,i,j,k,labelBCs[m],surfaceInds[n], Map(i,j,k), surfaceValsVecA[count], surfaceValsVecB[count]); 
+                            //printf("[DEBUG] --rank=%d, i=%d, j=%d, k=%d, label=%d, surfInd=%d, mapInd=%d, A=%f, B=%f\n",rank,i,j,k,labelBCs[m],surfaceInds[n], Map(i,j,k), surfaceValsVecA[count], surfaceValsVecB[count]); 
                             count++;
                         }
                     }    
@@ -282,17 +282,17 @@ int ScaLBL_ColorModel::IndexSurfaceBoundaries(int *surfaceInds)
     ScaLBL_AllocateDeviceMemory((void **) &surfaceBCInds, sizeof(int)*count);        
     // copy surfaceInds to surfaceBCInds in device
     ScaLBL_CopyToDevice(surfaceBCInds, surfaceIndsVec, count*sizeof(int));
-    printf("[DEBUG] --rank=%d, Indexes Assigned\n",rank); 
+    //printf("[DEBUG] --rank=%d, Indexes Assigned\n",rank); 
     
     
     ScaLBL_AllocateDeviceMemory((void **) &surfaceBCValsA, sizeof(double)*count);        
     ScaLBL_CopyToDevice(surfaceBCValsA, surfaceValsVecA, count*sizeof(double));
-    printf("[DEBUG] --rank=%d, A Surfaces Assigned\n",rank); 
+    //printf("[DEBUG] --rank=%d, A Surfaces Assigned\n",rank); 
     
     
     ScaLBL_AllocateDeviceMemory((void **) &surfaceBCValsB, sizeof(double)*count);        
     ScaLBL_CopyToDevice(surfaceBCValsB, surfaceValsVecB, count*sizeof(double));
-    printf("[DEBUG] --rank=%d, B Surfaces Assigned\n",rank); 
+    //printf("[DEBUG] --rank=%d, B Surfaces Assigned\n",rank); 
     
     return count;
 }
@@ -794,17 +794,16 @@ void ScaLBL_ColorModel::Run(){
         ScaLBL_Comm->BiRecvD3Q7AA(Aq,Bq); //WRITE INTO OPPOSITE
         ScaLBL_DeviceBarrier();
         ScaLBL_D3Q7_AAodd_PhaseField(NeighborList, dvcMap, Aq, Bq, Den, Phi, 0, ScaLBL_Comm->LastExterior(), Np);
-
-        if (inletA+inletB+outletA+outletB > 0){
-            ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
-            ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
-        }
         
         if (labelBCsFlag) {
             //printf("[DEBUG] --rank=%d, assigning surface BCs %d, count %d\n",rank,labelBCs.size(),surfBCCount); 
             ScaLBL_Color_BC_YDW(surfaceBCInds, dvcMap, Phi, Den, surfaceBCValsA, surfaceBCValsB, surfBCCount, Np);
         }
-        
+        if (inletA+inletB+outletA+outletB > 0){
+            ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
+            ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
+        }
+                
         // Halo exchange for phase field
         ScaLBL_Comm_Regular->SendHalo(Phi);
         // Perform the collision operation
@@ -838,13 +837,13 @@ void ScaLBL_ColorModel::Run(){
         ScaLBL_D3Q7_AAeven_PhaseField(dvcMap, Aq, Bq, Den, Phi, 0, ScaLBL_Comm->LastExterior(), Np);
 
         // Halo exchange for phase field boundary conditions
+        if (labelBCsFlag) {
+            //printf("[DEBUG] --rank=%d, assigning surface BCs %d, count %d\n",rank,labelBCs.size(),surfBCCount); 
+            ScaLBL_Color_BC_YDW(surfaceBCInds, dvcMap, Phi, Den, surfaceBCValsA, surfaceBCValsB, surfBCCount, Np);
+        }
         if (inletA+inletB+outletA+outletB > 0){
             ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
             ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
-        }
-        
-        if (labelBCsFlag) {
-            ScaLBL_Color_BC_YDW(surfaceBCInds, dvcMap, Phi, Den, surfaceBCValsA, surfaceBCValsB, surfBCCount, Np);
         }
         
         ScaLBL_Comm_Regular->SendHalo(Phi);
