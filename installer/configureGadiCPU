@@ -2,8 +2,10 @@
 
 module purge
 module load cmake/3.16.2
-module load gcc/system 
-module load openmpi/4.0.2
+module load gcc/system
+module load openmpi/4.1.2
+module load ucx/1.12
+
 
 export LBPM_SOURCE="/home/561/yw5484/LBPMYDW/LBPM-slim/"
 export LBPM_DIR="/home/561/yw5484/LBPMYDW/lbpmSlimBuild"

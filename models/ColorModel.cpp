@@ -1962,7 +1962,12 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
             for (int i=0; i<Nx; i++){
                 //fprintf(OUTFILE,"%f\n",PhaseField(i, j, k));
                 temp = PhaseField(i,j,k);
-                fwrite(&temp,sizeof(double),1,OUTFILE);
+                //if (rank==0) printf("[DEBUG] temp = %f, ", temp);
+                temp = (temp+1)*127.5;
+                //if (rank==0) printf("[DEBUG] temp = %f, ", temp);
+                uint8_t tempChar = (uint8_t)temp;
+                //if (rank==0) printf("[DEBUG] temp = %d\n\n", tempChar);
+                fwrite(&tempChar,sizeof(uint8_t),1,OUTFILE);
             }
         }
     }
