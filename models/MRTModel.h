@@ -46,6 +46,7 @@ public:
 	//void VelocityField();
 //	void writeConcentration();
 	void fqField();
+	void fqField2();
     void velPField();
     
 	bool Restart,pBC;
