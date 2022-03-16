@@ -350,7 +350,7 @@ void ScaLBL_ColorModel::AssignComponentLabels(double *phase)
     // Set Dm to match Mask
     //for (int i=0; i<Nx*Ny*Nz; i++) Dm->id[i] = Mask->id[i]; 
 
-    MPI_Allreduce(&label_count[0],&label_count_global[0],NLABELS,MPI_DOUBLE,MPI_SUM,Dm->Comm);
+    MPI_Allreduce(&label_count,&label_count_global,NLABELS,MPI_DOUBLE,MPI_SUM,Dm->Comm); //theres a bug here! 
     //poro=0.0;
 
     if (rank==0) printf("Components labels: %lu \n",NLABELS);
@@ -594,6 +594,7 @@ void ScaLBL_ColorModel::Run(){
     bool logFile = false;
     int ramp_timesteps = 50000;
     double capillary_number = 0;
+
     double morphTolerance = 1.f;
     double tolerance = 1.f;
     double Ca_previous = 0.f;
@@ -613,6 +614,8 @@ void ScaLBL_ColorModel::Run(){
     bool affinityRampupFlag = false;
     int affinityRampSteps = 0;
     // for forced injection problems
+    int fluxRampup = 0;
+    double maxFlux = flux;
     bool fluxReversalFlag = false;
     int fluxReversalType = 1;
     double fluxReversalSat = -1.0;
@@ -689,6 +692,13 @@ void ScaLBL_ColorModel::Run(){
     }
     if (rank==0)    printf("Voxel Size = %f microns\n",voxelSize*1000000);
     // (BoundaryCondition == 4){
+
+        if (color_db->keyExists( "fluxRampup" )){
+            fluxRampup = color_db->getScalar<int>( "fluxRampup" );
+            if (rank==0) printf("[Colour Model], Flux will ramp up to %f in %d timesteps\n",flux,fluxRampup);
+            flux=0;
+        }  
+        
         if (color_db->keyExists( "fluxReversalFlag" )){
             fluxReversalFlag = color_db->getScalar<bool>( "fluxReversalFlag" );
             if (rank==0 && fluxReversalFlag) printf("[Colour Model], Flux indicators are set to be reversed\n");
@@ -748,8 +758,7 @@ void ScaLBL_ColorModel::Run(){
         if (injectionType==1) prevSatVis=1;
         if (injectionType==2) prevSatVis=0;
         
-    }
-    else{
+    } else{
         sat_visualisation_interval = 0;
     }
     
@@ -962,15 +971,15 @@ void ScaLBL_ColorModel::Run(){
                     for (int i=1;i<Nx-1;i++){
                         int n = k*Nx*Ny+j*Nx+i;
                         if (Map(i,j,k) >= 0){
-                            if (PhaseField(i,j,k)>interfaceThreshold){
-                                qinALoc += Velocity_z(i,j,k);
-                                PinALoc += Pressure_Cart(i,j,k);
-                                countAInLoc+=1.0;
-                            } else if (PhaseField(i,j,k)<-1*interfaceThreshold) {
-                                qinBLoc += Velocity_z(i,j,k);
-                                PinBLoc += Pressure_Cart(i,j,k);
-                                countBInLoc+=1.0;
-                            }
+                            double phaseA = (PhaseField(i,j,k)+1)/2; 
+                            double phaseB = 1 - phaseA;
+                            qinBLoc += Velocity_z(i,j,k)*phaseB;
+                            PinBLoc += Pressure_Cart(i,j,k)*phaseB;
+                            countBInLoc+=phaseB;
+                            qinALoc += Velocity_z(i,j,k)*phaseA;
+                            PinALoc += Pressure_Cart(i,j,k)*phaseA;
+                            countAInLoc+=phaseA;
+
                         }
                     }                    
                 }
@@ -982,15 +991,14 @@ void ScaLBL_ColorModel::Run(){
                     for (int i=1;i<Nx-1;i++){
                         int n = k*Nx*Ny+j*Nx+i;
                         if (Map(i,j,k) >= 0){
-                            if (PhaseField(i,j,k)>interfaceThreshold){
-                                qoutALoc += Velocity_z(i,j,k);
-                                PoutALoc += Pressure_Cart(i,j,k);
-                                countAOutLoc+=1.0;
-                            } else if (PhaseField(i,j,k)<-1*interfaceThreshold) {
-                                qoutBLoc += Velocity_z(i,j,k);
-                                PoutBLoc += Pressure_Cart(i,j,k);
-                                countBOutLoc+=1.0;
-                            }
+                            double phaseA = (PhaseField(i,j,k)+1)/2; 
+                            double phaseB = 1 - phaseA;
+                            qoutBLoc += Velocity_z(i,j,k)*phaseB;
+                            PoutBLoc += Pressure_Cart(i,j,k)*phaseB;
+                            countBOutLoc+=phaseB;
+                            qoutALoc += Velocity_z(i,j,k)*phaseA;
+                            PoutALoc += Pressure_Cart(i,j,k)*phaseA;
+                            countAOutLoc+=phaseA;
                         }
                     }                    
                 }
@@ -1256,6 +1264,10 @@ void ScaLBL_ColorModel::Run(){
             double Ca1 = fabs(muA*flow_rate_A)/(alpha);
             double Ca2 = fabs(muB*flow_rate_B)/(alpha);
             
+			double Re = fabs(flow_rate_A*rhoA/muA + flow_rate_B*rhoB/muB)*sqrt((Nx-2)*(Ny-2)*nprocy*nprocx);
+            double Re1 = fabs(flow_rate_A*rhoA/muA)*sqrt((Nx-2)*(Ny-2)*nprocy*nprocx);
+            double Re2 = fabs(flow_rate_B*rhoB/muB)*sqrt((Nx-2)*(Ny-2)*nprocy*nprocx);
+            
             //double flow_rate_A = sqrt(vA_x*vA_x + vA_y*vA_y + vA_z*vA_z);
             //double flow_rate_B = sqrt(vB_x*vB_x + vB_y*vB_y + vB_z*vB_z);
             //double flow_rate_A_H = sqrt(vA_x_H*vA_x_H + vA_y_H*vA_y_H + vA_z_H*vA_z_H);
@@ -1300,7 +1312,7 @@ void ScaLBL_ColorModel::Run(){
             if (rank==0) {
                 printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1,absperm2,absperm1_H,absperm2_H);
                 printf("EMA: Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1_EMA, absperm2_EMA,absperm1_H_EMA, absperm2_H_EMA);
-                printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e\nNca = (%e, %e), EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Ca1, Ca2, Ca_EMA, dCadtEMA, settlingParam);
+                printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e\nRe = (%e, %e), Nca = (%e, %e), EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Re1, Re2, Ca1, Ca2, Ca_EMA, dCadtEMA, settlingParam);
                 if (logFile) {
                     FILE * log_file = fopen("log.csv","a");
                     fprintf(log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n", timestep,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,vA_x_H,vA_y_H,vA_z_H,vB_x_H,vB_y_H,vB_z_H,flow_rate_A,flow_rate_B,flow_rate_A_H,flow_rate_B_H, force_magnitude,absperm1,absperm2,absperm1_H,absperm2_H,absperm1_EMA,absperm2_EMA,absperm1_H_EMA,absperm2_H_EMA, MLUPSGlob,current_saturation,flux,gradP,Ca,Ca2,Ca_EMA,dCadtEMA,settlingParam);
@@ -1396,10 +1408,9 @@ void ScaLBL_ColorModel::Run(){
             // check for flux reversal
             //printf("Core: %d, setParm: %f\n",rank, settlingParam); 
             if (fluxReversalFlag){
-                if (current_saturation < fluxReversalSat || settlingParam < settlingTolerance){
+                if (current_saturation < fluxReversalSat){
                     WriteDebugYDW();
-                    if (autoMorphFlag) { //if automorph is active, reverse the morph direction, and reverse the force if thats an active flag
-                        injectionType = fabs(injectionType-3); //1-2 switch
+                    if (autoMorphFlag || coinjectionFlag) { //if automorph is active, reverse the morph direction, and reverse the force if thats an active flag
                         satInit=1.0-satInit;
                         if (rank==0) printf("[AUTOMORPH], Flux reversal conditions have been met, the morph direction has been switched to %d\n", injectionType);
                         autoMorphAdapt=false;
@@ -1418,6 +1429,7 @@ void ScaLBL_ColorModel::Run(){
                             if (rank==0) printf("Flux Reversal Type: Flow direction flipped\n");
                         }
                     }
+                    injectionType = fabs(injectionType-3); //1-2 switch
                     if (rank==0 && current_saturation < fluxReversalSat) printf("Current Saturation of %f is less than the flux reversal saturation of %f. \nFluxes have been reversed. \nThis will not carry on to restart. \nPlease manually change the inputfile at end of simulation.\n", current_saturation, fluxReversalSat);
                     if (rank==0 && settlingParam < settlingTolerance) printf("Current Saturation of %f has reached steady state, so flux reversal has been activated. \nFluxes have been reversed. \nThis will not carry on to restart. \nPlease manually change the inputfile at end of simulation.\n", current_saturation);
                     fluxReversalFlag = false;
@@ -1467,38 +1479,39 @@ void ScaLBL_ColorModel::Run(){
             
             //co-injeciton stabilisation routine
             if (timestep > ramp_timesteps && coinjectionFlag){
-                if (stabilityCounter >= stabilisationRate){ // theres no adaptation phase, so no extra flag here
-                    if (dCadtEMA < tolerance ){
-                        WriteDebugYDW();
-                        if (rank==0){ //save the data as a rel perm point
-                            printf("[CO-INJECTION]: Steady state reached. WRITE STEADY POINT\n");
-                            volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
-                            volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
-                            FILE * kr_log_file = fopen("relperm.csv","a");
-                            fprintf(kr_log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g ",timestep,muA,muB,alpha,Fx,Fy,Fz);
-                            fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,inletA,inletB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2,current_saturation_H,absperm1_H,absperm2_H);
-                            fclose(kr_log_file);
-                        }
-                        MPI_Barrier(Dm->Comm);
-                        if (injectionType==1){ //drainage - increase injected oil volumes
-                            inletA=inletA+satInc; //a is nwp
-                            inletB=inletB-satInc;
-                            outletA=outletA+satInc; //a is nwp
-                            outletB=outletB-satInc;
-                        } else if (injectionType==2){ // imbibiton, reduce injected oil volumes
-                            inletA=inletA-satInc; //a is nwp
-                            inletB=inletB+satInc;
-                            outletA=outletA-satInc; //a is nwp
-                            outletB=outletB+satInc;
-
-                        }
-                        if (rank==0) printf("[CO-INJECTION]: Inlet altered to: Phase 1: %f, Phase 2: %f \n",inletA, inletB);
-                    } else { //if the system is unstable, continue stabilisation
-                        if (rank==0) printf("[CO-INJECTION]: Continuing stabilisation. Inlet: %f, %f. Outlet: %f, %f\n",inletA, inletB, outletA, outletB);
-                        stabilityCounter = 1;
+                if (globStabilityCounter >= max_stabilisation){ // theres no adaptation phase, so no extra flag here
+                    WriteDebugYDW();
+                    globStabilityCounter = 0;
+                    if (rank==0){ //save the data as a rel perm point
+                        printf("[CO-INJECTION]: Steady state reached. WRITE STEADY POINT\n");
+                        volA /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);
+                        volB /= double((Nx-2)*(Ny-2)*(Nz-2)*nprocs);// was this supposed to be nprocsz?
+                        FILE * kr_log_file = fopen("relperm.csv","a");
+                        fprintf(kr_log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g ",timestep,muA,muB,alpha,Fx,Fy,Fz);
+                        fprintf(kr_log_file,"%.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n",volA,volB,inletA,inletB,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,current_saturation,absperm1,absperm2,current_saturation_H,absperm1_H,absperm2_H);
+                        fclose(kr_log_file);
                     }
+                    MPI_Barrier(Dm->Comm);
+                    if (injectionType==1){ //drainage - increase injected oil volumes
+                        inletA=inletA+satInc; //a is nwp
+                        inletB=inletB-satInc;
+                        //outletA=outletA+satInc; //a is nwp
+                        //outletB=outletB-satInc;
+                    } else if (injectionType==2){ // imbibiton, reduce injected oil volumes
+                        inletA=inletA-satInc; //a is nwp
+                        inletB=inletB+satInc;
+                        //outletA=outletA-satInc; //a is nwp
+                        //outletB=outletB+satInc;
+                    }
+                    if (rank==0) printf("[CO-INJECTION]: Inlet altered to: Phase 1: %f, Phase 2: %f \n",inletA, inletB);
+                    if (inletA < 0 || inletA > 1 || inletB < 0 || inletB > 1){
+                        if (rank==0) printf("[CO-INJECTION]: Inlet fractions have exceeded limits. Terminating simulation. \n");
+                        break; 
+                    }
+                } else { //if the system is unstable, continue stabilisation
+                    if (rank==0) printf("[CO-INJECTION]: Continuing stabilisation. Inlet: %f, %f. Outlet: %f, %f\n",inletA, inletB, outletA, outletB);
+                    globStabilityCounter += analysis_interval;
                 }
-                stabilityCounter += analysis_interval;
             }
             
             //AUTOMORPH routine
@@ -1642,6 +1655,10 @@ void ScaLBL_ColorModel::Run(){
                 }
                 accelerationCounter += analysis_interval; //increment the acceleration
             }
+            if (fluxRampup>=timestep && fluxRampup>0) {
+                flux=maxFlux*timestep/fluxRampup;
+            }
+
         	analysistime = MPI_Wtime();
         	analysistime = analysistime - stoptime;
         	float analysisRatio;
@@ -1986,7 +2003,73 @@ void ScaLBL_ColorModel::WriteDebugYDW(){
     }
     fclose(OUTFILE);
     MPI_Barrier(Dm->Comm);
-    
+
+
+    	//create the folder
+	char LocalRankFoldernameVelP[100];
+	if (rank==0) {
+		sprintf(LocalRankFoldernameVelP,"./rawVisVelP%d",timestep); 
+	    mkdir(LocalRankFoldernameVelP, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    }
+	MPI_Barrier(comm);
+	//create the file
+	FILE *OUTFILEVelP;
+	char LocalRankFilenameVelP[100];
+	sprintf(LocalRankFilenameVelP,"rawVisVelP%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
+	OUTFILEVelP = fopen(LocalRankFilenameVelP,"wb");
+    int idx=0;
+    for (int k=0; k<Nz; k++){
+	    for (int j=0; j<Ny; j++){
+		    for (int i=0; i<Nx; i++){
+		        idx = Map(i,j,k);
+		        if (idx >= 0) {
+			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			        temp = Velocity_x(i,j,k);
+	                fwrite(&temp,sizeof(double),1,OUTFILEVelP);
+	            }
+		    }
+	    }
+    }
+    for (int k=0; k<Nz; k++){
+	    for (int j=0; j<Ny; j++){
+		    for (int i=0; i<Nx; i++){
+		        idx = Map(i,j,k);
+		        if (idx >= 0) {
+			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			        temp = Velocity_y(i,j,k);
+	                fwrite(&temp,sizeof(double),1,OUTFILEVelP);
+	            }
+		    }
+	    }
+    }
+    for (int k=0; k<Nz; k++){
+	    for (int j=0; j<Ny; j++){
+		    for (int i=0; i<Nx; i++){
+		        idx = Map(i,j,k);
+		        if (idx >= 0) {
+			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			        temp = Velocity_z(i,j,k);
+	                fwrite(&temp,sizeof(double),1,OUTFILEVelP);
+	            }
+		    }
+	    }
+    }
+    for (int k=0; k<Nz; k++){
+	    for (int j=0; j<Ny; j++){
+		    for (int i=0; i<Nx; i++){
+		        idx = Map(i,j,k);
+		        if (idx >= 0) {
+			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
+			        temp = Pressure_Cart(i,j,k);
+	                fwrite(&temp,sizeof(double),1,OUTFILEVelP);
+	            }
+		    }
+	    }
+    }
+	fclose(OUTFILEVelP);
+	MPI_Barrier(comm);
+
+
 //    FILE *OUTFILEPress;
 //    char LocalRankFilenameVels[100];
 //    sprintf(LocalRankFilenameVels,"rawVis%d/Press_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
