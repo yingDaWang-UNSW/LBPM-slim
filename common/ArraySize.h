@@ -6,7 +6,8 @@
 #include <cstring>
 #include <initializer_list>
 #include <vector>
-
+#include <cstdint>   // For uint8_t
+#include <stdexcept> // For std::out_of_range
 
 #if defined( __CUDA_ARCH__ )
 #include <cuda.h>
