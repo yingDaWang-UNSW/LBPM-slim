@@ -23,18 +23,35 @@ color lattice boltzmann model
 #include <sys/stat.h>
 #include <bits/stdc++.h> 
 #include <algorithm>
+#include <tiffio.h>
 bool labelBCsFlag=false;
 int surfBCCount=0;
 using namespace std;
 ScaLBL_ColorModel::ScaLBL_ColorModel(int RANK, int NP, MPI_Comm COMM):
 rank(RANK), nprocs(NP),  Restart(0),timestep(0),timestepMax(0),tauA(0),tauB(0),rhoA(0),rhoB(0),alpha(0),beta(0),
 Fx(0),Fy(0),Fz(0),flux(0),din(0),dout(0),inletA(0),inletB(0),outletA(0),outletB(0),
-Nx(0),Ny(0),Nz(0),N(0),Np(0),poro(0),nprocx(0),nprocy(0),nprocz(0),BoundaryCondition(0),Lx(0),Ly(0),Lz(0),comm(COMM)
+Nx(0),Ny(0),Nz(0),N(0),Np(0),poro(0),nprocx(0),nprocy(0),nprocz(0),BoundaryCondition(0),Lx(0),Ly(0),Lz(0),
+dx_si(0),dt_si(0),rho_ref(0),comm(COMM)
 {
 
 }
 ScaLBL_ColorModel::~ScaLBL_ColorModel(){
-
+	delete[] id;
+	ScaLBL_FreeDeviceMemory(NeighborList);
+	ScaLBL_FreeDeviceMemory(dvcMap);
+	ScaLBL_FreeDeviceMemory(fq);
+	ScaLBL_FreeDeviceMemory(Aq);
+	ScaLBL_FreeDeviceMemory(Bq);
+	ScaLBL_FreeDeviceMemory(Den);
+	ScaLBL_FreeDeviceMemory(Phi);
+	ScaLBL_FreeDeviceMemory(Pressure);
+	ScaLBL_FreeDeviceMemory(Velocity);
+	ScaLBL_FreeDeviceMemory(ColorGrad);
+	if (labelBCsFlag){
+		ScaLBL_FreeDeviceMemory(surfaceBCInds);
+		ScaLBL_FreeDeviceMemory(surfaceBCValsA);
+		ScaLBL_FreeDeviceMemory(surfaceBCValsB);
+	}
 }
 
 void ScaLBL_ColorModel::ReadParams(string filename){
@@ -567,6 +584,28 @@ void ScaLBL_ColorModel::Initialize(){
     ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, 0, ScaLBL_Comm->LastExterior(), Np);
     ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
 
+    // Pre-set boundary phase composition so D3Q19 init uses the correct
+    // density at inlet/outlet.  Without this, outlet voxels start at rhoA
+    // (from segmented data) but the Run loop Color_BC immediately resets
+    // them to outletA/outletB.  With density_ratio != 1 the Zou-He BC
+    // sees rho_dist=rhoA vs dout=rhoB, computing uz = -(rhoB-rhoA) which
+    // is catastrophically large and causes NaN within ~1000 steps.
+    if (!Restart && (inletA + inletB + outletA + outletB > 0)) {
+        ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
+        ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
+    }
+
+    // Scale D3Q19 distributions to phase-consistent density.
+    // D3Q19_Init sets everything to rho=1.  This rescales each site's
+    // distributions by rho0 = rhoA + 0.5*(1-phi)*(rhoB-rhoA) so that the
+    // density carried by fq matches the phase.  Must run AFTER Color_BC
+    // so boundary voxels already have the correct phase composition.
+    if (!Restart && fabs(rhoA - rhoB) > 1e-10) {
+        if (rank == 0) printf("Initializing D3Q19 with phase-consistent density (rhoA=%.4f, rhoB=%.4f)\n", rhoA, rhoB);
+        ScaLBL_D3Q19_Init_Color(fq, Den, rhoA, rhoB, 0, ScaLBL_Comm->LastExterior(), Np);
+        ScaLBL_D3Q19_Init_Color(fq, Den, rhoA, rhoB, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
+    }
+
 //    if (BoundaryCondition > 0 ){
 //        if (Dm->kproc()==0){
 //            ScaLBL_SetSlice_z(Phi,1.0,Nx,Ny,Nz,0);
@@ -790,6 +829,23 @@ void ScaLBL_ColorModel::Run(){
     //runAnalysis analysis( analysis_db, rank_info, ScaLBL_Comm, Dm, Np, Regular, beta, Map );
     //analysis.createThreads( analysis_method, 4 );
 
+    // Write log file headers (rank 0 only, once at start)
+    if (rank == 0 && logFile) {
+        FILE *hdr;
+        hdr = fopen("log.csv","w");
+        fprintf(hdr, "timestep vA_x vA_y vA_z vB_x vB_y vB_z vA_x_H vA_y_H vA_z_H vB_x_H vB_y_H vB_z_H "
+                     "qA qB qA_H qB_H force k1 k2 k1_H k2_H k1_EMA k2_EMA k1_H_EMA k2_H_EMA "
+                     "MLUPS Sw flux gradP Ca Ca2 Ca_EMA dCa_dt setPar\n");
+        fclose(hdr);
+        if (dt_si > 0 && dx_si > 0 && rho_ref > 0) {
+            hdr = fopen("log_SI.csv","w");
+            fprintf(hdr, "time_SI timestep Sw vA_x vA_y vA_z vB_x vB_y vB_z "
+                         "qA qB gradP_SI k1_m2 k2_m2 k1_H_m2 k2_H_m2 "
+                         "Ca Ca1 Ca2 Re Re1 Re2 Ca_EMA setPar\n");
+            fclose(hdr);
+        }
+    }
+
     while (timestep < timestepMax ) {
         //if ( rank==0 ) { printf("Running timestep %i (%i MB)\n",timestep+1,(int)(Utilities::getMemoryUsage()/1048576)); }
         //PROFILE_START("Update");
@@ -879,10 +935,10 @@ void ScaLBL_ColorModel::Run(){
         
         //PROFILE_STOP("Update");
         //raw visualisation intervals
-        if (timestep%visualisation_interval == 0){
+        if (visualisation_interval > 0 && timestep%visualisation_interval == 0){
             WriteDebugYDW();
         }
-        if (timestep%restart_interval == 0){
+        if (restart_interval > 0 && timestep%restart_interval == 0){
             WriteRestartYDW();
         }
                 // Run the analysis
@@ -896,7 +952,11 @@ void ScaLBL_ColorModel::Run(){
     		deltatime = stoptime - temptime;
     		temptime = stoptime;
             if (rank==0) {
-                printf("=================TimeStep: %d, Elapsed time = %f=================\n", timestep, cputime);
+                if (dt_si > 0) {
+                    printf("=================TimeStep: %d, Phys. time = %.4e s, Elapsed wall time = %f=================\n", timestep, timestep*dt_si, cputime);
+                } else {
+                    printf("=================TimeStep: %d, Elapsed time = %f=================\n", timestep, cputime);
+                }
             }
             ScaLBL_D3Q19_Pressure(fq,Pressure,Np);
             ScaLBL_Comm->RegularLayout(Map,&Pressure[0],Pressure_Cart);
@@ -1021,23 +1081,25 @@ void ScaLBL_ColorModel::Run(){
             MPI_Allreduce(&countAInLoc,&countAIn,1,MPI_DOUBLE,MPI_SUM,Dm->Comm);
 
             MPI_Barrier(Dm->Comm);
-            double internalDeltaP;
-            internalDeltaP = ((PinA+PinB)/(countAIn+countBIn) - (PoutA+PoutB)/(countAOut+countBOut))/((Nz-2)*nprocz);
-            PoutA /= countAOut;
-            PoutB /= countBOut;
-            PinA /= countAIn;
-            PinB /= countBIn;
+            double internalDeltaP = 0.0;
+            if ((countAIn+countBIn) > 0 && (countAOut+countBOut) > 0)
+                internalDeltaP = ((PinA+PinB)/(countAIn+countBIn) - (PoutA+PoutB)/(countAOut+countBOut))/((Nz-2)*nprocz);
+            if (countAOut > 0) PoutA /= countAOut; else PoutA = 0.0;
+            if (countBOut > 0) PoutB /= countBOut; else PoutB = 0.0;
+            if (countAIn > 0) PinA /= countAIn; else PinA = 0.0;
+            if (countBIn > 0) PinB /= countBIn; else PinB = 0.0;
             qinA *= rhoA;
             qinB *= rhoB;
             qoutA *= rhoA;
             qoutB *= rhoB;
-            double accumulation;
-            accumulation = (qinA + qinB - qoutA - qoutB)/(qinA + qinB) * 100;
+            double accumulation = 0.0;
+            if ((qinA + qinB) != 0.0)
+                accumulation = (qinA + qinB - qoutA - qoutB)/(qinA + qinB) * 100;
             if (rank==0) printf("Inlet Flow A|B: %e | %e, Outlet Flow A|B: %e | %e \n", qinA, qinB, qoutA, qoutB);
             if (rank==0) printf("Inlet Pressure A|B: %e | %e, Outlet Pressure A|B: %e | %e \n", PinA, PinB, PoutA, PoutB);
             if (rank==0) printf("Internal Pressure Gradient: %e, Accumulation Flux: %f% \n", internalDeltaP, accumulation);
             
-            if (BoundaryCondition == 0 && nprocs<8 && inletA+inletB+outletA+outletB == 0){ // 
+            if (BoundaryCondition == 0 && inletA+inletB+outletA+outletB == 0){ // 
                 // find the NWP blobs
                 ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,PhaseField,Distance,vF,vS,NWP_blob_label,Dm->Comm);
                 MPI_Barrier(Dm->Comm);
@@ -1134,6 +1196,8 @@ void ScaLBL_ColorModel::Run(){
                 for (st = v.begin(); st != it; ++st) 
                     connectedNWPBlobs.push_back(*st); 
                 connectedNWPBlobs.erase( unique( connectedNWPBlobs.begin(), connectedNWPBlobs.end() ), connectedNWPBlobs.end() );
+                free(inletNWPBlobsGlob);
+                free(outletNWPBlobsGlob);
                 if (rank==0) {
                     printf("Hydraulically connected Phase 1 Blob IDs: "); 
                     for (int i=0;i<connectedNWPBlobs.size();i++){
@@ -1153,6 +1217,8 @@ void ScaLBL_ColorModel::Run(){
                 for (st2 = v2.begin(); st2 != it2; ++st2) 
                     connectedWPBlobs.push_back(*st2); 
                 connectedWPBlobs.erase( unique( connectedWPBlobs.begin(), connectedWPBlobs.end() ), connectedWPBlobs.end() );
+                free(inletWPBlobsGlob);
+                free(outletWPBlobsGlob);
                 if (rank==0) {
                     printf("Hydraulically connected Phase 2 Blob IDs: "); 
                     for (int i=0;i<connectedWPBlobs.size();i++){
@@ -1254,11 +1320,13 @@ void ScaLBL_ColorModel::Run(){
 				dir_y = 0.0;
 				dir_z = 1.0;
 			}
-            // this is really questionable.
-			double flow_rate_A = volA*(vA_x*dir_x + vA_y*dir_y + vA_z*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs*poro);
-			double flow_rate_B = volB*(vB_x*dir_x + vB_y*dir_y + vB_z*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs*poro);
-            double flow_rate_A_H = volA*(vA_x_H*dir_x + vA_y_H*dir_y + vA_z_H*dir_z)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs*poro);
-            double flow_rate_B_H = volB*(vB_x_H*dir_x + vB_y_H*dir_y + vB_z_H*dir_x)/((Nx-2)*(Ny-2)*(Nz-2)*nprocs*poro);
+            // Superficial (Darcy) velocity for each phase, projected onto the flow direction.
+            // vA_x is already sum(u_x over phase-A voxels) / N_total = S_A * phi * <u_x>_A,
+            // i.e. Darcy flux.  No further volume weighting needed.
+			double flow_rate_A = vA_x*dir_x + vA_y*dir_y + vA_z*dir_z;
+			double flow_rate_B = vB_x*dir_x + vB_y*dir_y + vB_z*dir_z;
+            double flow_rate_A_H = vA_x_H*dir_x + vA_y_H*dir_y + vA_z_H*dir_z;
+            double flow_rate_B_H = vB_x_H*dir_x + vB_y_H*dir_y + vB_z_H*dir_z;
 			
 			double Ca = fabs(muA*flow_rate_A + muB*flow_rate_B)/(alpha);
             double Ca1 = fabs(muA*flow_rate_A)/(alpha);
@@ -1267,24 +1335,16 @@ void ScaLBL_ColorModel::Run(){
 			double Re = fabs(flow_rate_A*rhoA/muA + flow_rate_B*rhoB/muB)*sqrt((Nx-2)*(Ny-2)*nprocy*nprocx);
             double Re1 = fabs(flow_rate_A*rhoA/muA)*sqrt((Nx-2)*(Ny-2)*nprocy*nprocx);
             double Re2 = fabs(flow_rate_B*rhoB/muB)*sqrt((Nx-2)*(Ny-2)*nprocy*nprocx);
-            
-            //double flow_rate_A = sqrt(vA_x*vA_x + vA_y*vA_y + vA_z*vA_z);
-            //double flow_rate_B = sqrt(vB_x*vB_x + vB_y*vB_y + vB_z*vB_z);
-            //double flow_rate_A_H = sqrt(vA_x_H*vA_x_H + vA_y_H*vA_y_H + vA_z_H*vA_z_H);
-            //double flow_rate_B_H = sqrt(vB_x_H*vB_x_H + vB_y_H*vB_y_H + vB_z_H*vB_z_H);
-            //double Ca = fabs(volA*muA*flow_rate_A + volB*muB*flow_rate_B)/(alpha*double((Nx-2)*(Ny-2)*(Nz-2))*nprocs*poro);
-            //double Ca1 = (muA*flow_rate_A)/(alpha);
-            //double Ca2 = (muB*flow_rate_B)/(alpha);
 
-            //double Ca = fabs((1-current_saturation)*muA*flow_rate_A + current_saturation*muB*flow_rate_B)/(5.796*alpha);
             double gradP=force_magnitude+(din-dout)/((Nz-2)*nprocz)/3;
             if (gradP==0){
                 gradP=internalDeltaP;
             }
-            double absperm1 = muA*flow_rate_A*9.87e11*voxelSize*voxelSize/gradP;
-            double absperm2 = muB*flow_rate_B*9.87e11*voxelSize*voxelSize/gradP;
-            double absperm1_H = muA*flow_rate_A_H*9.87e11*voxelSize*voxelSize/gradP;
-            double absperm2_H = muB*flow_rate_B_H*9.87e11*voxelSize*voxelSize/gradP;
+            const double DARCY_M2 = 9.869233e-13; // 1 Darcy in m²
+            double absperm1 = muA*flow_rate_A*voxelSize*voxelSize/(gradP*DARCY_M2);
+            double absperm2 = muB*flow_rate_B*voxelSize*voxelSize/(gradP*DARCY_M2);
+            double absperm1_H = muA*flow_rate_A_H*voxelSize*voxelSize/(gradP*DARCY_M2);
+            double absperm2_H = muB*flow_rate_B_H*voxelSize*voxelSize/(gradP*DARCY_M2);
             //scale the settling parameter by the domain size
             settlingParam = sqrt(settlingParam)/(double((Nx-2)*(Ny-2)*(Nz-2)*nprocs))/poro;
             current_saturation = volB/(volA+volB);
@@ -1310,9 +1370,41 @@ void ScaLBL_ColorModel::Run(){
             //printf("Rank: %d, MLUPS: %f\n",rank, MLUPS);
             MPI_Barrier(Dm->Comm);
             if (rank==0) {
-                printf("Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1,absperm2,absperm1_H,absperm2_H);
-                printf("EMA: Phase 1: %f D, Phase 2: %f D, Connected Phase 1: %f D, Connected Phase 2 %f D\n",absperm1_EMA, absperm2_EMA,absperm1_H_EMA, absperm2_H_EMA);
-                printf("MLUPS: %f, Sat = %f, flux = %e, force = %e, gradP = %e\nRe = (%e, %e), Nca = (%e, %e), EMANca = %e, EMAdNca = %e, setPar = %e\n",MLUPSGlob, current_saturation, flux, force_magnitude, gradP, Re1, Re2, Ca1, Ca2, Ca_EMA, dCadtEMA, settlingParam);
+                if (dt_si > 0 && dx_si > 0 && rho_ref > 0) {
+                    // ---- SI unit output ----
+                    double vel_scale = dx_si / dt_si;                       // lattice vel -> m/s
+                    double gradP_SI = gradP * rho_ref * dx_si / (dt_si * dt_si); // lattice gradP -> Pa/m
+                    double time_SI = timestep * dt_si;
+                    printf("[SI] t = %.4e s | Sat = %.4f | MLUPS = %.1f\n", time_SI, current_saturation, MLUPSGlob);
+                    printf("[SI] vA = (%.4e, %.4e, %.4e) m/s | vB = (%.4e, %.4e, %.4e) m/s\n",
+                           vA_x*vel_scale, vA_y*vel_scale, vA_z*vel_scale,
+                           vB_x*vel_scale, vB_y*vel_scale, vB_z*vel_scale);
+                    printf("[SI] gradP = %.4e Pa/m | k1 = %.4f D | k2 = %.4f D | k1H = %.4f D | k2H = %.4f D\n",
+                           gradP_SI, absperm1, absperm2, absperm1_H, absperm2_H);
+                    printf("[SI] Ca = %.4e | Re = (%.4e, %.4e) | force = %.4e [LB] | setPar = %.4e\n", Ca, Re1, Re2, force_magnitude, settlingParam);
+                    // SI log file
+                    if (logFile) {
+                        FILE * si_log = fopen("log_SI.csv","a");
+                        fprintf(si_log,"%.6e %i %.4f %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e %.6e\n",
+                            time_SI, timestep, current_saturation,
+                            vA_x*vel_scale, vA_y*vel_scale, vA_z*vel_scale,
+                            vB_x*vel_scale, vB_y*vel_scale, vB_z*vel_scale,
+                            flow_rate_A*vel_scale, flow_rate_B*vel_scale,
+                            gradP_SI,
+                            absperm1*9.869e-13, absperm2*9.869e-13,
+                            absperm1_H*9.869e-13, absperm2_H*9.869e-13,
+                            Ca, Ca1, Ca2, Re, Re1, Re2,
+                            Ca_EMA, settlingParam);
+                        fclose(si_log);
+                    }
+                } else {
+                    // ---- Lattice unit output (original) ----
+                    printf("[LB] t = %i | Sat = %.4f | MLUPS = %.1f\n", timestep, current_saturation, MLUPSGlob);
+                    printf("[LB] k1 = %f D | k2 = %f D | k1H = %f D | k2H = %f D\n",absperm1,absperm2,absperm1_H,absperm2_H);
+                    printf("[LB] EMA: k1 = %f D | k2 = %f D | k1H = %f D | k2H = %f D\n",absperm1_EMA,absperm2_EMA,absperm1_H_EMA,absperm2_H_EMA);
+                    printf("[LB] flux = %e [LB] | force = %e [LB] | gradP = %e [LB]\n",flux, force_magnitude, gradP);
+                    printf("[LB] Re = (%e, %e) | Ca = (%e, %e) | EMA_Ca = %e | dCa/dt = %e | setPar = %e\n",Re1, Re2, Ca1, Ca2, Ca_EMA, dCadtEMA, settlingParam);
+                }
                 if (logFile) {
                     FILE * log_file = fopen("log.csv","a");
                     fprintf(log_file,"%i %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g %.5g\n", timestep,vA_x,vA_y,vA_z,vB_x,vB_y,vB_z,vA_x_H,vA_y_H,vA_z_H,vB_x_H,vB_y_H,vB_z_H,flow_rate_A,flow_rate_B,flow_rate_A_H,flow_rate_B_H, force_magnitude,absperm1,absperm2,absperm1_H,absperm2_H,absperm1_EMA,absperm2_EMA,absperm1_H_EMA,absperm2_H_EMA, MLUPSGlob,current_saturation,flux,gradP,Ca,Ca2,Ca_EMA,dCadtEMA,settlingParam);
@@ -1321,9 +1413,30 @@ void ScaLBL_ColorModel::Run(){
             }
             MPI_Barrier(Dm->Comm);
             
-            if (std::isnan(flow_rate_B+flow_rate_A) || (flow_rate_B+flow_rate_A) == 0.0 || std::isnan(gradP)) {
-                if (rank==0) printf("Nan/zero Flowrate-Force detected, terminating simulation. \n");
-                break;
+            // Comprehensive NaN detection
+            {
+                bool nanDetected = false;
+                if (std::isnan(vA_x) || std::isnan(vA_y) || std::isnan(vA_z) ||
+                    std::isnan(vB_x) || std::isnan(vB_y) || std::isnan(vB_z)) {
+                    if (rank==0) printf("ERROR: NaN in velocity at timestep %i\n", timestep);
+                    nanDetected = true;
+                }
+                if (std::isnan(flow_rate_A) || std::isnan(flow_rate_B)) {
+                    if (rank==0) printf("ERROR: NaN in flow rate at timestep %i\n", timestep);
+                    nanDetected = true;
+                }
+                if (std::isnan(gradP)) {
+                    if (rank==0) printf("ERROR: NaN in pressure gradient at timestep %i\n", timestep);
+                    nanDetected = true;
+                }
+                if (std::isnan(Ca) || std::isnan(absperm1) || std::isnan(absperm2)) {
+                    if (rank==0) printf("ERROR: NaN in Ca or permeability at timestep %i\n", timestep);
+                    nanDetected = true;
+                }
+                if (nanDetected) {
+                    if (rank==0) printf("ERROR: Simulation terminated due to NaN at timestep %i, Sat = %.4f\n", timestep, current_saturation);
+                    break;
+                }
             }
             
             if (sat_visualisation_interval>0) {
@@ -1966,201 +2079,223 @@ void ScaLBL_ColorModel::WriteRestartYDW(){
     MPI_Barrier(Dm->Comm);
 }
 
-void ScaLBL_ColorModel::WriteDebugYDW(){
-    //create the folder
+// --------------- TIFF writing helpers ---------------
+static void _tiffDummyWarning(const char*, const char*, va_list){}
 
-    char LocalRankFoldername[100];
-    if (rank==0) {
-        sprintf(LocalRankFoldername,"./rawVis%d",timestep); 
-        mkdir(LocalRankFoldername, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+static void writeTiff3D_uint8(const char* filename, const uint8_t* data, int nx, int ny, int nz){
+    TIFFSetWarningHandler((TIFFErrorHandler)_tiffDummyWarning);
+    TIFF* tif = TIFFOpen(filename, "w");
+    if (!tif){ printf("ERROR: cannot open %s for writing\n", filename); return; }
+    // ImageJ metadata so readers (ParaView, ImageJ, Fiji) treat pages as z-slices
+    char desc[256];
+    snprintf(desc, sizeof(desc), "ImageJ=1.0\nimages=%d\nslices=%d\n", nz, nz);
+    for (int z = 0; z < nz; z++){
+        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH,      (uint32_t)nx);
+        TIFFSetField(tif, TIFFTAG_IMAGELENGTH,      (uint32_t)ny);
+        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL,  1);
+        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE,    8);
+        TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT,     SAMPLEFORMAT_UINT);
+        TIFFSetField(tif, TIFFTAG_COMPRESSION,       COMPRESSION_ADOBE_DEFLATE);
+        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC,       PHOTOMETRIC_MINISBLACK);
+        TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP,      (uint32_t)ny);
+        TIFFSetField(tif, TIFFTAG_PLANARCONFIG,      PLANARCONFIG_CONTIG);
+        if (z == 0) TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION, desc);
+        const uint8_t* slice = data + (long long)z * ny * nx;
+        for (int y = 0; y < ny; y++){
+            TIFFWriteScanline(tif, (void*)(slice + y * nx), y, 0);
+        }
+        TIFFWriteDirectory(tif);
     }
-    MPI_Barrier(Dm->Comm);
-    // Copy back final phase indicator field and convert to regular layout
-    //DoubleArray PhaseField(Nx,Ny,Nz);
-    //ScaLBL_Comm->RegularLayout(Map,Phi,PhaseField);
+    TIFFClose(tif);
+}
+
+static void writeTiff3D_float(const char* filename, const float* data, int nx, int ny, int nz){
+    TIFFSetWarningHandler((TIFFErrorHandler)_tiffDummyWarning);
+    TIFF* tif = TIFFOpen(filename, "w");
+    if (!tif){ printf("ERROR: cannot open %s for writing\n", filename); return; }
+    char desc[256];
+    snprintf(desc, sizeof(desc), "ImageJ=1.0\nimages=%d\nslices=%d\n", nz, nz);
+    for (int z = 0; z < nz; z++){
+        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH,      (uint32_t)nx);
+        TIFFSetField(tif, TIFFTAG_IMAGELENGTH,      (uint32_t)ny);
+        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL,  1);
+        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE,    32);
+        TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT,     SAMPLEFORMAT_IEEEFP);
+        TIFFSetField(tif, TIFFTAG_COMPRESSION,       COMPRESSION_ADOBE_DEFLATE);
+        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC,       PHOTOMETRIC_MINISBLACK);
+        TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP,      (uint32_t)ny);
+        TIFFSetField(tif, TIFFTAG_PLANARCONFIG,      PLANARCONFIG_CONTIG);
+        if (z == 0) TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION, desc);
+        const float* slice = data + (long long)z * ny * nx;
+        for (int y = 0; y < ny; y++){
+            TIFFWriteScanline(tif, (void*)(slice + (long long)y * nx), y, 0);
+        }
+        TIFFWriteDirectory(tif);
+    }
+    TIFFClose(tif);
+}
+
+// --------------- Merged TIFF output (replaces Part-file dumps) ---------------
+void ScaLBL_ColorModel::WriteDebugYDW(){
+    // Local interior dimensions (strip ghost layers)
+    int lNx = Nx - 2, lNy = Ny - 2, lNz = Nz - 2;
+    // Global domain dimensions
+    int gNx = nprocx * lNx;
+    int gNy = nprocy * lNy;
+    int gNz = nprocz * lNz;
+    long long localSize  = (long long)lNx * lNy * lNz;
+    long long globalSize = (long long)gNx * gNy * gNz;
+
+    // Copy phase field from device to host
     ScaLBL_CopyToHost(PhaseField.data(), Phi, sizeof(double)*N);
-    //create the file
-    double temp = 0.0;
-    double phiLoc = 0.0;
-    FILE *OUTFILE;
-    char LocalRankFilename[100];
-    sprintf(LocalRankFilename,"rawVis%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-    OUTFILE = fopen(LocalRankFilename,"wb");
-    //td::fstream ofs(LocalRankFilename, ios::out | ios::binary );
-    for (int k=0; k<Nz; k++){
-        for (int j=0; j<Ny; j++){
-            for (int i=0; i<Nx; i++){
-                //fprintf(OUTFILE,"%f\n",PhaseField(i, j, k));
-                temp = PhaseField(i,j,k);
-                //if (rank==0) printf("[DEBUG] temp = %f, ", temp);
-                temp = (temp+1)*127.5;
-                //if (rank==0) printf("[DEBUG] temp = %f, ", temp);
-                uint8_t tempChar = (uint8_t)temp;
-                //if (rank==0) printf("[DEBUG] temp = %d\n\n", tempChar);
-                fwrite(&tempChar,sizeof(uint8_t),1,OUTFILE);
+
+    // ========== Phase map (uint8): 0=WP, 1=solid, 2=NWP ==========
+    std::vector<uint8_t> localPhase(localSize);
+    for (int k = 1; k < Nz-1; k++){
+        for (int j = 1; j < Ny-1; j++){
+            for (int i = 1; i < Nx-1; i++){
+                long long idx = (long long)(k-1)*lNy*lNx + (j-1)*lNx + (i-1);
+                if (Map(i,j,k) < 0){
+                    localPhase[idx] = 1;       // solid
+                } else if (PhaseField(i,j,k) < 0.0){
+                    localPhase[idx] = 0;       // wetting phase
+                } else {
+                    localPhase[idx] = 2;       // non-wetting phase
+                }
             }
         }
     }
-    fclose(OUTFILE);
+
+    // Gather phase to rank 0
+    std::vector<uint8_t> gatherPhase;
+    if (rank == 0) gatherPhase.resize((long long)localSize * nprocs);
+    MPI_Gather(localPhase.data(), (int)localSize, MPI_UNSIGNED_CHAR,
+               rank == 0 ? gatherPhase.data() : nullptr, (int)localSize,
+               MPI_UNSIGNED_CHAR, 0, Dm->Comm);
+    localPhase.clear();
+
+    if (rank == 0){
+        std::vector<uint8_t> assembled(globalSize);
+        for (int r = 0; r < nprocs; r++){
+            int kp = r / (nprocy * nprocx);
+            int jp = (r % (nprocy * nprocx)) / nprocx;
+            int ip = r % nprocx;
+            long long gx0 = ip * lNx, gy0 = jp * lNy, gz0 = kp * lNz;
+            for (int k = 0; k < lNz; k++){
+                for (int j = 0; j < lNy; j++){
+                    for (int i = 0; i < lNx; i++){
+                        long long src = (long long)r * localSize + k*lNy*lNx + j*lNx + i;
+                        long long dst = (gz0+k)*(long long)gNy*gNx + (gy0+j)*gNx + (gx0+i);
+                        assembled[dst] = gatherPhase[src];
+                    }
+                }
+            }
+        }
+        gatherPhase.clear();
+        char fname[256];
+        sprintf(fname, "colortest_%09d.tif", timestep);
+        writeTiff3D_uint8(fname, assembled.data(), gNx, gNy, gNz);
+        if (rank == 0) printf("  Wrote %s (%d x %d x %d)\n", fname, gNx, gNy, gNz);
+    }
     MPI_Barrier(Dm->Comm);
 
+    // ========== Velocity & pressure fields (float32 TIFF) ==========
+    double vel_conv  = (dt_si > 0 && dx_si > 0) ? dx_si / dt_si : 1.0;
+    double pres_conv = (dt_si > 0 && dx_si > 0 && rho_ref > 0)
+                       ? rho_ref * (dx_si / dt_si) * (dx_si / dt_si) : 1.0;
+    bool siMode = (dt_si > 0 && dx_si > 0);
+    const char* unitTag = siMode ? "SI" : "LB";
 
-    	//create the folder
-	char LocalRankFoldernameVelP[100];
-	if (rank==0) {
-		sprintf(LocalRankFoldernameVelP,"./rawVisVelP%d",timestep); 
-	    mkdir(LocalRankFoldernameVelP, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    // Reusable buffers
+    std::vector<float> localBuf(localSize);
+    std::vector<float> gatherBuf;
+    std::vector<float> globalField;
+    if (rank == 0){
+        gatherBuf.resize((long long)localSize * nprocs);
+        globalField.resize(globalSize);
     }
-	MPI_Barrier(comm);
-	//create the file
-	FILE *OUTFILEVelP;
-	char LocalRankFilenameVelP[100];
-	sprintf(LocalRankFilenameVelP,"rawVisVelP%d/Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-	OUTFILEVelP = fopen(LocalRankFilenameVelP,"wb");
-    int idx=0;
-    for (int k=0; k<Nz; k++){
-	    for (int j=0; j<Ny; j++){
-		    for (int i=0; i<Nx; i++){
-		        idx = Map(i,j,k);
-		        if (idx >= 0) {
-			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
-			        temp = Velocity_x(i,j,k);
-	                fwrite(&temp,sizeof(double),1,OUTFILEVelP);
-	            }
-		    }
-	    }
+
+    // Lambda: pack local interior of a Cartesian DoubleArray into localBuf
+    auto packField = [&](DoubleArray& field, double conv){
+        for (int k = 1; k < Nz-1; k++){
+            for (int j = 1; j < Ny-1; j++){
+                for (int i = 1; i < Nx-1; i++){
+                    long long idx = (long long)(k-1)*lNy*lNx + (j-1)*lNx + (i-1);
+                    localBuf[idx] = (Map(i,j,k) >= 0)
+                        ? (float)(field(i,j,k) * conv) : 0.0f;
+                }
+            }
+        }
+    };
+
+    // Lambda: gather localBuf → rank 0 assembles global → writes TIFF
+    auto gatherAndWrite = [&](const char* fname){
+        MPI_Gather(localBuf.data(), (int)localSize, MPI_FLOAT,
+                   rank == 0 ? gatherBuf.data() : nullptr, (int)localSize,
+                   MPI_FLOAT, 0, Dm->Comm);
+        if (rank == 0){
+            for (int r = 0; r < nprocs; r++){
+                int kp = r / (nprocy * nprocx);
+                int jp = (r % (nprocy * nprocx)) / nprocx;
+                int ip = r % nprocx;
+                long long gx0 = ip * lNx, gy0 = jp * lNy, gz0 = kp * lNz;
+                for (int k = 0; k < lNz; k++){
+                    for (int j = 0; j < lNy; j++){
+                        for (int i = 0; i < lNx; i++){
+                            long long src = (long long)r * localSize + k*lNy*lNx + j*lNx + i;
+                            long long dst = (gz0+k)*(long long)gNy*gNx + (gy0+j)*gNx + (gx0+i);
+                            globalField[dst] = gatherBuf[src];
+                        }
+                    }
+                }
+            }
+            writeTiff3D_float(fname, globalField.data(), gNx, gNy, gNz);
+            printf("  Wrote %s (%d x %d x %d)\n", fname, gNx, gNy, gNz);
+        }
+    };
+
+    char fname[256];
+
+    // Velocity magnitude
+    for (int k = 1; k < Nz-1; k++){
+        for (int j = 1; j < Ny-1; j++){
+            for (int i = 1; i < Nx-1; i++){
+                long long idx = (long long)(k-1)*lNy*lNx + (j-1)*lNx + (i-1);
+                if (Map(i,j,k) >= 0){
+                    double vx = Velocity_x(i,j,k) * vel_conv;
+                    double vy = Velocity_y(i,j,k) * vel_conv;
+                    double vz = Velocity_z(i,j,k) * vel_conv;
+                    localBuf[idx] = (float)sqrt(vx*vx + vy*vy + vz*vz);
+                } else {
+                    localBuf[idx] = 0.0f;
+                }
+            }
+        }
     }
-    for (int k=0; k<Nz; k++){
-	    for (int j=0; j<Ny; j++){
-		    for (int i=0; i<Nx; i++){
-		        idx = Map(i,j,k);
-		        if (idx >= 0) {
-			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
-			        temp = Velocity_y(i,j,k);
-	                fwrite(&temp,sizeof(double),1,OUTFILEVelP);
-	            }
-		    }
-	    }
-    }
-    for (int k=0; k<Nz; k++){
-	    for (int j=0; j<Ny; j++){
-		    for (int i=0; i<Nx; i++){
-		        idx = Map(i,j,k);
-		        if (idx >= 0) {
-			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
-			        temp = Velocity_z(i,j,k);
-	                fwrite(&temp,sizeof(double),1,OUTFILEVelP);
-	            }
-		    }
-	    }
-    }
-    for (int k=0; k<Nz; k++){
-	    for (int j=0; j<Ny; j++){
-		    for (int i=0; i<Nx; i++){
-		        idx = Map(i,j,k);
-		        if (idx >= 0) {
-			        //fprintf(OUTFILE,"%f\n",vx(i, j, k));
-			        temp = Pressure_Cart(i,j,k);
-	                fwrite(&temp,sizeof(double),1,OUTFILEVelP);
-	            }
-		    }
-	    }
-    }
-	fclose(OUTFILEVelP);
-	MPI_Barrier(comm);
+    sprintf(fname, "colortestVelMag_%s_%09d.tif", unitTag, timestep);
+    gatherAndWrite(fname);
 
+    // Vx
+    packField(Velocity_x, vel_conv);
+    sprintf(fname, "colortestVx_%s_%09d.tif", unitTag, timestep);
+    gatherAndWrite(fname);
 
-//    FILE *OUTFILEPress;
-//    char LocalRankFilenameVels[100];
-//    sprintf(LocalRankFilenameVels,"rawVis%d/Press_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-//    OUTFILEPress = fopen(LocalRankFilenameVels,"wb");
-//    for (int k=0; k<Nz; k++){
-//        for (int j=0; j<Ny; j++){
-//            for (int i=0; i<Nx; i++){
-//                //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
-//                //phiLoc = PhaseField(i,j,k);
-//                temp = Pressure_Cart(i,j,k);
-//                fwrite(&temp,sizeof(double),1,OUTFILEPress);
-//            }
-//        }
-//    }
-//    fclose(OUTFILEPress);
+    // Vy
+    packField(Velocity_y, vel_conv);
+    sprintf(fname, "colortestVy_%s_%09d.tif", unitTag, timestep);
+    gatherAndWrite(fname);
 
-//    FILE *OUTFILEDens;
-//    char LocalRankFilenameVels[100];
-//    sprintf(LocalRankFilenameVels,"rawVis%d/Den_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-//    OUTFILEDens = fopen(LocalRankFilenameVels,"wb");
-//    for (int k=0; k<Nz; k++){
-//        for (int j=0; j<Ny; j++){
-//            for (int i=0; i<Nx; i++){
-//                //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
-//                //phiLoc = PhaseField(i,j,k);
+    // Vz
+    packField(Velocity_z, vel_conv);
+    sprintf(fname, "colortestVz_%s_%09d.tif", unitTag, timestep);
+    gatherAndWrite(fname);
 
-//                    temp = Density_A_Cart(i,j,k);
+    // Pressure
+    packField(Pressure_Cart, pres_conv);
+    sprintf(fname, "colortestP_%s_%09d.tif", unitTag, timestep);
+    gatherAndWrite(fname);
 
-//                fwrite(&temp,sizeof(double),1,OUTFILEDens);
-//            }
-//        }
-//    }
-//    
-//    for (int k=0; k<Nz; k++){
-//        for (int j=0; j<Ny; j++){
-//            for (int i=0; i<Nx; i++){
-//                //fprintf(OUTFILEY,"%f\n",Velocity_y(i, j, k));
-//                //phiLoc = PhaseField(i,j,k);
-
-//                    temp = Density_B_Cart(i,j,k);
-
-//                fwrite(&temp,sizeof(double),1,OUTFILEDens);
-//            }
-//        }
-//    }
-//    fclose(OUTFILEDens);
-    
-//    FILE *OUTFILEVels;
-//    char LocalRankFilenameVels[100];
-//    sprintf(LocalRankFilenameVels,"rawVis%d/Vel_Part_%d_%d_%d_%d_%d_%d_%d.txt",timestep,rank,Nx,Ny,Nz,nprocx,nprocy,nprocz); //change this file name to include the size
-//    OUTFILEVels = fopen(LocalRankFilenameVels,"wb");
-//    for (int k=0; k<Nz; k++){
-//        for (int j=0; j<Ny; j++){
-//            for (int i=0; i<Nx; i++){
-//                //fprintf(OUTFILEX,"%f\n",Velocity_x(i, j, k));
-//                phiLoc = PhaseField(i,j,k);
-
-//                    temp = Velocity_x(i,j,k);
-
-//                fwrite(&temp,sizeof(double),1,OUTFILEVels);
-//            }
-//        }
-//    }
-//    
-//    for (int k=0; k<Nz; k++){
-//        for (int j=0; j<Ny; j++){
-//            for (int i=0; i<Nx; i++){
-//                //fprintf(OUTFILEY,"%f\n",Velocity_y(i, j, k));
-//                phiLoc = PhaseField(i,j,k);
-
-//                    temp = Velocity_y(i,j,k);
-
-//                fwrite(&temp,sizeof(double),1,OUTFILEVels);
-//            }
-//        }
-//    }
-//    
-//    for (int k=0; k<Nz; k++){
-//        for (int j=0; j<Ny; j++){
-//            for (int i=0; i<Nx; i++){
-//                //fprintf(OUTFILEZ,"%f\n",Velocity_z(i, j, k));
-//                phiLoc = PhaseField(i,j,k);
-
-//                    temp = Velocity_z(i,j,k);
-
-//                fwrite(&temp,sizeof(double),1,OUTFILEVels);
-//            }
-//        }
-//    }
-//    fclose(OUTFILEVels);
-//    MPI_Barrier(Dm->Comm);
+    MPI_Barrier(Dm->Comm);
 }
 
 double ScaLBL_ColorModel::approxRollingAverage(double avg, double new_sample, int timestep) {
@@ -2172,42 +2307,28 @@ double ScaLBL_ColorModel::approxRollingAverage(double avg, double new_sample, in
 }
 // there is a memory corruption issue here....
 int ScaLBL_ColorModel::collateBoundaryBlobs(int *&inletNWPBlobsGlob, vector<int>inletNWPBlobsLoc) {
-    int *recvcounts;
-    recvcounts = (int *) malloc( nprocs * sizeof(int));
+    // Remove sentinel values
     inletNWPBlobsLoc.erase(std::remove(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), -2), inletNWPBlobsLoc.end());
     inletNWPBlobsLoc.erase(std::remove(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end(), -1), inletNWPBlobsLoc.end());
     int sizeLocalBlobsList = inletNWPBlobsLoc.size();
-    MPI_Barrier(Dm->Comm);
-    MPI_Allgather(&sizeLocalBlobsList, 1, MPI_INT, recvcounts, 1, MPI_INT, Dm->Comm); // gather the bloblengths
-//            if (rank==0) {
-//                for (int i = 0; i < nprocs; i++) {
-//                    printf("rank: %d, recvCounts: %d \n",rank, recvcounts[i]);
-//                }
-//            }
-    int totlen = 0; 
-    int *displs;
-    displs = new int[sizeLocalBlobsList*sizeof(int)];
-    displs[0] = 0; // log up the cumulative values
-    totlen += recvcounts[0]; // the total
-    for (int i=1; i<nprocs; i++) {
-       totlen += recvcounts[i];   
-       displs[i] = displs[i-1] + recvcounts[i-1];
+
+    // Gather per-rank counts
+    std::vector<int> recvcounts(nprocs);
+    MPI_Allgather(&sizeLocalBlobsList, 1, MPI_INT, recvcounts.data(), 1, MPI_INT, Dm->Comm);
+
+    // Compute displacements and total length (must be nprocs elements)
+    std::vector<int> displs(nprocs);
+    displs[0] = 0;
+    int totlen = recvcounts[0];
+    for (int i = 1; i < nprocs; i++) {
+        displs[i] = displs[i-1] + recvcounts[i-1];
+        totlen += recvcounts[i];
     }
-//            for (int i = 0; i < nprocs; i++) {
-//                printf("rank: %d, totlen: %d, displacements: %d, recvCounts: %d \n",rank, totlen, displs[i], recvcounts[i]);
-//            }
-    /* allocate string, pre-fill with spaces and null terminator */
-    inletNWPBlobsGlob = (int *) malloc( totlen * sizeof(int)) ;          
-    int *temp;
-    temp = (int *) malloc( inletNWPBlobsLoc.size() * sizeof(int)) ; 
-    for (int i=0;i<inletNWPBlobsLoc.size();i++){
-        temp[i] = inletNWPBlobsLoc[i];
-    }
-    MPI_Barrier(Dm->Comm);
-    MPI_Allgatherv(temp, sizeLocalBlobsList, MPI_INT, inletNWPBlobsGlob, recvcounts, displs, MPI_INT, Dm->Comm);
-//            for (int i = 0; i < totlen; i++) {
-//                printf("rank: %d, boundary blobID: %d \n",rank, inletNWPBlobsGlob[i]);
-//            }
-    MPI_Barrier(Dm->Comm);
+
+    // Gather all boundary blob IDs
+    inletNWPBlobsGlob = (int *) malloc(totlen * sizeof(int));
+    std::vector<int> temp(inletNWPBlobsLoc.begin(), inletNWPBlobsLoc.end());
+    MPI_Allgatherv(temp.data(), sizeLocalBlobsList, MPI_INT,
+                   inletNWPBlobsGlob, recvcounts.data(), displs.data(), MPI_INT, Dm->Comm);
     return totlen;
 }

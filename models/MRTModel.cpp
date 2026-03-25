@@ -574,7 +574,7 @@ void ScaLBL_MRTModel::Run(){
 			}
 			MPI_Allreduce(&MLUPS,&MLUPSGlob,1,MPI_DOUBLE,MPI_SUM,Mask->Comm);
 			if (rank==0) {
-				printf("Timestep: %d, MLUPS: %0.4f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt = %0.4e, gradP: %0.4e, fluxBar: %0.4e, maxDeltaVMag: %0.4e, meanDeltaVMag: %0.4e\n",timestep, MLUPSGlob,absperm*9.87e11,  abspermZ*9.87e11, cputime, convRate, gradP, vaz*(Nx-2)*(Ny-2)*(Nz-2)*nprocs/((Nz-2)*nprocz), maxdeltavmagglob, meandeltavmagglob);
+				printf("Timestep: %d, MLUPS: %0.4f, K = %f Darcies (RMS), %f Darcies (Z-Dir), Time %0.2fs, dK/dt = %0.4e, gradP: %0.4e, fluxBar: %0.4e, maxDeltaVMag: %0.4e, meanDeltaVMag: %0.4e\n",timestep, MLUPSGlob,absperm/9.869233e-13,  abspermZ/9.869233e-13, cputime, convRate, gradP, vaz*(Nx-2)*(Ny-2)*(Nz-2)*nprocs/((Nz-2)*nprocz), maxdeltavmagglob, meandeltavmagglob);
 				if (logFile) {
 				    FILE * log_file = fopen("Permeability.csv","a");
 				    fprintf(log_file,"%i %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g %.8g\n",timestep, Fx, Fy, Fz, din, dout, mu, vax,vay,vaz, absperm);

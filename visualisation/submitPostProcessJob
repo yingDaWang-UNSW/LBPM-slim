@@ -1,0 +1,15 @@
+#!/bin/bash
+#PBS -P m65
+#PBS -q normal
+#PBS -l walltime=48:00:00
+#PBS -l mem=190GB
+#PBS -l jobfs=400GB
+#PBS -l ncpus=48
+#PBS -l storage=scratch/m65
+#PBS -l software=my_program
+#PBS -l wd
+
+module load python3
+python3 ~/LBPMYDW/LBPM-slim/visualisation/lbpmRawToTiff.py
+
+

@@ -14,6 +14,7 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 // GPU Functions for D3Q7 Lattice Boltzmann Methods
+#include <stdio.h>
 
 #define NBLOCKS 8192
 #define NTHREADS 256
@@ -94,10 +95,48 @@ __global__ void dvc_ScaLBL_D3Q7_Unpack(int q,  int *list,  int start, int count,
 	}
 }
 
+__global__  void dvc_ScaLBL_D3Q7_Reflection_BC_z(int *list, double *dist, int count, int Np){
+	int idx, n;
+	idx = blockIdx.x*blockDim.x + threadIdx.x;
+	if (idx < count){
+		n = list[idx];
+		double f5 = 0.222222222222222222222222 - dist[6*Np+n];
+		dist[6*Np+n] = f5;
+	}
+}
+
+__global__  void dvc_ScaLBL_D3Q7_Reflection_BC_Z(int *list, double *dist, int count, int Np){
+	int idx, n;
+	idx = blockIdx.x*blockDim.x + threadIdx.x;
+	if (idx < count){
+		n = list[idx];
+		double f6 = 0.222222222222222222222222 - dist[5*Np+n];
+		dist[5*Np+n] = f6;
+	}
+}
+
 
 extern "C" void ScaLBL_D3Q7_Unpack(int q, int *list,  int start, int count, double *recvbuf, double *dist, int N){
 	int GRID = count / 512 + 1;
 	dvc_ScaLBL_D3Q7_Unpack <<<GRID,512 >>>(q, list, start, count, recvbuf, dist, N);
+}
+
+extern "C" void ScaLBL_D3Q7_Reflection_BC_z(int *list, double *dist, int count, int Np){
+	int GRID = count / 512 + 1;
+	dvc_ScaLBL_D3Q7_Reflection_BC_z<<<GRID,512>>>(list, dist, count, Np);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q7_Reflection_BC_z (kernel): %s \n",cudaGetErrorString(err));
+	}
+}
+
+extern "C" void ScaLBL_D3Q7_Reflection_BC_Z(int *list, double *dist, int count, int Np){
+	int GRID = count / 512 + 1;
+	dvc_ScaLBL_D3Q7_Reflection_BC_Z<<<GRID,512>>>(list, dist, count, Np);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q7_Reflection_BC_Z (kernel): %s \n",cudaGetErrorString(err));
+	}
 }
 
 extern "C" void ScaLBL_Scalar_Pack(int *list, int count, double *sendbuf, double *Data, int N){

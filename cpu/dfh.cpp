@@ -126,10 +126,11 @@ extern "C" void ScaLBL_D3Q19_AAeven_DFH(int *neighborList, double *dist, double 
 		ny = Gradient[n+Np];
 		nz = Gradient[n+2*Np];
 		C = sqrt(nx*nx+ny*ny+nz*nz);
-		if (C==0.0) C=1.0;
-		nx = nx/C;
-		ny = ny/C;
-		nz = nz/C;		
+		double ColorMag = C;
+		if (C==0.0) ColorMag=1.0;
+		nx = nx/ColorMag;
+		ny = ny/ColorMag;
+		nz = nz/ColorMag;		
 
 		// q=0
 		fq = dist[n];
@@ -653,10 +654,11 @@ extern "C" void ScaLBL_D3Q19_AAodd_DFH(int *neighborList, double *dist, double *
 		ny = Gradient[n+Np];
 		nz = Gradient[n+2*Np];
 		C = sqrt(nx*nx+ny*ny+nz*nz);
-		if (C==0.0) C=1.0;
-		nx = nx/C;
-		ny = ny/C;
-		nz = nz/C;			
+		double ColorMag = C;
+		if (C==0.0) ColorMag=1.0;
+		nx = nx/ColorMag;
+		ny = ny/ColorMag;
+		nz = nz/ColorMag;			
 
 		// q=0
 		fq = dist[n];

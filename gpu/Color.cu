@@ -504,9 +504,9 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_Color(int *Map, double *dist, double *A
 
 			//........................................................................
 			//..............carry out relaxation process..............................
-			//..........Toelke, Fruediger et. al. 2006................................
+			//..CSS formulation: capillary stress is TRACELESS (deviatoric only)......
 			if (C == 0.0)	nx = ny = nz = 0.0;
-			m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) -19*alpha*C - m1);
+			m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) - m1);
 			m2 = m2 + rlx_setA*((3*rho - 5.5*(jx*jx+jy*jy+jz*jz)/rho0)- m2);
 			m4 = m4 + rlx_setB*((-0.6666666666666666*jx)- m4);
 			m6 = m6 + rlx_setB*((-0.6666666666666666*jy)- m6);
@@ -813,10 +813,11 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_Color(int *neighborList, int *Map, double
 
 			//...........Normalize the Color Gradient.................................
 			C = sqrt(nx*nx+ny*ny+nz*nz);
-			if (C==0.0) C=1.0;
-			nx = nx/C;
-			ny = ny/C;
-			nz = nz/C;		
+			double ColorMag = C;
+			if (C==0.0) ColorMag=1.0;
+			nx = nx/ColorMag;
+			ny = ny/ColorMag;
+			nz = nz/ColorMag;		
 
 			// q=0
 			fq = dist[n];
@@ -1141,9 +1142,9 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_Color(int *neighborList, int *Map, double
 			
 			//........................................................................
 			//..............carry out relaxation process..............................
-			//..........Toelke, Fruediger et. al. 2006................................
+			//..CSS formulation: capillary stress is TRACELESS (deviatoric only)......
 			if (C == 0.0)	nx = ny = nz = 0.0;
-			m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) -19*alpha*C - m1);
+			m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) - m1);
 			m2 = m2 + rlx_setA*((3*rho - 5.5*(jx*jx+jy*jy+jz*jz)/rho0)- m2);
 			m4 = m4 + rlx_setB*((-0.6666666666666666*jx)- m4);
 			m6 = m6 + rlx_setB*((-0.6666666666666666*jy)- m6);
@@ -1621,6 +1622,34 @@ extern "C" void ScaLBL_PhaseField_Init(int *Map, double *Phi, double *Den, doubl
 	cudaError_t err = cudaGetLastError();
 	if (cudaSuccess != err){
 		printf("CUDA error in ScaLBL_PhaseField_Init: %s \n",cudaGetErrorString(err));
+	}
+}
+
+// Scale D3Q19 distributions from uniform rho=1 to phase-consistent rho0
+__global__ void dvc_ScaLBL_D3Q19_Init_Color(double *dist, double *Den, double rhoA, double rhoB, int start, int finish, int Np){
+	int idx;
+	int S = Np/NBLOCKS/NTHREADS + 1;
+	for (int s=0; s<S; s++){
+		idx = S*blockIdx.x*blockDim.x + s*blockDim.x + threadIdx.x + start;
+		if (idx < finish) {
+			double nA = Den[idx];
+			double nB = Den[Np + idx];
+			double sum = nA + nB;
+			if (sum < 1e-30) sum = 1.0;
+			double phi = (nA - nB) / sum;
+			double rho0 = rhoA + 0.5*(1.0-phi)*(rhoB-rhoA);
+			for (int q = 0; q < 19; q++){
+				dist[q*Np + idx] *= rho0;
+			}
+		}
+	}
+}
+
+extern "C" void ScaLBL_D3Q19_Init_Color(double *dist, double *Den, double rhoA, double rhoB, int start, int finish, int Np){
+	dvc_ScaLBL_D3Q19_Init_Color<<<NBLOCKS,NTHREADS>>>(dist, Den, rhoA, rhoB, start, finish, Np);
+	cudaError_t err = cudaGetLastError();
+	if (cudaSuccess != err){
+		printf("CUDA error in ScaLBL_D3Q19_Init_Color: %s \n",cudaGetErrorString(err));
 	}
 }
 

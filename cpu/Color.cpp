@@ -475,9 +475,9 @@ extern "C" void ScaLBL_D3Q19_AAeven_Color(int *Map, double *dist, double *Aq, do
 
 		//........................................................................
 		//..............carry out relaxation process..............................
-		//..........Toelke, Fruediger et. al. 2006................................
+		//..CSS formulation: capillary stress is TRACELESS (deviatoric only)......
 		if (C == 0.0)	nx = ny = nz = 0.0;
-		m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) -19*alpha*C - m1);
+		m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) - m1);
 		m2 = m2 + rlx_setA*((3*rho - 5.5*(jx*jx+jy*jy+jz*jz)/rho0)- m2);
 		m4 = m4 + rlx_setB*((-0.6666666666666666*jx)- m4);
 		m6 = m6 + rlx_setB*((-0.6666666666666666*jy)- m6);
@@ -1112,9 +1112,9 @@ extern "C" void ScaLBL_D3Q19_AAodd_Color(int *neighborList, int *Map, double *di
 		
 		//........................................................................
 		//..............carry out relaxation process..............................
-		//..........Toelke, Fruediger et. al. 2006................................
+		//..CSS formulation: capillary stress is TRACELESS (deviatoric only)......
 		if (C == 0.0)	nx = ny = nz = 0.0;
-		m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) -19*alpha*C - m1);
+		m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) - m1);
 		m2 = m2 + rlx_setA*((3*rho - 5.5*(jx*jx+jy*jy+jz*jz)/rho0)- m2);
 		m4 = m4 + rlx_setB*((-0.6666666666666666*jx)- m4);
 		m6 = m6 + rlx_setB*((-0.6666666666666666*jy)- m6);
@@ -1520,6 +1520,20 @@ extern "C" void ScaLBL_PhaseField_Init(int *Map, double *Phi, double *Den, doubl
 		Bq[4*Np+idx]=0.1111111111111111*nB;
 		Bq[5*Np+idx]=0.1111111111111111*nB;
 		Bq[6*Np+idx]=0.1111111111111111*nB;
+	}
+}
+
+extern "C" void ScaLBL_D3Q19_Init_Color(double *dist, double *Den, double rhoA, double rhoB, int start, int finish, int Np){
+	for (int idx = start; idx < finish; idx++){
+		double nA = Den[idx];
+		double nB = Den[Np + idx];
+		double sum = nA + nB;
+		if (sum < 1e-30) sum = 1.0;
+		double phi = (nA - nB) / sum;
+		double rho0 = rhoA + 0.5*(1.0-phi)*(rhoB-rhoA);
+		for (int q = 0; q < 19; q++){
+			dist[q*Np + idx] *= rho0;
+		}
 	}
 }
 

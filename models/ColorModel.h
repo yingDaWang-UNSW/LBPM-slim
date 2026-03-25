@@ -56,6 +56,9 @@ public:
 	double tauA,tauB,rhoA,rhoB,alpha,beta;
 	double Fx,Fy,Fz,flux;
 	double din,dout,inletA,inletB,outletA,outletB;
+
+	// SI conversion factors (set by ColorModelSI; 0 = lattice-unit mode)
+	double dx_si, dt_si, rho_ref;
 	
 	int Nx,Ny,Nz,N,Np;
 	double poro;
@@ -108,8 +111,8 @@ public:
 private:
 	MPI_Comm comm;
     
-	int dist_mem_size;
-	int neighborSize;
+	size_t dist_mem_size;
+	size_t neighborSize;
 	// filenames
     char LocalRankString[8];
     char LocalRankFilename[40];
