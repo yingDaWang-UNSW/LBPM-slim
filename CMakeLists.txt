@@ -3,7 +3,7 @@ CMAKE_MINIMUM_REQUIRED( VERSION 3.9 )
 
 
 MESSAGE("====================")
-MESSAGE("Configuring LBPM-slim")
+MESSAGE("Configuring LBPM-slim (petrophysics branch: k, kr, pc only)")
 MESSAGE("====================")
 
 
@@ -62,7 +62,7 @@ INCLUDE_DIRECTORIES( "${${PROJ}_INSTALL_DIR}/include" )
 ADD_CUSTOM_TARGET( build-test )
 ADD_CUSTOM_TARGET( build-examples )
 ADD_CUSTOM_TARGET( check COMMAND  make test  )
-ADD_DISTCLEAN( analysis tests liblbpm-slim.* cpu gpu example common )
+ADD_DISTCLEAN( analysis tests liblbpm-slim.* cpu gpu common )
 
 
 # Check for CUDA
@@ -108,7 +108,6 @@ ELSE()
 ENDIF()
 INSTALL_LBPM_TARGET( lbpm-slim-library  )
 ADD_SUBDIRECTORY( tests )
-ADD_SUBDIRECTORY( example )
 INSTALL_PROJ_LIB()
 
 
