@@ -59,6 +59,8 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_GreyscaleColor(int *neighborList, int *Ma
 			// read the component number densities
 			nA = Den[n];
 			nB = Den[Np + n];
+			if (!(nA >= 0.0)) nA = 0.0;
+			if (!(nB >= 0.0)) nB = 0.0;
 
             porosity = Poros[n];
             perm = Perm[n];
@@ -68,6 +70,7 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_GreyscaleColor(int *neighborList, int *Ma
 
 			// compute phase indicator field
 			phi=(nA-nB)/(nA+nB);
+			phi = fmin(1.0, fmax(-1.0, phi));
 
 			// local density
 			rho0=rhoA + 0.5*(1.0-phi)*(rhoB-rhoA);
@@ -513,6 +516,17 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_GreyscaleColor(int *neighborList, int *Ma
 			Velocity[Np+n] = uy;
 			Velocity[2*Np+n] = uz;
 
+			// Cap velocity for stability (prevents negative distributions)
+			{
+				double u_sq = ux*ux + uy*uy + uz*uz;
+				if (u_sq > 0.01) {
+					double u_scale = 0.1 / sqrt(u_sq);
+					ux *= u_scale;
+					uy *= u_scale;
+					uz *= u_scale;
+				}
+			}
+
 			//........................................................................
 			//..............carry out relaxation process..............................
 			//..........Toelke, Fruediger et. al. 2006................................
@@ -816,6 +830,8 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_GreyscaleColor(int *Map, double *dist, 
 			// read the component number densities
 			nA = Den[n];
 			nB = Den[Np + n];
+			if (!(nA >= 0.0)) nA = 0.0;
+			if (!(nB >= 0.0)) nB = 0.0;
             porosity = Poros[n];
             perm = Perm[n];
             nx_gs = GreySolidGrad[n+0*Np];
@@ -824,6 +840,7 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_GreyscaleColor(int *Map, double *dist, 
 
 			// compute phase indicator field
 			phi=(nA-nB)/(nA+nB);
+			phi = fmin(1.0, fmax(-1.0, phi));
 
 			// local density
 			rho0=rhoA + 0.5*(1.0-phi)*(rhoB-rhoA);
@@ -1217,6 +1234,17 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_GreyscaleColor(int *Map, double *dist, 
 			Velocity[n] = ux;
 			Velocity[Np+n] = uy;
 			Velocity[2*Np+n] = uz;
+
+			// Cap velocity for stability (prevents negative distributions)
+			{
+				double u_sq = ux*ux + uy*uy + uz*uz;
+				if (u_sq > 0.01) {
+					double u_scale = 0.1 / sqrt(u_sq);
+					ux *= u_scale;
+					uy *= u_scale;
+					uz *= u_scale;
+				}
+			}
 
 			//........................................................................
 			//..............carry out relaxation process..............................

@@ -110,7 +110,74 @@ extern "C" void ScaLBL_D3Q19_AAodd_ThermalBGK(int *neighborList, double *Velocit
 // Thermal TRT
 
 
+// =========================================================================
+// FuelCell Model Kernels
+// =========================================================================
 
+// Shan-Chen pseudopotential force (Carnahan-Starling EoS)
+extern "C" void ScaLBL_D3Q19_AAeven_ShanChen_Force(
+    int *Map, double *Den, double *Phi,
+    double *ForceX, double *ForceY, double *ForceZ,
+    double G, double cs_a, double cs_b, double cs_T,
+    double rhoA, double rhoB,
+    int strideY, int strideZ, int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q19_AAodd_ShanChen_Force(
+    int *neighborList, int *Map, double *Den, double *Phi,
+    double *ForceX, double *ForceY, double *ForceZ,
+    double G, double cs_a, double cs_b, double cs_T,
+    double rhoA, double rhoB,
+    int strideY, int strideZ, int start, int finish, int Np);
+
+// D3Q7 Species transport (advection-diffusion with source terms)
+extern "C" void ScaLBL_D3Q7_AAeven_FuelCell_Species(
+    int *Map, double *Cq, double *Conc, double *Velocity,
+    double *Phi, double *Poros, double *DiffCoeff, double *SourceTerm,
+    double tau_sp, int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAodd_FuelCell_Species(
+    int *neighborList, int *Map, double *Cq, double *Conc, double *Velocity,
+    double *Phi, double *Poros, double *DiffCoeff, double *SourceTerm,
+    double tau_sp, int start, int finish, int Np);
+
+// D3Q7 Laplace potential solver (electronic + protonic)
+extern "C" void ScaLBL_D3Q7_AAeven_FuelCell_Potential(
+    int *Map, double *Pq, double *PotentialField, double *Conductivity,
+    int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAodd_FuelCell_Potential(
+    int *neighborList, int *Map, double *Pq, double *PotentialField,
+    double *Conductivity, int start, int finish, int Np);
+
+// D3Q7 Thermal transport with source terms
+extern "C" void ScaLBL_D3Q7_AAeven_FuelCell_Thermal(
+    int *Map, double *Tq, double *Temperature, double *Velocity,
+    double *ThermalCond, double *SourceThermal,
+    double tau_thermal, int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAodd_FuelCell_Thermal(
+    int *neighborList, int *Map, double *Tq, double *Temperature,
+    double *Velocity, double *ThermalCond, double *SourceThermal,
+    double tau_thermal, int start, int finish, int Np);
+
+// Butler-Volmer electrochemical reaction sources
+extern "C" void ScaLBL_FuelCell_ButlerVolmer(
+    double *PhiS, double *PhiE, double *Temperature,
+    double *RegionID, double *ReactionRate,
+    double *SourceO2, double *SourceN2, double *SourceH2, double *SourceH2O,
+    double i0_cathode, double i0_anode,
+    double alpha_a_c, double alpha_c_c,
+    double alpha_a_a, double alpha_c_a,
+    double E_eq, double F_const, double R_gas, double T_ref,
+    int start, int finish, int Np);
+
+// Phase change (evaporation/condensation) source terms
+extern "C" void ScaLBL_FuelCell_PhaseChange(
+    double *Phi, double *Temperature, double *ConcH2O,
+    double *SourcePhaseField, double *SourceThermal,
+    double h_fg, double R_gas, double T_ref, double P_ref,
+    double k_evap, double k_cond,
+    int *Map, int start, int finish, int Np);
 
 // FDM MODEL
 //extern "C" void ScaLBL_FDM_ConvectionDiffusion(int *neighborList, double *Velocity, double *dist, int start, int finish, int Np, double rlx, double dt); 

@@ -1,0 +1,113 @@
+// LBPM Fuel Cell Simulator — Example configuration
+//
+// This input file configures a minimal fuel cell simulation with:
+//   - Two-phase flow (liquid water + gas mixture)
+//   - Greyscale porous media (MPL + CL + membrane)
+//   - Shan-Chen pseudopotential (Carnahan-Starling EoS)
+//   - Species transport (O2, N2, H2, H2O vapor)
+//   - Butler-Volmer electrochemistry
+//   - Non-isothermal thermal transport
+//
+// Label map convention:
+//   0 = solid (bipolar plate, carbon fiber)
+//   1 = resolved void (channels, GDL macro-pores)
+//   2 = MPL (greyscale)
+//   3 = catalyst layer (greyscale + reactions)
+//   4 = membrane (diffusion only)
+
+Color {
+    tauA   = 0.7       // relaxation time liquid water (wetting phase)
+    tauB   = 0.7       // relaxation time gas mixture (non-wetting)
+    rhoA   = 1.0       // lattice density liquid
+    rhoB   = 1.0       // lattice density gas
+    alpha  = 1e-2      // surface tension parameter
+    beta   = 0.95      // recoloring parameter  
+    F = 0, 0, 0        // body force (gravity)
+    Restart = false
+    din  = 1.0         // inlet density (pressure BC)
+    dout = 1.0         // outlet density (pressure BC)
+    flux = 0.0         // flux BC (set non-zero for flux control)
+    inletA  = 0.0      // inlet fraction phase A (liquid)
+    inletB  = 1.0      // inlet fraction phase B (gas)
+    outletA = 0.0
+    outletB = 1.0
+    timestepMax = 10000
+    ComponentLabels = 0, 1, 2, 3, 4
+    ComponentAffinity = -1.0, 0.0, -0.5, 0.0, -1.0
+}
+
+Domain {
+    nproc = 1, 1, 1          // processors (Npx, Npy, Npz)
+    n = 64, 64, 128          // local domain size (Nx, Ny, Nz)
+    L = 1, 1, 2              // physical length
+    BC = 0                   // 0=periodic, 3=pressure, 4=flux
+    ReadType = "8bit"        // input file format
+    ReadValues = 0, 1, 2, 3, 4
+    WriteValues = 0, 1, 2, 3, 4
+}
+
+FuelCell {
+    // ---- Shan-Chen / Carnahan-Starling EoS ----
+    sc_G  = -1.0             // SC interaction strength (negative = attraction)
+    cs_a  = 0.4963           // CS-EoS parameter a
+    cs_b  = 4.0              // CS-EoS parameter b
+    cs_T  = 0.7              // reduced temperature T/Tc
+
+    // ---- Greyscale porous media ----
+    tauA_eff = 0.7           // effective tau in porous medium (liquid)
+    tauB_eff = 0.7           // effective tau in porous medium (gas)
+    MPL_porosity = 0.5       // MPL porosity
+    MPL_permeability = 1.0e-12  // MPL permeability [m^2]
+    CL_porosity = 0.3        // CL porosity
+    CL_permeability = 1.0e-14   // CL permeability [m^2]
+
+    // ---- Species diffusivities (lattice units) ----
+    D_O2   = 0.10            // O2 diffusivity
+    D_N2   = 0.08            // N2 diffusivity
+    D_H2   = 0.15            // H2 diffusivity
+    D_H2Ov = 0.12            // H2O vapor diffusivity
+    
+    // ---- Inlet concentrations (lattice units, ~ mole fraction) ----
+    c_O2_inlet   = 0.21      // cathode air O2
+    c_N2_inlet   = 0.79      // cathode air N2
+    c_H2_inlet   = 1.0       // anode pure H2
+    c_H2Ov_inlet = 0.0       // initial water vapor
+
+    // ---- Electrochemistry ----
+    i0_cathode = 1.0e-3      // exchange current density cathode [A/m^2]
+    i0_anode   = 1.0         // exchange current density anode [A/m^2]
+    alpha_a_cathode = 0.5    // anodic transfer coefficient (cathode)
+    alpha_c_cathode = 0.5    // cathodic transfer coefficient (cathode)
+    alpha_a_anode   = 0.5    // anodic transfer coefficient (anode)
+    alpha_c_anode   = 0.5    // cathodic transfer coefficient (anode)
+    E_eq   = 1.23            // equilibrium potential [V]
+    V_cell = 0.6             // cell voltage [V]
+    sigma_s = 300.0          // electronic conductivity [S/m]
+    sigma_e = 10.0           // protonic conductivity [S/m]
+    electro_interval = 100   // solve potentials every N LBM steps
+
+    // ---- Thermal ----
+    T_ref = 353.15           // reference temperature [K] (80 C)
+    k_thermal_gas = 0.03     // thermal conductivity gas [W/(m·K)]
+    k_thermal_liquid = 0.6   // thermal conductivity liquid [W/(m·K)]
+    k_thermal_GDL = 1.7      // thermal conductivity GDL/MPL [W/(m·K)]
+    k_thermal_membrane = 0.2 // thermal conductivity membrane [W/(m·K)]
+    h_fg = 2.26e6            // latent heat of vaporization [J/kg]
+    cp_ref = 4180.0          // specific heat [J/(kg·K)]
+
+    // ---- Membrane (Springer model) ----
+    lambda_membrane = 14.0   // water content
+    n_drag = 1.0             // electro-osmotic drag coefficient
+
+    // ---- Simulation control ----
+    ramp_timesteps = 1000    // timesteps to ramp up forcing
+}
+
+Analysis {
+    analysis_interval = 1000
+    restart_interval = 10000
+    visualization_interval = 5000
+    restart_file = "Restart"
+    N_threads = 4
+    load_balance = "independent"
+}

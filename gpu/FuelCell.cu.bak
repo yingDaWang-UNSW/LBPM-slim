@@ -1,0 +1,938 @@
+/*
+  FuelCell.cu — GPU kernels for the Fuel Cell model
+
+  New kernels beyond the existing GreyscaleColor momentum solver:
+    1. Shan-Chen pseudopotential force (Carnahan-Starling EoS + EDM)
+    2. D3Q7-BGK species transport with source terms
+    3. D3Q7-BGK Laplace potential solver (electronic + protonic)
+    4. D3Q7-BGK thermal transport with source terms
+    5. Butler-Volmer reaction source computation
+    6. Phase change source computation (Carnahan-Starling saturation)
+*/
+#include <stdio.h>
+#include <math.h>
+
+#define NBLOCKS 1024
+#define NTHREADS 256
+
+// =========================================================================
+//  Helper: Carnahan-Starling EoS pressure
+//    p = rho*R*T*(1+eta+eta^2-eta^3)/(1-eta)^3 - a*rho^2
+//    where eta = b*rho/4
+// =========================================================================
+__device__ double CS_EoS_Pressure(double rho, double a, double b, double T_R)
+{
+    double eta = b * rho * 0.25;
+    double denom = (1.0 - eta);
+    double num = 1.0 + eta + eta * eta - eta * eta * eta;
+    return rho * T_R * num / (denom * denom * denom) - a * rho * rho;
+}
+
+// =========================================================================
+//  Helper: Shan-Chen effective mass psi(rho) from EoS
+//    psi = sqrt(2*(p_EoS - rho*cs^2) / (G*cs^2))
+//    where cs^2 = 1/3
+// =========================================================================
+__device__ double SC_EffectiveMass(double rho, double G, double a, double b, double T_R)
+{
+    double p = CS_EoS_Pressure(rho, a, b, T_R);
+    double cs2 = 1.0 / 3.0;
+    double arg = 2.0 * (p - rho * cs2) / (G * cs2);
+    if (arg < 0.0) arg = 0.0;
+    return sqrt(arg);
+}
+
+// =========================================================================
+//  Kernel 1: Shan-Chen pseudopotential force (EDM — Exact Difference Method)
+//
+//  Computes the inter-particle force at each voxel:
+//    F_SC = -G * psi(x) * sum_q w_q * psi(x+e_q) * e_q
+//
+//  Then applies EDM:  delta_f_q = f_q^eq(rho, u+du) - f_q^eq(rho, u)
+//  where du = F_SC * dt / rho
+//
+//  For simplicity, this kernel just computes and stores the SC force
+//  into the Velocity array as an additive force correction.  The momentum
+//  kernel (GreyscaleColor) will then include Fx+F_SC_x, etc.
+// =========================================================================
+__global__ void dvc_ScaLBL_D3Q19_AAeven_ShanChen_Force(
+    int *Map, double *Den, double *Phi,
+    double *ForceX, double *ForceY, double *ForceZ,
+    double G, double cs_a, double cs_b, double cs_T,
+    double rhoA, double rhoB,
+    int strideY, int strideZ, int start, int finish, int Np)
+{
+    int n, ijk, nn;
+    double nA, nB, rho, phi, rho_local;
+    double psi, psi_nb;
+    double Fsc_x, Fsc_y, Fsc_z;
+
+    // D3Q19 weights for nearest neighbors
+    // Face neighbors (q=1..6): w=1/18
+    // Edge neighbors (q=7..18): w=1/36
+    const double w_face = 1.0 / 18.0;
+    const double w_edge = 1.0 / 36.0;
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            nA = Den[n];
+            nB = Den[Np + n];
+            rho = nA + nB;
+            phi = (nA - nB) / (nA + nB);
+            phi = fmin(1.0, fmax(-1.0, phi));
+
+            // Mixture density for EoS
+            rho_local = rhoA + 0.5 * (1.0 - phi) * (rhoB - rhoA);
+
+            ijk = Map[n];
+            psi = SC_EffectiveMass(rho_local, G, cs_a, cs_b, cs_T);
+
+            Fsc_x = 0.0;
+            Fsc_y = 0.0;
+            Fsc_z = 0.0;
+
+            // ------- Face neighbors -------
+            // +x
+            nn = ijk + 1;
+            // Need density at neighbor — approximate using Den from Map^{-1}
+            // For face neighbors in the Cartesian layout:
+            double rho_nb; // density at neighbor
+
+            // +x neighbor
+            psi_nb = SC_EffectiveMass(rho_local, G, cs_a, cs_b, cs_T); // placeholder: use local
+            // In practice, we read from the Phi/Den Cartesian arrays
+            // For now, the SC force is computed approximately
+            // TODO: pass Cartesian-layout density for full SC gradient
+
+            // Using isotropic 18-point stencil approximation from Phi field
+            // F_SC ≈ -G * psi * grad(psi)
+            // Approximate gradient from Phi (phase indicator):
+            double phi_px, phi_mx, phi_py, phi_my, phi_pz, phi_mz;
+            phi_px = Phi[ijk + 1];
+            phi_mx = Phi[ijk - 1];
+            phi_py = Phi[ijk + strideY];
+            phi_my = Phi[ijk - strideY];
+            phi_pz = Phi[ijk + strideZ];
+            phi_mz = Phi[ijk - strideZ];
+
+            // Face + edge neighbors for better gradient
+            double phi_pxpy = Phi[ijk + 1 + strideY];
+            double phi_mxmy = Phi[ijk - 1 - strideY];
+            double phi_pxmy = Phi[ijk + 1 - strideY];
+            double phi_mxpy = Phi[ijk - 1 + strideY];
+            double phi_pxpz = Phi[ijk + 1 + strideZ];
+            double phi_mxmz = Phi[ijk - 1 - strideZ];
+            double phi_pxmz = Phi[ijk + 1 - strideZ];
+            double phi_mxpz = Phi[ijk - 1 + strideZ];
+            double phi_pypz = Phi[ijk + strideY + strideZ];
+            double phi_mymz = Phi[ijk - strideY - strideZ];
+            double phi_pymz = Phi[ijk + strideY - strideZ];
+            double phi_mypz = Phi[ijk - strideY + strideZ];
+
+            // Map phi to density for SC calculation
+            // rho(phi) = rhoA + 0.5*(1-phi)*(rhoB-rhoA)
+            auto phi2rho = [&](double p) -> double {
+                return rhoA + 0.5 * (1.0 - p) * (rhoB - rhoA);
+            };
+
+            // Compute psi at each neighbor
+            auto psi_of_phi = [&](double p) -> double {
+                return SC_EffectiveMass(phi2rho(p), G, cs_a, cs_b, cs_T);
+            };
+
+            // Isotropic gradient of psi using D3Q19 weights
+            double psi_px = psi_of_phi(phi_px);
+            double psi_mx = psi_of_phi(phi_mx);
+            double psi_py = psi_of_phi(phi_py);
+            double psi_my = psi_of_phi(phi_my);
+            double psi_pz = psi_of_phi(phi_pz);
+            double psi_mz = psi_of_phi(phi_mz);
+
+            double psi_pxpy = psi_of_phi(phi_pxpy);
+            double psi_mxmy = psi_of_phi(phi_mxmy);
+            double psi_pxmy = psi_of_phi(phi_pxmy);
+            double psi_mxpy = psi_of_phi(phi_mxpy);
+            double psi_pxpz = psi_of_phi(phi_pxpz);
+            double psi_mxmz = psi_of_phi(phi_mxmz);
+            double psi_pxmz = psi_of_phi(phi_pxmz);
+            double psi_mxpz = psi_of_phi(phi_mxpz);
+            double psi_pypz = psi_of_phi(phi_pypz);
+            double psi_mymz = psi_of_phi(phi_mymz);
+            double psi_pymz = psi_of_phi(phi_pymz);
+            double psi_mypz = psi_of_phi(phi_mypz);
+
+            // F_SC = -G * psi(x) * sum_q w_q psi(x+e_q) e_q
+            Fsc_x = -G * psi * (
+                w_face * (psi_px - psi_mx) +
+                w_edge * (psi_pxpy - psi_mxmy + psi_pxmy - psi_mxpy +
+                          psi_pxpz - psi_mxmz + psi_pxmz - psi_mxpz));
+
+            Fsc_y = -G * psi * (
+                w_face * (psi_py - psi_my) +
+                w_edge * (psi_pxpy - psi_mxmy - psi_pxmy + psi_mxpy +
+                          psi_pypz - psi_mymz + psi_pymz - psi_mypz));
+
+            Fsc_z = -G * psi * (
+                w_face * (psi_pz - psi_mz) +
+                w_edge * (psi_pxpz - psi_mxmz - psi_pxmz + psi_mxpz +
+                          psi_pypz - psi_mymz - psi_pymz + psi_mypz));
+
+            ForceX[n] = Fsc_x;
+            ForceY[n] = Fsc_y;
+            ForceZ[n] = Fsc_z;
+        }
+    }
+}
+
+// Odd timestep variant (reads from neighbor list)
+__global__ void dvc_ScaLBL_D3Q19_AAodd_ShanChen_Force(
+    int *neighborList, int *Map, double *Den, double *Phi,
+    double *ForceX, double *ForceY, double *ForceZ,
+    double G, double cs_a, double cs_b, double cs_T,
+    double rhoA, double rhoB,
+    int strideY, int strideZ, int start, int finish, int Np)
+{
+    // Same logic as even, but uses neighbor list for reading distributions
+    // The force computation itself still uses Cartesian Phi
+    int n, ijk;
+    double nA, nB, phi, rho_local, psi;
+    double Fsc_x, Fsc_y, Fsc_z;
+    const double w_face = 1.0 / 18.0;
+    const double w_edge = 1.0 / 36.0;
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            nA = Den[n];
+            nB = Den[Np + n];
+            phi = (nA - nB) / (nA + nB);
+            phi = fmin(1.0, fmax(-1.0, phi));
+            rho_local = rhoA + 0.5 * (1.0 - phi) * (rhoB - rhoA);
+            ijk = Map[n];
+            psi = SC_EffectiveMass(rho_local, G, cs_a, cs_b, cs_T);
+
+            // Read Phi neighbors from Cartesian layout
+            double phi_px = Phi[ijk + 1];
+            double phi_mx = Phi[ijk - 1];
+            double phi_py = Phi[ijk + strideY];
+            double phi_my = Phi[ijk - strideY];
+            double phi_pz = Phi[ijk + strideZ];
+            double phi_mz = Phi[ijk - strideZ];
+            double phi_pxpy = Phi[ijk + 1 + strideY];
+            double phi_mxmy = Phi[ijk - 1 - strideY];
+            double phi_pxmy = Phi[ijk + 1 - strideY];
+            double phi_mxpy = Phi[ijk - 1 + strideY];
+            double phi_pxpz = Phi[ijk + 1 + strideZ];
+            double phi_mxmz = Phi[ijk - 1 - strideZ];
+            double phi_pxmz = Phi[ijk + 1 - strideZ];
+            double phi_mxpz = Phi[ijk - 1 + strideZ];
+            double phi_pypz = Phi[ijk + strideY + strideZ];
+            double phi_mymz = Phi[ijk - strideY - strideZ];
+            double phi_pymz = Phi[ijk + strideY - strideZ];
+            double phi_mypz = Phi[ijk - strideY + strideZ];
+
+            auto phi2rho = [&](double p) -> double {
+                return rhoA + 0.5 * (1.0 - p) * (rhoB - rhoA);
+            };
+            auto psi_of_phi = [&](double p) -> double {
+                return SC_EffectiveMass(phi2rho(p), G, cs_a, cs_b, cs_T);
+            };
+
+            double psi_px = psi_of_phi(phi_px), psi_mx = psi_of_phi(phi_mx);
+            double psi_py = psi_of_phi(phi_py), psi_my = psi_of_phi(phi_my);
+            double psi_pz = psi_of_phi(phi_pz), psi_mz = psi_of_phi(phi_mz);
+            double psi_pxpy = psi_of_phi(phi_pxpy), psi_mxmy = psi_of_phi(phi_mxmy);
+            double psi_pxmy = psi_of_phi(phi_pxmy), psi_mxpy = psi_of_phi(phi_mxpy);
+            double psi_pxpz = psi_of_phi(phi_pxpz), psi_mxmz = psi_of_phi(phi_mxmz);
+            double psi_pxmz = psi_of_phi(phi_pxmz), psi_mxpz = psi_of_phi(phi_mxpz);
+            double psi_pypz = psi_of_phi(phi_pypz), psi_mymz = psi_of_phi(phi_mymz);
+            double psi_pymz = psi_of_phi(phi_pymz), psi_mypz = psi_of_phi(phi_mypz);
+
+            Fsc_x = -G * psi * (
+                w_face * (psi_px - psi_mx) +
+                w_edge * (psi_pxpy - psi_mxmy + psi_pxmy - psi_mxpy +
+                          psi_pxpz - psi_mxmz + psi_pxmz - psi_mxpz));
+            Fsc_y = -G * psi * (
+                w_face * (psi_py - psi_my) +
+                w_edge * (psi_pxpy - psi_mxmy - psi_pxmy + psi_mxpy +
+                          psi_pypz - psi_mymz + psi_pymz - psi_mypz));
+            Fsc_z = -G * psi * (
+                w_face * (psi_pz - psi_mz) +
+                w_edge * (psi_pxpz - psi_mxmz - psi_pxmz + psi_mxpz +
+                          psi_pypz - psi_mymz - psi_pymz + psi_mypz));
+
+            ForceX[n] = Fsc_x;
+            ForceY[n] = Fsc_y;
+            ForceZ[n] = Fsc_z;
+        }
+    }
+}
+
+
+// =========================================================================
+//  Kernel 2: D3Q7 Species Transport (advection-diffusion with source term)
+//
+//  For species s with concentration field C:
+//    f_i^eq = w_i * C * (1 + 3 * e_i . u)
+//    f_i = f_i - (f_i - f_i^eq)/tau_sp + w_i * S_source
+//
+//  D3Q7 velocities: e0=(0,0,0), e1..6 = (±1,0,0), (0,±1,0), (0,0,±1)
+//  Weights: w0 = 1/4, w1..6 = 1/8
+// =========================================================================
+__global__ void dvc_ScaLBL_D3Q7_AAeven_FuelCell_Species(
+    int *Map, double *Cq, double *Conc, double *Velocity,
+    double *Phi, double *Poros, double *DiffCoeff, double *SourceTerm,
+    double tau_sp, int start, int finish, int Np)
+{
+    int n, ijk;
+    double f0, f1, f2, f3, f4, f5, f6;
+    double C, feq, ux, uy, uz, porosity, diff_eff, source;
+    double phi; // phase indicator: phi>0 = liquid, phi<0 = gas
+
+    const double w0 = 0.25;
+    const double w1 = 0.125;
+    double rlx = 1.0 / tau_sp;
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            ijk = Map[n];
+            porosity = Poros[n];
+            diff_eff = DiffCoeff[n];
+            source = SourceTerm[n];
+
+            // Advection velocity from momentum solver
+            ux = Velocity[n];
+            uy = Velocity[Np + n];
+            uz = Velocity[2 * Np + n];
+
+            // Phase indicator: species only transported in gas phase
+            phi = Phi[ijk];
+
+            // Mask gas-phase species in liquid: if phi > 0.5 (mostly liquid), suppress
+            double gas_mask = (phi < 0.5) ? 1.0 : 0.0;
+
+            // Read D3Q7 distributions (even timestep: in-place)
+            f0 = Cq[0 * Np + n];
+            f1 = Cq[1 * Np + n];
+            f2 = Cq[2 * Np + n];
+            f3 = Cq[3 * Np + n];
+            f4 = Cq[4 * Np + n];
+            f5 = Cq[5 * Np + n];
+            f6 = Cq[6 * Np + n];
+
+            // Compute concentration
+            C = f0 + f1 + f2 + f3 + f4 + f5 + f6;
+
+            // Effective relaxation including porosity
+            double tau_eff = 0.5 + (tau_sp - 0.5) * porosity * diff_eff;
+            double rlx_eff = 1.0 / tau_eff;
+
+            // BGK collision with advection and source
+            f0 = f0 * (1.0 - rlx_eff) + rlx_eff * w0 * C + w0 * source * gas_mask;
+            f1 = f1 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 + 3.0 * ux) + w1 * source * gas_mask;
+            f2 = f2 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 - 3.0 * ux) + w1 * source * gas_mask;
+            f3 = f3 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 + 3.0 * uy) + w1 * source * gas_mask;
+            f4 = f4 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 - 3.0 * uy) + w1 * source * gas_mask;
+            f5 = f5 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 + 3.0 * uz) + w1 * source * gas_mask;
+            f6 = f6 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 - 3.0 * uz) + w1 * source * gas_mask;
+
+            // Write back
+            Cq[0 * Np + n] = f0;
+            Cq[1 * Np + n] = f1;
+            Cq[2 * Np + n] = f2;
+            Cq[3 * Np + n] = f3;
+            Cq[4 * Np + n] = f4;
+            Cq[5 * Np + n] = f5;
+            Cq[6 * Np + n] = f6;
+
+            // Update concentration field
+            Conc[n] = C;
+        }
+    }
+}
+
+// Odd timestep variant (uses neighbor list for streaming)
+__global__ void dvc_ScaLBL_D3Q7_AAodd_FuelCell_Species(
+    int *neighborList, int *Map, double *Cq, double *Conc, double *Velocity,
+    double *Phi, double *Poros, double *DiffCoeff, double *SourceTerm,
+    double tau_sp, int start, int finish, int Np)
+{
+    int n, ijk, nread;
+    double f0, f1, f2, f3, f4, f5, f6;
+    double C, ux, uy, uz, porosity, diff_eff, source, phi;
+
+    const double w0 = 0.25;
+    const double w1 = 0.125;
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            ijk = Map[n];
+            porosity = Poros[n];
+            diff_eff = DiffCoeff[n];
+            source = SourceTerm[n];
+            ux = Velocity[n];
+            uy = Velocity[Np + n];
+            uz = Velocity[2 * Np + n];
+            phi = Phi[ijk];
+            double gas_mask = (phi < 0.5) ? 1.0 : 0.0;
+
+            // Read from neighbor positions (AA odd pattern)
+            f0 = Cq[n];
+            nread = neighborList[n];           f1 = Cq[nread];
+            nread = neighborList[n + Np];      f2 = Cq[nread];
+            nread = neighborList[n + 2 * Np];  f3 = Cq[nread];
+            nread = neighborList[n + 3 * Np];  f4 = Cq[nread];
+            nread = neighborList[n + 4 * Np];  f5 = Cq[nread];
+            nread = neighborList[n + 5 * Np];  f6 = Cq[nread];
+
+            C = f0 + f1 + f2 + f3 + f4 + f5 + f6;
+
+            double tau_eff = 0.5 + (tau_sp - 0.5) * porosity * diff_eff;
+            double rlx_eff = 1.0 / tau_eff;
+
+            f0 = f0 * (1.0 - rlx_eff) + rlx_eff * w0 * C + w0 * source * gas_mask;
+            f1 = f1 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 + 3.0 * ux) + w1 * source * gas_mask;
+            f2 = f2 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 - 3.0 * ux) + w1 * source * gas_mask;
+            f3 = f3 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 + 3.0 * uy) + w1 * source * gas_mask;
+            f4 = f4 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 - 3.0 * uy) + w1 * source * gas_mask;
+            f5 = f5 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 + 3.0 * uz) + w1 * source * gas_mask;
+            f6 = f6 * (1.0 - rlx_eff) + rlx_eff * w1 * C * (1.0 - 3.0 * uz) + w1 * source * gas_mask;
+
+            // Write back to own position (AA odd)
+            Cq[n] = f0;
+            nread = neighborList[n];           Cq[nread] = f1;
+            nread = neighborList[n + Np];      Cq[nread] = f2;
+            nread = neighborList[n + 2 * Np];  Cq[nread] = f3;
+            nread = neighborList[n + 3 * Np];  Cq[nread] = f4;
+            nread = neighborList[n + 4 * Np];  Cq[nread] = f5;
+            nread = neighborList[n + 5 * Np];  Cq[nread] = f6;
+
+            Conc[n] = C;
+        }
+    }
+}
+
+
+// =========================================================================
+//  Kernel 3: D3Q7 Laplace Potential Solver (steady-state diffusion)
+//
+//  Solves: div(sigma * grad(phi)) = 0
+//  Using D3Q7-BGK: approach steady state iteratively
+//  tau_pot = 0.5 + 3*sigma_local
+// =========================================================================
+__global__ void dvc_ScaLBL_D3Q7_AAeven_FuelCell_Potential(
+    int *Map, double *Pq, double *PotentialField, double *Conductivity,
+    int start, int finish, int Np)
+{
+    int n;
+    double f0, f1, f2, f3, f4, f5, f6;
+    double pot, sigma_local;
+    const double w0 = 0.25;
+    const double w1 = 0.125;
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            sigma_local = Conductivity[n];
+            double tau_pot = 0.5 + 3.0 * sigma_local;
+            if (tau_pot < 0.501) tau_pot = 0.501; // stability limit
+            double rlx = 1.0 / tau_pot;
+
+            // Read D3Q7 (even timestep)
+            f0 = Pq[0 * Np + n];
+            f1 = Pq[1 * Np + n];
+            f2 = Pq[2 * Np + n];
+            f3 = Pq[3 * Np + n];
+            f4 = Pq[4 * Np + n];
+            f5 = Pq[5 * Np + n];
+            f6 = Pq[6 * Np + n];
+
+            pot = f0 + f1 + f2 + f3 + f4 + f5 + f6;
+
+            // BGK collision (no advection for Laplace)
+            f0 = f0 * (1.0 - rlx) + rlx * w0 * pot;
+            f1 = f1 * (1.0 - rlx) + rlx * w1 * pot;
+            f2 = f2 * (1.0 - rlx) + rlx * w1 * pot;
+            f3 = f3 * (1.0 - rlx) + rlx * w1 * pot;
+            f4 = f4 * (1.0 - rlx) + rlx * w1 * pot;
+            f5 = f5 * (1.0 - rlx) + rlx * w1 * pot;
+            f6 = f6 * (1.0 - rlx) + rlx * w1 * pot;
+
+            // Write back
+            Pq[0 * Np + n] = f0;
+            Pq[1 * Np + n] = f1;
+            Pq[2 * Np + n] = f2;
+            Pq[3 * Np + n] = f3;
+            Pq[4 * Np + n] = f4;
+            Pq[5 * Np + n] = f5;
+            Pq[6 * Np + n] = f6;
+
+            PotentialField[n] = pot;
+        }
+    }
+}
+
+__global__ void dvc_ScaLBL_D3Q7_AAodd_FuelCell_Potential(
+    int *neighborList, int *Map, double *Pq, double *PotentialField,
+    double *Conductivity, int start, int finish, int Np)
+{
+    int n, nread;
+    double f0, f1, f2, f3, f4, f5, f6;
+    double pot, sigma_local;
+    const double w0 = 0.25;
+    const double w1 = 0.125;
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            sigma_local = Conductivity[n];
+            double tau_pot = 0.5 + 3.0 * sigma_local;
+            if (tau_pot < 0.501) tau_pot = 0.501;
+            double rlx = 1.0 / tau_pot;
+
+            f0 = Pq[n];
+            nread = neighborList[n];           f1 = Pq[nread];
+            nread = neighborList[n + Np];      f2 = Pq[nread];
+            nread = neighborList[n + 2 * Np];  f3 = Pq[nread];
+            nread = neighborList[n + 3 * Np];  f4 = Pq[nread];
+            nread = neighborList[n + 4 * Np];  f5 = Pq[nread];
+            nread = neighborList[n + 5 * Np];  f6 = Pq[nread];
+
+            pot = f0 + f1 + f2 + f3 + f4 + f5 + f6;
+
+            f0 = f0 * (1.0 - rlx) + rlx * w0 * pot;
+            f1 = f1 * (1.0 - rlx) + rlx * w1 * pot;
+            f2 = f2 * (1.0 - rlx) + rlx * w1 * pot;
+            f3 = f3 * (1.0 - rlx) + rlx * w1 * pot;
+            f4 = f4 * (1.0 - rlx) + rlx * w1 * pot;
+            f5 = f5 * (1.0 - rlx) + rlx * w1 * pot;
+            f6 = f6 * (1.0 - rlx) + rlx * w1 * pot;
+
+            Pq[n] = f0;
+            nread = neighborList[n];           Pq[nread] = f1;
+            nread = neighborList[n + Np];      Pq[nread] = f2;
+            nread = neighborList[n + 2 * Np];  Pq[nread] = f3;
+            nread = neighborList[n + 3 * Np];  Pq[nread] = f4;
+            nread = neighborList[n + 4 * Np];  Pq[nread] = f5;
+            nread = neighborList[n + 5 * Np];  Pq[nread] = f6;
+
+            PotentialField[n] = pot;
+        }
+    }
+}
+
+
+// =========================================================================
+//  Kernel 4: D3Q7 Thermal Transport (advection-diffusion with source terms)
+//
+//  T equation: rho*cp * (dT/dt + u.grad(T)) = div(k*grad(T)) + Q_source
+//    Q_source = Q_rxn + Q_ohmic + Q_latent
+//    Q_rxn = |j| * T * deltaS / (n_e * F)  (reversible heat)
+//    Q_ohmic = j^2 / sigma  (irreversible Joule heat)
+//    Q_latent = -(dm/dt) * h_fg  (latent heat from phase change)
+// =========================================================================
+__global__ void dvc_ScaLBL_D3Q7_AAeven_FuelCell_Thermal(
+    int *Map, double *Tq, double *Temperature, double *Velocity,
+    double *ThermalCond, double *SourceThermal,
+    double tau_thermal, int start, int finish, int Np)
+{
+    int n;
+    double f0, f1, f2, f3, f4, f5, f6;
+    double T, ux, uy, uz, kth, source;
+    const double w0 = 0.25;
+    const double w1 = 0.125;
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            kth = ThermalCond[n];
+            source = SourceThermal[n];
+            ux = Velocity[n];
+            uy = Velocity[Np + n];
+            uz = Velocity[2 * Np + n];
+
+            double tau_eff = 0.5 + 3.0 * kth;
+            double rlx = 1.0 / tau_eff;
+
+            f0 = Tq[0 * Np + n];
+            f1 = Tq[1 * Np + n];
+            f2 = Tq[2 * Np + n];
+            f3 = Tq[3 * Np + n];
+            f4 = Tq[4 * Np + n];
+            f5 = Tq[5 * Np + n];
+            f6 = Tq[6 * Np + n];
+
+            T = f0 + f1 + f2 + f3 + f4 + f5 + f6;
+
+            f0 = f0 * (1.0 - rlx) + rlx * w0 * T + w0 * source;
+            f1 = f1 * (1.0 - rlx) + rlx * w1 * T * (1.0 + 3.0 * ux) + w1 * source;
+            f2 = f2 * (1.0 - rlx) + rlx * w1 * T * (1.0 - 3.0 * ux) + w1 * source;
+            f3 = f3 * (1.0 - rlx) + rlx * w1 * T * (1.0 + 3.0 * uy) + w1 * source;
+            f4 = f4 * (1.0 - rlx) + rlx * w1 * T * (1.0 - 3.0 * uy) + w1 * source;
+            f5 = f5 * (1.0 - rlx) + rlx * w1 * T * (1.0 + 3.0 * uz) + w1 * source;
+            f6 = f6 * (1.0 - rlx) + rlx * w1 * T * (1.0 - 3.0 * uz) + w1 * source;
+
+            Tq[0 * Np + n] = f0;
+            Tq[1 * Np + n] = f1;
+            Tq[2 * Np + n] = f2;
+            Tq[3 * Np + n] = f3;
+            Tq[4 * Np + n] = f4;
+            Tq[5 * Np + n] = f5;
+            Tq[6 * Np + n] = f6;
+
+            Temperature[n] = T;
+        }
+    }
+}
+
+__global__ void dvc_ScaLBL_D3Q7_AAodd_FuelCell_Thermal(
+    int *neighborList, int *Map, double *Tq, double *Temperature,
+    double *Velocity, double *ThermalCond, double *SourceThermal,
+    double tau_thermal, int start, int finish, int Np)
+{
+    int n, nread;
+    double f0, f1, f2, f3, f4, f5, f6;
+    double T, ux, uy, uz, kth, source;
+    const double w0 = 0.25;
+    const double w1 = 0.125;
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            kth = ThermalCond[n];
+            source = SourceThermal[n];
+            ux = Velocity[n];
+            uy = Velocity[Np + n];
+            uz = Velocity[2 * Np + n];
+
+            double tau_eff = 0.5 + 3.0 * kth;
+            double rlx = 1.0 / tau_eff;
+
+            f0 = Tq[n];
+            nread = neighborList[n];           f1 = Tq[nread];
+            nread = neighborList[n + Np];      f2 = Tq[nread];
+            nread = neighborList[n + 2 * Np];  f3 = Tq[nread];
+            nread = neighborList[n + 3 * Np];  f4 = Tq[nread];
+            nread = neighborList[n + 4 * Np];  f5 = Tq[nread];
+            nread = neighborList[n + 5 * Np];  f6 = Tq[nread];
+
+            T = f0 + f1 + f2 + f3 + f4 + f5 + f6;
+
+            f0 = f0 * (1.0 - rlx) + rlx * w0 * T + w0 * source;
+            f1 = f1 * (1.0 - rlx) + rlx * w1 * T * (1.0 + 3.0 * ux) + w1 * source;
+            f2 = f2 * (1.0 - rlx) + rlx * w1 * T * (1.0 - 3.0 * ux) + w1 * source;
+            f3 = f3 * (1.0 - rlx) + rlx * w1 * T * (1.0 + 3.0 * uy) + w1 * source;
+            f4 = f4 * (1.0 - rlx) + rlx * w1 * T * (1.0 - 3.0 * uy) + w1 * source;
+            f5 = f5 * (1.0 - rlx) + rlx * w1 * T * (1.0 + 3.0 * uz) + w1 * source;
+            f6 = f6 * (1.0 - rlx) + rlx * w1 * T * (1.0 - 3.0 * uz) + w1 * source;
+
+            Tq[n] = f0;
+            nread = neighborList[n];           Tq[nread] = f1;
+            nread = neighborList[n + Np];      Tq[nread] = f2;
+            nread = neighborList[n + 2 * Np];  Tq[nread] = f3;
+            nread = neighborList[n + 3 * Np];  Tq[nread] = f4;
+            nread = neighborList[n + 4 * Np];  Tq[nread] = f5;
+            nread = neighborList[n + 5 * Np];  Tq[nread] = f6;
+
+            Temperature[n] = T;
+        }
+    }
+}
+
+
+// =========================================================================
+//  Kernel 5: Butler-Volmer reaction source terms
+//
+//  At catalyst layer voxels (RegionID == 3 CL):
+//    eta = PhiS - PhiE - E_eq   (overpotential)
+//    j = i0 * [exp(alpha_a*F*eta/(R*T)) - exp(-alpha_c*F*eta/(R*T))]
+//
+//  Species source terms (from Faraday's law):
+//    Cathode (O₂ side): O₂ + 4H⁺ + 4e⁻ → 2H₂O
+//      S_O2 = -j/(4F),  S_H2O = +j/(2F)
+//    Anode (H₂ side):   H₂ → 2H⁺ + 2e⁻
+//      S_H2 = -j/(2F)
+// =========================================================================
+__global__ void dvc_ScaLBL_FuelCell_ButlerVolmer(
+    double *PhiS, double *PhiE, double *Temperature,
+    double *RegionID, double *ReactionRate,
+    double *SourceO2, double *SourceN2, double *SourceH2, double *SourceH2O,
+    double i0_cathode, double i0_anode,
+    double alpha_a_c, double alpha_c_c,
+    double alpha_a_a, double alpha_c_a,
+    double E_eq, double F_const, double R_gas,
+    int start, int finish, int Np)
+{
+    int n;
+    double phiS, phiE, T_local, eta, j, i0;
+    double region;
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            region = RegionID[n];
+            phiS = PhiS[n];
+            phiE = PhiE[n];
+            T_local = Temperature[n];
+            if (T_local < 0.1) T_local = 1.0; // safety
+
+            // Only CL voxels have reactions (RegionID == 3)
+            if (fabs(region - 3.0) < 0.5) {
+                // Determine if cathode or anode CL
+                // Convention: anode at low z, cathode at high z
+                // Use PhiE as indicator: anode PhiE ~ V_cell, cathode PhiE ~ 0
+                // Alternative: use sign of equilibrium potential match
+                // For now, both CL types can have BV, distinguished by i0
+                
+                // Cathode reaction (ORR)
+                eta = phiS - phiE - E_eq;
+                i0 = i0_cathode;
+                j = i0 * (exp(alpha_a_c * F_const * eta / (R_gas * T_local))
+                        - exp(-alpha_c_c * F_const * eta / (R_gas * T_local)));
+
+                // Clamp to prevent runaway
+                j = fmin(fmax(j, -1.0e4), 1.0e4);
+
+                ReactionRate[n] = j;
+
+                // Species source terms
+                SourceO2[n]  = -j / (4.0 * F_const);   // O₂ consumed
+                SourceN2[n]  = 0.0;                      // N₂ inert
+                SourceH2[n]  = 0.0;                      // no H₂ at cathode
+                SourceH2O[n] = j / (2.0 * F_const);     // H₂O produced
+            } else {
+                // Non-CL voxels: zero reaction
+                ReactionRate[n] = 0.0;
+                SourceO2[n]  = 0.0;
+                SourceN2[n]  = 0.0;
+                SourceH2[n]  = 0.0;
+                SourceH2O[n] = 0.0;
+            }
+        }
+    }
+}
+
+
+// =========================================================================
+//  Kernel 6: Phase change source terms (evaporation/condensation)
+//
+//  Based on saturation pressure from Clausius-Clapeyron:
+//    P_sat(T) = P_ref * exp(h_fg/R * (1/T_ref - 1/T))
+//  Condensation if P_H2O > P_sat:  S_cond ~ k_cond * (P_H2O - P_sat)
+//  Evaporation if P_H2O < P_sat & liquid present: S_evap ~ k_evap * (P_sat - P_H2O)
+// =========================================================================
+__global__ void dvc_ScaLBL_FuelCell_PhaseChange(
+    double *Phi, double *Temperature, double *ConcH2O,
+    double *SourcePhaseField, double *SourceThermal,
+    double h_fg, double R_gas, double T_ref, double P_ref,
+    double k_evap, double k_cond,
+    int *Map, int start, int finish, int Np)
+{
+    int n, ijk;
+    double T, c_h2o, phi, P_h2o, P_sat, dm;
+    const double M_H2O = 0.018; // kg/mol
+
+    int S = Np / NBLOCKS / NTHREADS + 1;
+    for (int s = 0; s < S; s++) {
+        n = S * blockIdx.x * blockDim.x + s * blockDim.x + threadIdx.x + start;
+        if (n < finish) {
+            ijk = Map[n];
+            T = Temperature[n];
+            if (T < 0.1) T = 1.0;
+            c_h2o = ConcH2O[n];
+            phi = Phi[ijk];  // phase: phi>0 liquid, phi<0 gas
+
+            // Partial pressure of water vapor (ideal gas approx in lattice units)
+            P_h2o = c_h2o / 3.0;  // p = rho * cs^2
+
+            // Saturation pressure (Clausius-Clapeyron)
+            P_sat = P_ref * exp(h_fg * M_H2O / R_gas * (1.0 / T_ref - 1.0 / T));
+
+            // Phase change rate
+            if (P_h2o > P_sat && phi < 0.3) {
+                // Condensation: vapor → liquid
+                dm = k_cond * (P_h2o - P_sat);
+            } else if (P_h2o < P_sat && phi > -0.3) {
+                // Evaporation: liquid → vapor
+                dm = -k_evap * (P_sat - P_h2o);
+            } else {
+                dm = 0.0;
+            }
+
+            // Source for phase field: positive dm → more liquid
+            SourcePhaseField[n] = dm;
+
+            // Thermal source: latent heat
+            SourceThermal[n] = -dm * h_fg;
+        }
+    }
+}
+
+
+// =========================================================================
+//  Extern "C" wrappers
+// =========================================================================
+
+// --- Shan-Chen Force ---
+extern "C" void ScaLBL_D3Q19_AAeven_ShanChen_Force(
+    int *Map, double *Den, double *Phi,
+    double *ForceX, double *ForceY, double *ForceZ,
+    double G, double cs_a, double cs_b, double cs_T,
+    double rhoA, double rhoB,
+    int strideY, int strideZ, int start, int finish, int Np)
+{
+    dvc_ScaLBL_D3Q19_AAeven_ShanChen_Force<<<NBLOCKS, NTHREADS>>>(
+        Map, Den, Phi, ForceX, ForceY, ForceZ,
+        G, cs_a, cs_b, cs_T, rhoA, rhoB,
+        strideY, strideZ, start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_D3Q19_AAeven_ShanChen_Force: %s\n", cudaGetErrorString(err));
+}
+
+extern "C" void ScaLBL_D3Q19_AAodd_ShanChen_Force(
+    int *neighborList, int *Map, double *Den, double *Phi,
+    double *ForceX, double *ForceY, double *ForceZ,
+    double G, double cs_a, double cs_b, double cs_T,
+    double rhoA, double rhoB,
+    int strideY, int strideZ, int start, int finish, int Np)
+{
+    dvc_ScaLBL_D3Q19_AAodd_ShanChen_Force<<<NBLOCKS, NTHREADS>>>(
+        neighborList, Map, Den, Phi, ForceX, ForceY, ForceZ,
+        G, cs_a, cs_b, cs_T, rhoA, rhoB,
+        strideY, strideZ, start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_D3Q19_AAodd_ShanChen_Force: %s\n", cudaGetErrorString(err));
+}
+
+// --- Species Transport ---
+extern "C" void ScaLBL_D3Q7_AAeven_FuelCell_Species(
+    int *Map, double *Cq, double *Conc, double *Velocity,
+    double *Phi, double *Poros, double *DiffCoeff, double *SourceTerm,
+    double tau_sp, int start, int finish, int Np)
+{
+    dvc_ScaLBL_D3Q7_AAeven_FuelCell_Species<<<NBLOCKS, NTHREADS>>>(
+        Map, Cq, Conc, Velocity, Phi, Poros, DiffCoeff, SourceTerm,
+        tau_sp, start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_D3Q7_AAeven_FuelCell_Species: %s\n", cudaGetErrorString(err));
+}
+
+extern "C" void ScaLBL_D3Q7_AAodd_FuelCell_Species(
+    int *neighborList, int *Map, double *Cq, double *Conc, double *Velocity,
+    double *Phi, double *Poros, double *DiffCoeff, double *SourceTerm,
+    double tau_sp, int start, int finish, int Np)
+{
+    dvc_ScaLBL_D3Q7_AAodd_FuelCell_Species<<<NBLOCKS, NTHREADS>>>(
+        neighborList, Map, Cq, Conc, Velocity, Phi, Poros, DiffCoeff, SourceTerm,
+        tau_sp, start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_D3Q7_AAodd_FuelCell_Species: %s\n", cudaGetErrorString(err));
+}
+
+// --- Potential Solver ---
+extern "C" void ScaLBL_D3Q7_AAeven_FuelCell_Potential(
+    int *Map, double *Pq, double *PotentialField, double *Conductivity,
+    int start, int finish, int Np)
+{
+    dvc_ScaLBL_D3Q7_AAeven_FuelCell_Potential<<<NBLOCKS, NTHREADS>>>(
+        Map, Pq, PotentialField, Conductivity, start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_D3Q7_AAeven_FuelCell_Potential: %s\n", cudaGetErrorString(err));
+}
+
+extern "C" void ScaLBL_D3Q7_AAodd_FuelCell_Potential(
+    int *neighborList, int *Map, double *Pq, double *PotentialField,
+    double *Conductivity, int start, int finish, int Np)
+{
+    dvc_ScaLBL_D3Q7_AAodd_FuelCell_Potential<<<NBLOCKS, NTHREADS>>>(
+        neighborList, Map, Pq, PotentialField, Conductivity,
+        start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_D3Q7_AAodd_FuelCell_Potential: %s\n", cudaGetErrorString(err));
+}
+
+// --- Thermal Transport ---
+extern "C" void ScaLBL_D3Q7_AAeven_FuelCell_Thermal(
+    int *Map, double *Tq, double *Temperature, double *Velocity,
+    double *ThermalCond, double *SourceThermal,
+    double tau_thermal, int start, int finish, int Np)
+{
+    dvc_ScaLBL_D3Q7_AAeven_FuelCell_Thermal<<<NBLOCKS, NTHREADS>>>(
+        Map, Tq, Temperature, Velocity, ThermalCond, SourceThermal,
+        tau_thermal, start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_D3Q7_AAeven_FuelCell_Thermal: %s\n", cudaGetErrorString(err));
+}
+
+extern "C" void ScaLBL_D3Q7_AAodd_FuelCell_Thermal(
+    int *neighborList, int *Map, double *Tq, double *Temperature,
+    double *Velocity, double *ThermalCond, double *SourceThermal,
+    double tau_thermal, int start, int finish, int Np)
+{
+    dvc_ScaLBL_D3Q7_AAodd_FuelCell_Thermal<<<NBLOCKS, NTHREADS>>>(
+        neighborList, Map, Tq, Temperature, Velocity,
+        ThermalCond, SourceThermal, tau_thermal, start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_D3Q7_AAodd_FuelCell_Thermal: %s\n", cudaGetErrorString(err));
+}
+
+// --- Butler-Volmer Source ---
+extern "C" void ScaLBL_FuelCell_ButlerVolmer(
+    double *PhiS, double *PhiE, double *Temperature,
+    double *RegionID, double *ReactionRate,
+    double *SourceO2, double *SourceN2, double *SourceH2, double *SourceH2O,
+    double i0_cathode, double i0_anode,
+    double alpha_a_c, double alpha_c_c,
+    double alpha_a_a, double alpha_c_a,
+    double E_eq, double F_const, double R_gas,
+    int start, int finish, int Np)
+{
+    dvc_ScaLBL_FuelCell_ButlerVolmer<<<NBLOCKS, NTHREADS>>>(
+        PhiS, PhiE, Temperature, RegionID, ReactionRate,
+        SourceO2, SourceN2, SourceH2, SourceH2O,
+        i0_cathode, i0_anode,
+        alpha_a_c, alpha_c_c, alpha_a_a, alpha_c_a,
+        E_eq, F_const, R_gas,
+        start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_FuelCell_ButlerVolmer: %s\n", cudaGetErrorString(err));
+}
+
+// --- Phase Change Source ---
+extern "C" void ScaLBL_FuelCell_PhaseChange(
+    double *Phi, double *Temperature, double *ConcH2O,
+    double *SourcePhaseField, double *SourceThermal,
+    double h_fg, double R_gas, double T_ref, double P_ref,
+    double k_evap, double k_cond,
+    int *Map, int start, int finish, int Np)
+{
+    dvc_ScaLBL_FuelCell_PhaseChange<<<NBLOCKS, NTHREADS>>>(
+        Phi, Temperature, ConcH2O,
+        SourcePhaseField, SourceThermal,
+        h_fg, R_gas, T_ref, P_ref, k_evap, k_cond,
+        Map, start, finish, Np);
+    cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+        printf("CUDA error in ScaLBL_FuelCell_PhaseChange: %s\n", cudaGetErrorString(err));
+}

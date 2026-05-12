@@ -49,6 +49,20 @@ public:
 	void WriteRestartYDW();
 	double approxRollingAverage(double avg, double new_sample, int timestep);
     int collateBoundaryBlobs(int *&inletNWPBlobsGlob, vector<int> inletNWPBlobsLoc);
+
+	// Steady-state hook: invoked by Run() on every rank, immediately
+	// after an automorph steady-state point is detected (and the
+	// existing relperm.csv row is written) and before the morph
+	// adaptation step.  Default implementation is a no-op; the
+	// LBPMRelPermSimulator overrides this to spawn per-phase
+	// single-phase BGK runs that measure the effective permeability.
+	// At call time PhaseField on host already reflects the current
+	// device Phi, Distance is the signed distance to solid, and
+	// volA/volB are the current global pore counts.  Implementations
+	// MUST NOT mutate any color-model fq/Phi/Den state -- they should
+	// allocate their own Mask/ScaLBL_Communicator and free it before
+	// returning so the outer color-model loop can resume.
+	virtual void OnSteadyStatePoint();
 	
 	bool Restart,pBC;
 	int timestep,timestepMax;
@@ -56,6 +70,7 @@ public:
 	double tauA,tauB,rhoA,rhoB,alpha,beta;
 	double Fx,Fy,Fz,flux;
 	double din,dout,inletA,inletB,outletA,outletB;
+	double bcInitA,bcInitB; // initial boundary composition for ramp (set from Phi after init)
 
 	// SI conversion factors (set by ColorModelSI; 0 = lattice-unit mode)
 	double dx_si, dt_si, rho_ref;

@@ -102,7 +102,7 @@ void ScaLBL_ColorModel::ReadParams(string filename){
         outletB = color_db->getScalar<double>( "outletB" );
     }
     else{
-        outletB=1.0;
+        outletB=0.0;
     }
     
     // Read domain parameters
@@ -498,7 +498,33 @@ void ScaLBL_ColorModel::Initialize(){
 
     double *PhaseLabel;
     PhaseLabel = new double[N];
-    AssignComponentLabels(PhaseLabel);    
+    AssignComponentLabels(PhaseLabel);
+
+    // Determine initial boundary composition for the ramp from the
+    // initialised Phi.  Average phi over the first interior z-slice of pore
+    // voxels to decide whether the domain starts as phase A or B.
+    {
+        double phiSum = 0.0;
+        int    phiCount = 0;
+        int kSlice = 1;  // first interior slice
+        for (int j = 0; j < Ny; j++){
+            for (int i = 0; i < Nx; i++){
+                int n = kSlice*Nx*Ny + j*Nx + i;
+                if (Dm->id[n] > 0){          // pore voxel
+                    phiSum += PhaseLabel[n];
+                    phiCount++;
+                }
+            }
+        }
+        double phiAvgLocal[2] = {phiSum, double(phiCount)};
+        double phiAvgGlobal[2];
+        MPI_Allreduce(phiAvgLocal, phiAvgGlobal, 2, MPI_DOUBLE, MPI_SUM, Dm->Comm);
+        double avgPhi = (phiAvgGlobal[1] > 0) ? phiAvgGlobal[0] / phiAvgGlobal[1] : 1.0;
+        bcInitA = 0.5*(avgPhi + 1.0);   // phi=+1 → A=1, phi=-1 → A=0
+        bcInitB = 0.5*(1.0 - avgPhi);
+        if (rank == 0) printf("Boundary ramp initial composition: A=%f, B=%f (avg phi=%f)\n",
+                              bcInitA, bcInitB, avgPhi);
+    }
 
     if (Restart == true){
         if (rank==0) printf("Reading restart file! \n");
@@ -584,27 +610,14 @@ void ScaLBL_ColorModel::Initialize(){
     ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, 0, ScaLBL_Comm->LastExterior(), Np);
     ScaLBL_PhaseField_Init(dvcMap, Phi, Den, Aq, Bq, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
 
-    // Pre-set boundary phase composition so D3Q19 init uses the correct
-    // density at inlet/outlet.  Without this, outlet voxels start at rhoA
-    // (from segmented data) but the Run loop Color_BC immediately resets
-    // them to outletA/outletB.  With density_ratio != 1 the Zou-He BC
-    // sees rho_dist=rhoA vs dout=rhoB, computing uz = -(rhoB-rhoA) which
-    // is catastrophically large and causes NaN within ~1000 steps.
-    if (!Restart && (inletA + inletB + outletA + outletB > 0)) {
-        ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
-        ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
-    }
-
-    // Scale D3Q19 distributions to phase-consistent density.
-    // D3Q19_Init sets everything to rho=1.  This rescales each site's
-    // distributions by rho0 = rhoA + 0.5*(1-phi)*(rhoB-rhoA) so that the
-    // density carried by fq matches the phase.  Must run AFTER Color_BC
-    // so boundary voxels already have the correct phase composition.
-    if (!Restart && fabs(rhoA - rhoB) > 1e-10) {
-        if (rank == 0) printf("Initializing D3Q19 with phase-consistent density (rhoA=%.4f, rhoB=%.4f)\n", rhoA, rhoB);
-        ScaLBL_D3Q19_Init_Color(fq, Den, rhoA, rhoB, 0, ScaLBL_Comm->LastExterior(), Np);
-        ScaLBL_D3Q19_Init_Color(fq, Den, rhoA, rhoB, ScaLBL_Comm->FirstInterior(), ScaLBL_Comm->LastInterior(), Np);
-    }
+    // Pre-set boundary phase composition (Den, Phi) for correct rho0 in
+    // Boundary phase composition is now ramped gradually in the Run() loop
+    // to avoid the sharp phase-interface shock that causes spurious currents
+    // when density_ratio != 1.  Do NOT force the target composition here.
+    // if (!Restart && (inletA + inletB + outletA + outletB > 0)) {
+    //     ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
+    //     ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
+    // }
 
 //    if (BoundaryCondition > 0 ){
 //        if (Dm->kproc()==0){
@@ -655,6 +668,9 @@ void ScaLBL_ColorModel::Run(){
     // for forced injection problems
     int fluxRampup = 0;
     double maxFlux = flux;
+    // boundary composition ramp (avoid sharp phase interface at boundaries)
+    double ramp_inletA = inletA, ramp_inletB = inletB;
+    double ramp_outletA = outletA, ramp_outletB = outletB;
     bool fluxReversalFlag = false;
     int fluxReversalType = 1;
     double fluxReversalSat = -1.0;
@@ -763,7 +779,7 @@ void ScaLBL_ColorModel::Run(){
     if (color_db->keyExists( "affinityRampSteps" )){
         affinityRampSteps = color_db->getScalar<int>( "affinityRampSteps" );
         if (rank==0 && affinityRampSteps>0) printf("[Colour Model], Affinities are to be ramped up to their specified values within %d timesteps\n", affinityRampSteps);
-    }    
+    }
     if (analysis_db->keyExists( "ramp_timesteps" )){
         ramp_timesteps = analysis_db->getScalar<double>( "ramp_timesteps" );
     }
@@ -852,6 +868,24 @@ void ScaLBL_ColorModel::Run(){
 
         // *************ODD TIMESTEP*************
         timestep++;
+
+        // Ramp boundary composition to avoid sharp phase-interface shock.
+        // bcInitA/bcInitB are set in Initialize() from the initial Phi field,
+        // so they correctly reflect whichever phase the domain starts with.
+        // On Restart the boundaries are already established, so skip the ramp.
+        if (!Restart && timestep <= ramp_timesteps && (inletA+inletB+outletA+outletB > 0)) {
+            double w = double(timestep) / double(ramp_timesteps); // 0→1
+            ramp_inletA  = bcInitA + w * (inletA  - bcInitA);
+            ramp_inletB  = bcInitB + w * (inletB  - bcInitB);
+            ramp_outletA = bcInitA + w * (outletA - bcInitA);
+            ramp_outletB = bcInitB + w * (outletB - bcInitB);
+        } else {
+            ramp_inletA  = inletA;
+            ramp_inletB  = inletB;
+            ramp_outletA = outletA;
+            ramp_outletB = outletB;
+        }
+
         // Compute the Phase indicator field
         // Read for Aq, Bq happens in this routine (requires communication)
         ScaLBL_Comm->BiSendD3Q7AA(Aq,Bq); //READ FROM NORMAL
@@ -864,9 +898,11 @@ void ScaLBL_ColorModel::Run(){
             //printf("[DEBUG] --rank=%d, assigning surface BCs %d, count %d\n",rank,labelBCs.size(),surfBCCount); 
             ScaLBL_Color_BC_YDW(surfaceBCInds, dvcMap, Phi, Den, surfaceBCValsA, surfaceBCValsB, surfBCCount, Np);
         }
-        if (inletA+inletB+outletA+outletB > 0){
-            ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
-            ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
+        if (inletA+inletB > 0){
+            ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, ramp_inletA, ramp_inletB);
+        }
+        if (outletA+outletB > 0){
+            ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, ramp_outletA, ramp_outletB);
         }
                 
         // Halo exchange for phase field
@@ -906,9 +942,11 @@ void ScaLBL_ColorModel::Run(){
             //printf("[DEBUG] --rank=%d, assigning surface BCs %d, count %d\n",rank,labelBCs.size(),surfBCCount); 
             ScaLBL_Color_BC_YDW(surfaceBCInds, dvcMap, Phi, Den, surfaceBCValsA, surfaceBCValsB, surfBCCount, Np);
         }
-        if (inletA+inletB+outletA+outletB > 0){
-            ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, inletA, inletB);
-            ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, outletA, outletB);
+        if (inletA+inletB > 0){
+            ScaLBL_Comm->Color_BC_z(dvcMap, Phi, Den, ramp_inletA, ramp_inletB);
+        }
+        if (outletA+outletB > 0){
+            ScaLBL_Comm->Color_BC_Z(dvcMap, Phi, Den, ramp_outletA, ramp_outletB);
         }
         
         ScaLBL_Comm_Regular->SendHalo(Phi);
@@ -932,7 +970,7 @@ void ScaLBL_ColorModel::Run(){
         ScaLBL_DeviceBarrier(); 
         MPI_Barrier(Dm->Comm);
         //************************************************************************
-        
+
         //PROFILE_STOP("Update");
         //raw visualisation intervals
         if (visualisation_interval > 0 && timestep%visualisation_interval == 0){
@@ -1088,18 +1126,31 @@ void ScaLBL_ColorModel::Run(){
             if (countBOut > 0) PoutB /= countBOut; else PoutB = 0.0;
             if (countAIn > 0) PinA /= countAIn; else PinA = 0.0;
             if (countBIn > 0) PinB /= countBIn; else PinB = 0.0;
+            // Volumetric accumulation (before density weighting)
+            double accumulation = 0.0;
+            double qinTotal = qinA + qinB;
+            double qoutTotal = qoutA + qoutB;
+            if (qinTotal != 0.0)
+                accumulation = (qinTotal - qoutTotal) / qinTotal * 100.0;
+            // Convert to SI volumetric flow rate if available
+            if (rank==0) {
+                if (dt_si > 0 && dx_si > 0) {
+                    double Q_scale = dx_si * dx_si * dx_si / dt_si;  // lattice vol flux -> m³/s
+                    printf("Inlet Flow A|B: %e | %e [m3/s], Outlet Flow A|B: %e | %e [m3/s]\n",
+                           qinA*Q_scale, qinB*Q_scale, qoutA*Q_scale, qoutB*Q_scale);
+                } else {
+                    printf("Inlet Flow A|B: %e | %e, Outlet Flow A|B: %e | %e [LB]\n", qinA, qinB, qoutA, qoutB);
+                }
+                printf("Inlet Pressure A|B: %e | %e, Outlet Pressure A|B: %e | %e\n", PinA, PinB, PoutA, PoutB);
+                printf("Internal Pressure Gradient: %e, Accumulation Flux: %.2f%%\n", internalDeltaP, accumulation);
+            }
+            // Scale to mass flux for downstream permeability calculations
             qinA *= rhoA;
             qinB *= rhoB;
             qoutA *= rhoA;
             qoutB *= rhoB;
-            double accumulation = 0.0;
-            if ((qinA + qinB) != 0.0)
-                accumulation = (qinA + qinB - qoutA - qoutB)/(qinA + qinB) * 100;
-            if (rank==0) printf("Inlet Flow A|B: %e | %e, Outlet Flow A|B: %e | %e \n", qinA, qinB, qoutA, qoutB);
-            if (rank==0) printf("Inlet Pressure A|B: %e | %e, Outlet Pressure A|B: %e | %e \n", PinA, PinB, PoutA, PoutB);
-            if (rank==0) printf("Internal Pressure Gradient: %e, Accumulation Flux: %f% \n", internalDeltaP, accumulation);
             
-            if (BoundaryCondition == 0 && inletA+inletB+outletA+outletB == 0){ // 
+            { // Connected components analysis
                 // find the NWP blobs
                 ComputeGlobalBlobIDs(Nx-2,Ny-2,Nz-2,rank_info,PhaseField,Distance,vF,vS,NWP_blob_label,Dm->Comm);
                 MPI_Barrier(Dm->Comm);
@@ -1375,13 +1426,14 @@ void ScaLBL_ColorModel::Run(){
                     double vel_scale = dx_si / dt_si;                       // lattice vel -> m/s
                     double gradP_SI = gradP * rho_ref * dx_si / (dt_si * dt_si); // lattice gradP -> Pa/m
                     double time_SI = timestep * dt_si;
-                    printf("[SI] t = %.4e s | Sat = %.4f | MLUPS = %.1f\n", time_SI, current_saturation, MLUPSGlob);
+                    printf("[SI] Sat = %.4f | MLUPS = %.1f\n", current_saturation, MLUPSGlob);
                     printf("[SI] vA = (%.4e, %.4e, %.4e) m/s | vB = (%.4e, %.4e, %.4e) m/s\n",
                            vA_x*vel_scale, vA_y*vel_scale, vA_z*vel_scale,
                            vB_x*vel_scale, vB_y*vel_scale, vB_z*vel_scale);
                     printf("[SI] gradP = %.4e Pa/m | k1 = %.4f D | k2 = %.4f D | k1H = %.4f D | k2H = %.4f D\n",
                            gradP_SI, absperm1, absperm2, absperm1_H, absperm2_H);
-                    printf("[SI] Ca = %.4e | Re = (%.4e, %.4e) | force = %.4e [LB] | setPar = %.4e\n", Ca, Re1, Re2, force_magnitude, settlingParam);
+                    printf("[SI] EMA: k1 = %.4f D | k2 = %.4f D | k1H = %.4f D | k2H = %.4f D\n", absperm1_EMA, absperm2_EMA, absperm1_H_EMA, absperm2_H_EMA);
+                    printf("[SI] Ca = %.4e | Re = (%.4e, %.4e) | EMA_Ca = %.4e | dCa/dt = %.4e | setPar = %.4e\n", Ca, Re1, Re2, Ca_EMA, dCadtEMA, settlingParam);
                     // SI log file
                     if (logFile) {
                         FILE * si_log = fopen("log_SI.csv","a");
@@ -1551,7 +1603,7 @@ void ScaLBL_ColorModel::Run(){
             
             // adjust the force if capillary number is set
             if (SET_CAPILLARY_NUMBER) {
-                if (autoMorphAdapt || timestep < ramp_timesteps){ // activate if capillary number is specified, and during morph - let the system relax after
+                if (autoMorphAdapt || timestep < ramp_timesteps && !Restart){ // activate if capillary number is specified, and during morph - let the system relax after
                     // at each analysis step, 
                     if (Ca>0.f){
                         double caRatio = capillary_number / fabs(Ca); 
@@ -1591,7 +1643,7 @@ void ScaLBL_ColorModel::Run(){
             }
             
             //co-injeciton stabilisation routine
-            if (timestep > ramp_timesteps && coinjectionFlag){
+            if (timestep > ramp_timesteps && coinjectionFlag && !Restart){
                 if (globStabilityCounter >= max_stabilisation){ // theres no adaptation phase, so no extra flag here
                     WriteDebugYDW();
                     globStabilityCounter = 0;
@@ -1628,7 +1680,7 @@ void ScaLBL_ColorModel::Run(){
             }
             
             //AUTOMORPH routine
-            if (timestep > ramp_timesteps && autoMorphFlag){
+            if (timestep > ramp_timesteps && autoMorphFlag && !Restart){
                 if (current_saturation*((injectionType-1)*2-1)<satInit*((injectionType-1)*2-1) && satInit > 0.0 && satInit < 1.0){
                     // initially, use flux conditions to push the system along
                     if (rank==0) printf("[AUTOMORPH]: Initial Flux injection to target %f (current: %f) \n", satInit, current_saturation);
@@ -1695,7 +1747,12 @@ void ScaLBL_ColorModel::Run(){
                             absperm2_old = absperm2;
                             tolerance = morphTolerance;
                         }
-                        MPI_Barrier(Dm->Comm);                    
+                        MPI_Barrier(Dm->Comm);
+                        // Per-steady-state hook (collective on all ranks).
+                        // Default: no-op.  LBPMRelPermSimulator overrides
+                        // this to run per-phase single-phase BGK.
+                        OnSteadyStatePoint();
+                        MPI_Barrier(Dm->Comm);
                         if (injectionType==1){
                             targetSaturation = current_saturation - satInc;
                             shellRadius = 1 + current_saturation;
@@ -2332,3 +2389,6 @@ int ScaLBL_ColorModel::collateBoundaryBlobs(int *&inletNWPBlobsGlob, vector<int>
                    inletNWPBlobsGlob, recvcounts.data(), displs.data(), MPI_INT, Dm->Comm);
     return totlen;
 }
+
+// Default no-op steady-state hook (subclasses override).
+void ScaLBL_ColorModel::OnSteadyStatePoint() {}

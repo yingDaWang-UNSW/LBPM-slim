@@ -115,6 +115,12 @@ public:
     // The D3Q19 MRT color-gradient kernel produces sigma_eff = K * alpha.
     // K ~ 7.28 for tau >= 0.7, with a small exponential correction at low tau.
     static double computeKSigma(double tau);
+
+    // Pre-read the raw geometry file to compute porosity before SetDomain.
+    // Reads Filename, ReadValues, WriteValues from the Domain database.
+    // Fluid voxels have mapped value > 0, solid = 0.
+    // Returns porosity (0 if geometry cannot be read).
+    double preloadPorosity();
 };
 
 #endif

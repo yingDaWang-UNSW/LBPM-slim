@@ -4,6 +4,8 @@
 #include "models/ColorModelSI.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 
 using namespace std;
 
@@ -45,6 +47,111 @@ double ScaLBL_ColorModelSI::computeKSigma(double tau) {
     return K_inf - A * exp(-B * (tau - 0.5));
 }
 
+// =========================================================================
+// preloadPorosity: read the raw geometry file (rank 0 only) and count
+// fluid voxels over the simulation domain to compute porosity.
+// Must be called AFTER db/domain_db are set but BEFORE SetDomain().
+// =========================================================================
+double ScaLBL_ColorModelSI::preloadPorosity() {
+    double porosity = 0.0;
+
+    // Read domain parameters needed for raw file reading
+    auto Filename = domain_db->getScalar<std::string>("Filename");
+    auto SIZE = domain_db->getVector<int>("N");        // raw file dimensions
+    auto ReadValues = domain_db->getVector<char>("ReadValues");
+    auto WriteValues = domain_db->getVector<char>("WriteValues");
+    std::string ReadType = "8bit";
+    if (domain_db->keyExists("ReadType"))
+        ReadType = domain_db->getScalar<std::string>("ReadType");
+
+    int64_t NX = SIZE[0], NY = SIZE[1], NZ = SIZE[2]; // raw file dimensions
+
+    // Offset into the raw file
+    int64_t xStart = 0, yStart = 0, zStart = 0;
+    if (domain_db->keyExists("offset")) {
+        auto offset = domain_db->getVector<int>("offset");
+        xStart = offset[0]; yStart = offset[1]; zStart = offset[2];
+    }
+
+    // Simulation domain extent in voxels
+    int64_t simNx = int64_t(Nx) * nprocx;
+    int64_t simNy = int64_t(Ny) * nprocy;
+    int64_t simNz = int64_t(Nz) * nprocz;
+
+    if (rank == 0) {
+        int64_t TOTAL = NX * NY * NZ;
+        char *SegData = new char[TOTAL];
+
+        // Read the raw file
+        FILE *fp = fopen(Filename.c_str(), "rb");
+        if (fp == NULL) {
+            printf("WARNING: Cannot open geometry file '%s' for porosity preload\n", Filename.c_str());
+            delete[] SegData;
+            return 0.0;
+        }
+
+        if (ReadType == "16bit") {
+            short int *tmp = new short int[TOTAL];
+            size_t nread = fread(tmp, 2, TOTAL, fp);
+            fclose(fp);
+            if (nread != size_t(TOTAL)) {
+                printf("WARNING: Short read of geometry file (16bit)\n");
+                delete[] tmp; delete[] SegData;
+                return 0.0;
+            }
+            for (int64_t n = 0; n < TOTAL; n++) SegData[n] = char(tmp[n]);
+            delete[] tmp;
+        } else {
+            size_t nread = fread(SegData, 1, TOTAL, fp);
+            fclose(fp);
+            if (nread != size_t(TOTAL)) {
+                printf("WARNING: Short read of geometry file (8bit)\n");
+                delete[] SegData;
+                return 0.0;
+            }
+        }
+
+        // Count fluid voxels over the simulation domain region
+        int64_t fluid_count = 0;
+        int64_t total_count = 0;
+        for (int64_t kk = 0; kk < simNz; kk++) {
+            for (int64_t jj = 0; jj < simNy; jj++) {
+                for (int64_t ii = 0; ii < simNx; ii++) {
+                    int64_t x = xStart + ii;
+                    int64_t y = yStart + jj;
+                    int64_t z = zStart + kk;
+                    // Clamp to raw file bounds
+                    if (x < 0) x = 0; if (x >= NX) x = NX - 1;
+                    if (y < 0) y = 0; if (y >= NY) y = NY - 1;
+                    if (z < 0) z = 0; if (z >= NZ) z = NZ - 1;
+                    int64_t idx = z * NX * NY + y * NX + x;
+                    char raw_val = SegData[idx];
+                    // Apply ReadValues -> WriteValues mapping
+                    char mapped_val = raw_val;
+                    for (size_t m = 0; m < ReadValues.size(); m++) {
+                        if (raw_val == ReadValues[m]) {
+                            mapped_val = WriteValues[m];
+                            break;
+                        }
+                    }
+                    total_count++;
+                    if (mapped_val > 0) fluid_count++;
+                }
+            }
+        }
+        delete[] SegData;
+
+        if (total_count > 0)
+            porosity = double(fluid_count) / double(total_count);
+        printf("Geometry preload: %s (%ldx%ldx%ld)\n", Filename.c_str(), simNx, simNy, simNz);
+        printf("  Fluid voxels: %ld / %ld  ->  porosity = %.6f\n", fluid_count, total_count, porosity);
+    }
+
+    // Broadcast porosity to all ranks
+    MPI_Bcast(&porosity, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    return porosity;
+}
+
 void ScaLBL_ColorModelSI::ReadParams(string filename) {
     // Read the input database
     db = make_shared<Database>(filename);
@@ -56,7 +163,12 @@ void ScaLBL_ColorModelSI::ReadParams(string filename) {
     // Read SI parameters from Color section
     // ==========================================
     viscosity_A = color_db->getScalar<double>("viscosity_A");
-    viscosity_B = color_db->getScalar<double>("viscosity_B");
+    if (color_db->keyExists("viscosity_B"))
+        viscosity_B = color_db->getScalar<double>("viscosity_B");
+    else if (color_db->keyExists("viscosity_ratio"))
+        viscosity_B = viscosity_A / color_db->getScalar<double>("viscosity_ratio");
+    else
+        ERROR("Must specify either viscosity_B or viscosity_ratio");
     density_A = color_db->getScalar<double>("density_A");
     density_B = color_db->getScalar<double>("density_B");
     surface_tension = color_db->getScalar<double>("surface_tension");
@@ -147,25 +259,21 @@ void ScaLBL_ColorModelSI::ReadParams(string filename) {
     Fy = dPdx_y * dt_si * dt_si / (rho_ref * dx_si);
     Fz = dPdx_z * dt_si * dt_si / (rho_ref * dx_si);
 
-    // 7. Phase-weighted reference densities at boundaries
-    double rho_inlet_ref = rhoA;
-    if (inletA + inletB > 0)
-        rho_inlet_ref = (rhoA * inletA + rhoB * inletB) / (inletA + inletB);
-    double rho_outlet_ref = rhoA;
-    if (outletA + outletB > 0)
-        rho_outlet_ref = (rhoA * outletA + rhoB * outletB) / (outletA + outletB);
-
-    //    Pressure BCs: centre around phase-weighted density
+    // 7. Pressure BCs: centre around rho=1 (the D3Q19 reference density).
+    //    The phase composition at boundaries is handled separately by Color_BC
+    //    which sets Den (nA,nB) and Phi.  The D3Q19 density (sum of fi) stays
+    //    near 1.0 regardless of the phase — rho0 (from phase) appears only in
+    //    the collision equilibrium.  Setting dout=rhoB would create a massive
+    //    Zou-He velocity: uz = -rhoB + sum(fi) ≈ -(rhoB-1).  
     //    dp_LB = (P_in - P_out) * dt^2 / (rho_ref * dx^2)
     double dp_SI = inlet_pressure - outlet_pressure;
     double dp_LB = dp_SI * dt_si * dt_si / (rho_ref * dx_si * dx_si);
-    din  = rho_inlet_ref  + 1.5 * dp_LB;
-    dout = rho_outlet_ref - 1.5 * dp_LB;
+    din  = 1.0 + 1.5 * dp_LB;
+    dout = 1.0 - 1.5 * dp_LB;
 
     // 8. Flux (volumetric flow rate -> lattice flux)
-    //    flux_LB = Q_SI * dt / dx^3
+    //    flux_LB = Q_SI * dt / dx^3.  With rho ~= 1, mass flux = volumetric flux.
     flux = flow_rate_SI * dt_si / (dx_si * dx_si * dx_si);
-    if (BoundaryCondition == 4) flux *= rho_inlet_ref; // mass flux with inlet phase density
 
     // Print conversion summary and check stability
     PrintConversionInfo();
@@ -188,6 +296,20 @@ void ScaLBL_ColorModelSI::ReadParams(string filename) {
 
 // =========================================================================
 // Mode 2: Dimensionless Number Matching
+//
+// Accepts EITHER:
+//   (a) capillary_number + reynolds_number  (pure dimensionless)
+//   (b) pressure_gradient [Pa/m] + permeability [mD]  (SI-driven)
+//   (c) flow_rate [m³/s]                              (SI-driven)
+//
+// EXPERIMENTAL CONVENTION: Ca and Re are defined with the Darcy
+// (superficial) velocity  v_D = Q/A  — the quantity an experimentalist
+// measures at the core face without seeing into the sample:
+//     Ca = mu * v_D / sigma       Re = v_D * sqrt(k) / nu
+// The characteristic length in Re is sqrt(permeability) — an intrinsic
+// property of the medium — so the dimensionless numbers are unique
+// regardless of sample or domain size.  Permeability is REQUIRED.
+// Porosity is still preloaded for informational output.
 // =========================================================================
 void ScaLBL_ColorModelSI::ReadParamsDimensionless(string filename) {
     // Read the input database
@@ -197,18 +319,8 @@ void ScaLBL_ColorModelSI::ReadParamsDimensionless(string filename) {
     analysis_db = db->getDatabase("Analysis");
 
     // ==========================================
-    // Read dimensionless parameters
-    // Use "target_" prefix to avoid triggering parent's adaptive controller
+    // Read common parameters
     // ==========================================
-    if (color_db->keyExists("target_capillary_number"))
-        capillary_number = color_db->getScalar<double>("target_capillary_number");
-    else
-        capillary_number = color_db->getScalar<double>("capillary_number");
-
-    if (color_db->keyExists("target_reynolds_number"))
-        reynolds_number = color_db->getScalar<double>("target_reynolds_number");
-    else
-        reynolds_number = color_db->getScalar<double>("reynolds_number");
     viscosity_ratio  = color_db->getScalar<double>("viscosity_ratio");  // M = nu_A / nu_B
     density_ratio    = color_db->getScalar<double>("density_ratio");    // Lambda = rho_A / rho_B
 
@@ -238,134 +350,211 @@ void ScaLBL_ColorModelSI::ReadParamsDimensionless(string filename) {
     nprocx = nproc[0]; nprocy = nproc[1]; nprocz = nproc[2];
 
     // ==========================================
-    // Auto-compute stable lattice parameters
+    // Determine input mode
     // ==========================================
-    // Characteristic length in lattice units = domain z-extent
-    double L_LB = double(Nz * nprocz);
+    bool has_Ca_Re = (color_db->keyExists("capillary_number") || color_db->keyExists("target_capillary_number"))
+                  && (color_db->keyExists("reynolds_number")  || color_db->keyExists("target_reynolds_number"));
+    bool has_dP    = color_db->keyExists("pressure_gradient");
+    bool has_flux  = color_db->keyExists("flow_rate");
+    bool has_perm  = color_db->keyExists("permeability");
 
-    // The more viscous phase gets target_tau
-    // nu_LB_max = (target_tau - 0.5) / 3
+    // Read SI fluid properties (needed for SI-driven modes, optional for Ca/Re mode)
+    if (color_db->keyExists("viscosity_A"))
+        viscosity_A = color_db->getScalar<double>("viscosity_A");
+    if (color_db->keyExists("viscosity_B"))
+        viscosity_B = color_db->getScalar<double>("viscosity_B");
+    if (color_db->keyExists("density_A"))
+        density_A = color_db->getScalar<double>("density_A");
+    if (color_db->keyExists("density_B"))
+        density_B = color_db->getScalar<double>("density_B");
+    if (color_db->keyExists("surface_tension"))
+        surface_tension = color_db->getScalar<double>("surface_tension");
+
+    // ==========================================
+    // Auto-compute lattice parameters (tau, rho, nu)
+    // ==========================================
+    double L_LB = double(Nz * nprocz);
     double nu_LB_max = (target_tau - 0.5) / 3.0;
 
-    // Determine which phase is more viscous based on viscosity_ratio
-    // M = nu_A / nu_B
     double nu_LB_A, nu_LB_B;
     if (viscosity_ratio >= 1.0) {
-        // Phase A is more viscous
         nu_LB_A = nu_LB_max;
         nu_LB_B = nu_LB_max / viscosity_ratio;
     } else {
-        // Phase B is more viscous
         nu_LB_B = nu_LB_max;
         nu_LB_A = nu_LB_max * viscosity_ratio;
     }
 
     tauA = 3.0 * nu_LB_A + 0.5;
     tauB = 3.0 * nu_LB_B + 0.5;
-
-    // Density ratio
     rhoA = 1.0;
-    rhoB = 1.0 / density_ratio;  // Lambda = rho_A / rho_B
+    rhoB = 1.0 / density_ratio;
 
-    // Characteristic velocity from Re:
-    //   Re = u * L / nu_A  =>  u_LB = Re * nu_LB_A / L_LB
-    double u_LB = reynolds_number * nu_LB_A / L_LB;
+    // ==========================================
+    // Compute dx_si, dt_si from voxel_length + viscosity_A
+    // ==========================================
+    dx_si = 0.0; dt_si = 0.0; rho_ref = 0.0;
+    if (domain_db->keyExists("voxel_length")) {
+        dx_si = domain_db->getScalar<double>("voxel_length") * 1.0e-6;
+        if (viscosity_A > 0.0)
+            dt_si = nu_LB_A * dx_si * dx_si / viscosity_A;
+    }
+    if (density_A > 0.0) rho_ref = density_A;
 
-    // Surface tension (alpha) from Ca:
-    //   Ca = mu * u / sigma = rho * nu * u / sigma_eff
-    //   In LBM: sigma_eff = K_sigma * alpha, so
-    //   Ca = rhoA * nu_LB_A * u_LB / (K_sigma * alpha)
-    //   => alpha = rhoA * nu_LB_A * u_LB / (Ca * K_sigma)
+    // ==========================================
+    // Determine characteristic velocity u_LB
+    // u_LB represents the DARCY (superficial) velocity in lattice units.
+    // This matches the experimental convention: v_D = Q/A.
+    // ==========================================
+    double u_LB = 0.0;
+    double porosity_preload = 0.0;
+    double perm_SI = 0.0;  // permeability in m²
+    double dPdz_SI = 0.0;  // pressure gradient magnitude [Pa/m]
+    double Q_SI = 0.0;     // volumetric flow rate [m³/s]
+
+    // Read permeability (REQUIRED for Re = v_D * sqrt(k) / nu)
+    if (has_perm) {
+        perm_SI = color_db->getScalar<double>("permeability") * 9.869233e-16;  // mD -> m²
+    } else {
+        if (rank == 0)
+            printf("ERROR: 'permeability' [mD] is required (Re = v_D * sqrt(k) / nu)\n");
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    double k_LB = perm_SI / (dx_si > 0 ? dx_si * dx_si : 1.0);  // lattice permeability
+    double sqrt_k_LB = sqrt(k_LB);
+
+    if (!has_Ca_Re && (has_dP || has_flux)) {
+        // ----- SI-driven mode: derive Ca & Re from physical inputs -----
+        // Validate required SI properties
+        if (viscosity_A <= 0.0 || density_A <= 0.0 || surface_tension <= 0.0 || dx_si <= 0.0) {
+            if (rank == 0)
+                printf("ERROR: SI-driven dimless mode requires viscosity_A, density_A, surface_tension, voxel_length\n");
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+
+        // Preload geometry porosity (informational; not required for Ca/Re)
+        porosity_preload = preloadPorosity();
+
+        double A_total = double(Nx * nprocx) * double(Ny * nprocy);  // cross-section in voxels²
+        double A_SI = A_total * dx_si * dx_si;                       // cross-section in m²
+
+        double mu_A = viscosity_A * density_A;  // dynamic viscosity [Pa·s]
+        double u_Darcy = 0.0;
+
+        if (has_dP) {
+            // Mode (b): pressure gradient + permeability -> Darcy velocity
+            auto dPdx_SI = color_db->getVector<double>("pressure_gradient");
+            dPdz_SI = dPdx_SI[2];  // z-component (flow direction)
+            if (perm_SI > 0.0) {
+                // Darcy: u_Darcy = (k / mu) * |dP/dz|  [superficial velocity]
+                u_Darcy = perm_SI * fabs(dPdz_SI) / mu_A;
+            } else {
+                if (rank == 0) printf("ERROR: pressure_gradient mode requires 'permeability' [mD]\n");
+                MPI_Abort(MPI_COMM_WORLD, 1);
+            }
+        } else {
+            // Mode (c): flow rate -> Darcy velocity
+            Q_SI = color_db->getScalar<double>("flow_rate");
+            u_Darcy = Q_SI / A_SI;
+            // Back-derive dP from Darcy if permeability given (for body force)
+            if (perm_SI > 0.0)
+                dPdz_SI = mu_A * u_Darcy / perm_SI;
+        }
+
+        if (has_dP) Q_SI = u_Darcy * A_SI;
+
+        // Convert Darcy velocity to lattice units
+        u_LB = u_Darcy * dt_si / dx_si;
+
+        // Derive dimensionless numbers from Darcy velocity
+        // Ca = mu * v_D / sigma,  Re = v_D * sqrt(k) / nu
+        capillary_number = mu_A * u_Darcy / surface_tension;
+        reynolds_number  = u_Darcy * sqrt(perm_SI) / viscosity_A;
+
+        if (rank == 0) {
+            printf("================================================================\n");
+            printf("  ColorModelSI: SI-Driven Dimensionless Mode\n");
+            printf("  (Experimental convention: Ca & Re use Darcy velocity)\n");
+            printf("================================================================\n");
+            printf("SI Inputs:\n");
+            if (has_dP) printf("  Pressure gradient (z): %.4e Pa/m\n", dPdz_SI);
+            if (has_flux) printf("  Flow rate: %.4e m3/s\n", Q_SI);
+            printf("  Permeability: %.4f mD  (%.4e m2)  sqrt(k) = %.4e m\n", perm_SI/9.869233e-16, perm_SI, sqrt(perm_SI));
+            if (porosity_preload > 0.0) printf("  Porosity (preloaded): %.4f\n", porosity_preload);
+            printf("  mu_A = %.4e Pa.s  |  sigma = %.4e N/m\n", mu_A, surface_tension);
+            printf("  v_Darcy = %.4e m/s  |  Q = %.4e m3/s\n", u_Darcy, Q_SI);
+            if (porosity_preload > 0.0)
+                printf("  v_pore  = %.4e m/s  (= v_Darcy / phi, for reference)\n", u_Darcy / porosity_preload);
+            printf("Derived Dimensionless Numbers (Darcy-velocity, sqrt(k) length):\n");
+            printf("  Ca = mu*v_D/sigma      = %.6e\n", capillary_number);
+            printf("  Re = v_D*sqrt(k)/nu    = %.6e\n", reynolds_number);
+        }
+    } else {
+        // ----- Mode (a): pure Ca/Re input -----
+        if (color_db->keyExists("target_capillary_number"))
+            capillary_number = color_db->getScalar<double>("target_capillary_number");
+        else
+            capillary_number = color_db->getScalar<double>("capillary_number");
+
+        if (color_db->keyExists("target_reynolds_number"))
+            reynolds_number = color_db->getScalar<double>("target_reynolds_number");
+        else
+            reynolds_number = color_db->getScalar<double>("reynolds_number");
+
+        // u_LB from Re:  Re = v_D * sqrt(k) / nu  =>  u_LB = Re * nu_LB / sqrt(k_LB)
+        u_LB = reynolds_number * nu_LB_A / sqrt_k_LB;
+
+        if (rank == 0) {
+            printf("================================================================\n");
+            printf("  ColorModelSI: Dimensionless Number Matching Mode\n");
+            printf("================================================================\n");
+            printf("Dimensionless Inputs:\n");
+            printf("  Capillary number (Ca = mu*v_D/sigma):   %.6e\n", capillary_number);
+            printf("  Reynolds number  (Re = v_D*sqrt(k)/nu): %.6e\n", reynolds_number);
+            printf("  Permeability: %.4f mD  (k_LB = %.4e, sqrt(k_LB) = %.4e)\n",
+                   perm_SI/9.869233e-16, k_LB, sqrt_k_LB);
+        }
+    }
+
+    // ==========================================
+    // Surface tension (alpha) from Ca
+    // ==========================================
     double K_sigma = computeKSigma(target_tau);
     if (capillary_number > 0.0) {
         alpha = rhoA * nu_LB_A * u_LB / (capillary_number * K_sigma);
     } else {
-        alpha = 1.0e-3; // default small value
+        alpha = 1.0e-3;
     }
 
-    // Body force (pressure gradient) from Re:
-    //   The body force IS the pressure gradient driving flow (applied to both phases).
-    //   Using Poiseuille scaling: u ~ F * L^2 / (8 * nu)
-    //   => F_LB = 8 * nu_LB_A * u_LB / L_LB^2
-    Fx = 0.0; Fy = 0.0;
-    Fz = 8.0 * nu_LB_A * u_LB / (L_LB * L_LB);
+    // ==========================================
+    // Body force / din-dout / flux  (BC-dependent)
+    // ==========================================
+    // Darcy:  F = nu * u / k_LB  (permeability is mandatory)
+    Fx = 0.0; Fy = 0.0; Fz = 0.0;
+    if (BoundaryCondition == 0) {
+        Fz = nu_LB_A * u_LB / k_LB;  // Darcy: F = nu * u / k
+    }
 
-    // Phase-weighted reference densities at boundaries
-    // When inlet/outlet phase composition is specified, the pressure BC must
-    // target the correct phase density, not rhoA=1.  Without this, setting
-    // e.g. outletB=1 with rhoB=6.67 creates a permanent conflict between
-    // the collision (wants rho=rhoB) and the pressure BC (forces rho=1).
-    double rho_inlet_ref = rhoA;
-    if (inletA + inletB > 0)
-        rho_inlet_ref = (rhoA * inletA + rhoB * inletB) / (inletA + inletB);
-    double rho_outlet_ref = rhoA;
-    if (outletA + outletB > 0)
-        rho_outlet_ref = (rhoA * outletA + rhoB * outletB) / (outletA + outletB);
+    // Pressure BCs (BC=3)
+    din = 1.0; dout = 1.0;
+    if (BoundaryCondition == 3) {
+        double dp_LB = nu_LB_A * u_LB * L_LB / k_LB;  // dp = F * L = (nu*u/k)*L
+        din  = 1.0 + 1.5 * dp_LB;
+        dout = 1.0 - 1.5 * dp_LB;
+    }
 
-    // Pressure BCs from Reynolds number:
-    //   For pressure-driven flow: dp_LB ~ rho * nu * u / L (Poiseuille scaling)
-    //   din = rho_ref_in + 1.5*dp,  dout = rho_ref_out - 1.5*dp
-    //   where dp = rhoA * nu_LB_A * u_LB / (L_LB * c_s^2), c_s^2 = 1/3
-    double dp_LB = rhoA * nu_LB_A * u_LB / L_LB;  // pressure gradient scale * L
-    din  = rho_inlet_ref  + 1.5 * dp_LB;
-    dout = rho_outlet_ref - 1.5 * dp_LB;
-
-    // Flux from characteristic velocity — only relevant for BC=4 (flux BC)
-    //   Q_LB = u_LB * A_cross * rho_phase (mass flux)
+    // Flux (BC=4)
+    // u_LB is Darcy velocity => total volumetric flux = v_D * A_total
+    flux = 0.0;
     if (BoundaryCondition == 4) {
         double A_cross = double(Nx * nprocx) * double(Ny * nprocy);
-        flux = u_LB * A_cross * rho_inlet_ref;
-    } else {
-        flux = 0.0;
+        flux = u_LB * A_cross;
     }
 
-    // Set dx_si and dt_si from voxel_length if available (for output scaling)
-    if (domain_db->keyExists("voxel_length")) {
-        dx_si = domain_db->getScalar<double>("voxel_length") * 1.0e-6;
-        // dt from nu matching: dt = nu_LB_A * dx^2 / nu_SI (if SI viscosity known)
-        // In dimensionless mode we don't necessarily have SI viscosity,
-        // but if the user provides it for output scaling:
-        if (color_db->keyExists("viscosity_A")) {
-            viscosity_A = color_db->getScalar<double>("viscosity_A");
-            dt_si = nu_LB_A * dx_si * dx_si / viscosity_A;
-        } else {
-            dt_si = 0.0; // unknown physical time scale
-        }
-    } else {
-        dx_si = 0.0;
-        dt_si = 0.0;
-    }
-    rho_ref = 0.0; // not applicable in dimensionless mode unless density_A given
-    if (color_db->keyExists("density_A")) {
-        density_A = color_db->getScalar<double>("density_A");
-        rho_ref = density_A;
-    }
-    if (color_db->keyExists("density_B"))
-        density_B = color_db->getScalar<double>("density_B");
-    if (color_db->keyExists("viscosity_B"))
-        viscosity_B = color_db->getScalar<double>("viscosity_B");
-    if (color_db->keyExists("surface_tension"))
-        surface_tension = color_db->getScalar<double>("surface_tension");
-
-    // Override body force with user-specified pressure gradient [Pa/m] if provided
-    if (color_db->keyExists("pressure_gradient") && dx_si > 0 && dt_si > 0 && rho_ref > 0) {
-        auto dPdx_SI = color_db->getVector<double>("pressure_gradient");
-        Fx = dPdx_SI[0] * dt_si * dt_si / (rho_ref * dx_si);
-        Fy = dPdx_SI[1] * dt_si * dt_si / (rho_ref * dx_si);
-        Fz = dPdx_SI[2] * dt_si * dt_si / (rho_ref * dx_si);
-        if (rank == 0)
-            printf("  Body force overridden by pressure_gradient: (%.4e, %.4e, %.4e) Pa/m -> F_LB = (%.4e, %.4e, %.4e)\n",
-                   dPdx_SI[0], dPdx_SI[1], dPdx_SI[2], Fx, Fy, Fz);
-    }
-
+    // ==========================================
     // Print summary
+    // ==========================================
     if (rank == 0) {
-        printf("================================================================\n");
-        printf("  ColorModelSI: Dimensionless Number Matching Mode\n");
-        printf("================================================================\n");
-        printf("Dimensionless Inputs:\n");
-        printf("  Capillary number (Ca): %.6e\n", capillary_number);
-        printf("  Reynolds number  (Re): %.6e\n", reynolds_number);
         printf("  Viscosity ratio  (M = nuA/nuB): %.6f\n", viscosity_ratio);
         printf("  Density ratio    (Lambda = rhoA/rhoB): %.6f\n", density_ratio);
         printf("  Target tau:       %.4f\n", target_tau);
@@ -375,15 +564,15 @@ void ScaLBL_ColorModelSI::ReadParamsDimensionless(string filename) {
         printf("  nu_LB_A: %.6e   nu_LB_B: %.6e\n", nu_LB_A, nu_LB_B);
         printf("  alpha (sfc. tension): %.6e\n", alpha);
         printf("  beta  (intfc. width): %.6f\n", beta);
-        printf("  u_LB (characteristic): %.6e\n", u_LB);
-        printf("  Fz (pressure gradient): %.6e  (Poiseuille: F=8*nu*u/L^2)\n", Fz);
+        printf("  u_LB (Darcy vel, lattice): %.6e\n", u_LB);
+        printf("  Fz (Darcy: nu*u/k): %.6e  (k_LB = %.4e)\n", Fz, k_LB);
         printf("  din: %.8f   dout: %.8f\n", din, dout);
         printf("  flux: %.6e\n", flux);
         printf("  BC:   %d\n", BoundaryCondition);
         printf("  L_LB (domain z): %.0f\n", L_LB);
         printf("Verification of dimensionless groups:\n");
-        double Ca_check = rhoA * nu_LB_A * u_LB / alpha;
-        double Re_check = u_LB * L_LB / nu_LB_A;
+        double Ca_check = (alpha > 0) ? rhoA * nu_LB_A * u_LB / (alpha * K_sigma) : 0.0;
+        double Re_check = u_LB * sqrt_k_LB / nu_LB_A;
         printf("  Ca_actual: %.6e  (target: %.6e)\n", Ca_check, capillary_number);
         printf("  Re_actual: %.6e  (target: %.6e)\n", Re_check, reynolds_number);
         if (dx_si > 0.0 && dt_si > 0.0) {
@@ -409,6 +598,8 @@ void ScaLBL_ColorModelSI::ReadParamsDimensionless(string filename) {
         fprintf(meta, "density_A = %.15e\n", density_A);
         fprintf(meta, "density_B = %.15e\n", density_B);
         fprintf(meta, "surface_tension = %.15e\n", surface_tension);
+        if (perm_SI > 0.0) fprintf(meta, "permeability_mD = %.15e\n", perm_SI/9.869233e-16);
+        if (porosity_preload > 0.0) fprintf(meta, "porosity = %.15e\n", porosity_preload);
         fclose(meta);
     }
 }
@@ -556,29 +747,18 @@ bool ScaLBL_ColorModelSI::CheckStability(bool abort_on_failure) {
     }
 
     // --- Pressure BC check ---
-    // Compare din/dout to the expected phase-weighted reference density,
-    // not to rho=1.  With density_ratio != 1, dout = rhoB is correct.
-    double rho_in_ref = rhoA;
-    if (inletA + inletB > 0)
-        rho_in_ref = (rhoA * inletA + rhoB * inletB) / (inletA + inletB);
-    double rho_out_ref = rhoA;
-    if (outletA + outletB > 0)
-        rho_out_ref = (rhoA * outletA + rhoB * outletB) / (outletA + outletB);
-    double din_dev  = (rho_in_ref  > 1e-10) ? fabs(din  - rho_in_ref)  / rho_in_ref  : 0.0;
-    double dout_dev = (rho_out_ref > 1e-10) ? fabs(dout - rho_out_ref) / rho_out_ref : 0.0;
-    if (din < 0.1 * rho_in_ref || dout < 0.1 * rho_out_ref) {
+    // din/dout should be close to 1.0 (the D3Q19 reference density).
+    // The phase composition at boundaries is independent of din/dout.
+    if (din < 0.5 || din > 2.0 || dout < 0.5 || dout > 2.0) {
         if (rank == 0) {
-            printf("  ERROR: din=%.6f or dout=%.6f far below phase reference (%.4f, %.4f)\n",
-                   din, dout, rho_in_ref, rho_out_ref);
-            printf("         The applied pressure difference is far too large.\n");
+            printf("  ERROR: din=%.6f or dout=%.6f far from reference density 1.0\n", din, dout);
+            printf("         Zou-He BC requires din,dout close to 1.0 (D3Q19 density).\n");
         }
         stable = false;
         error_count++;
-    } else if (din_dev > 0.5 || dout_dev > 0.5) {
+    } else if (fabs(din - 1.0) > 0.1 || fabs(dout - 1.0) > 0.1) {
         if (rank == 0) {
-            printf("  WARNING: din=%.6f (ref=%.4f, dev=%.1f%%), dout=%.6f (ref=%.4f, dev=%.1f%%)\n",
-                   din, rho_in_ref, din_dev*100, dout, rho_out_ref, dout_dev*100);
-            printf("           Large pressure deviation from phase equilibrium density.\n");
+            printf("  WARNING: din=%.6f, dout=%.6f -- large deviation from rho=1\n", din, dout);
         }
         warn_count++;
     } else {

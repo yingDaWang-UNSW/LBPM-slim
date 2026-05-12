@@ -149,9 +149,12 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_Color(int *Map, double *dist, double *A
 			// read the component number densities
 			nA = Den[n];
 			nB = Den[Np + n];
+			if (!(nA >= 0.0)) nA = 0.0;
+			if (!(nB >= 0.0)) nB = 0.0;
 
 			// compute phase indicator field
 			phi=(nA-nB)/(nA+nB);
+			phi = fmin(1.0, fmax(-1.0, phi));
 
 			// local density
 			rho0=rhoA + 0.5*(1.0-phi)*(rhoB-rhoA);
@@ -504,7 +507,18 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_Color(int *Map, double *dist, double *A
 
 			//........................................................................
 			//..............carry out relaxation process..............................
-			//..CSS formulation: capillary stress is TRACELESS (deviatoric only)......
+			//..CSS formulation: capillary stress is TRACELESS (deviatoric only)....
+			//...................................................................
+			// Stability: cap momentum before MRT collision (prevents |u|>0.1)
+			{
+				double j_sq = jx*jx + jy*jy + jz*jz;
+				if (j_sq > 0.01 * rho0 * rho0) {
+					double j_scale = 0.1 * rho0 / sqrt(j_sq);
+					jx *= j_scale;
+					jy *= j_scale;
+					jz *= j_scale;
+				}
+			}
 			if (C == 0.0)	nx = ny = nz = 0.0;
 			m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) - m1);
 			m2 = m2 + rlx_setA*((3*rho - 5.5*(jx*jx+jy*jy+jz*jz)/rho0)- m2);
@@ -637,6 +651,15 @@ __global__  void dvc_ScaLBL_D3Q19_AAeven_Color(int *Map, double *dist, double *A
 			Velocity[Np+n] = uy;
 			Velocity[2*Np+n] = uz;
 
+			// Cap velocity for recoloring stability (prevents negative D3Q7 distributions)
+			double u_mag = sqrt(ux*ux + uy*uy + uz*uz);
+			if (u_mag > 0.1) {
+				double u_scale = 0.1 / u_mag;
+				ux *= u_scale;
+				uy *= u_scale;
+				uz *= u_scale;
+			}
+
 			// Instantiate mass transport distributions
 			// Stationary value - distribution 0
 
@@ -736,9 +759,12 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_Color(int *neighborList, int *Map, double
 			// read the component number densities
 			nA = Den[n];
 			nB = Den[Np + n];
+			if (!(nA >= 0.0)) nA = 0.0;
+			if (!(nB >= 0.0)) nB = 0.0;
 
 			// compute phase indicator field
 			phi=(nA-nB)/(nA+nB);
+			phi = fmin(1.0, fmax(-1.0, phi));
 
 			// local density
 			rho0=rhoA + 0.5*(1.0-phi)*(rhoB-rhoA);
@@ -1142,7 +1168,18 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_Color(int *neighborList, int *Map, double
 			
 			//........................................................................
 			//..............carry out relaxation process..............................
-			//..CSS formulation: capillary stress is TRACELESS (deviatoric only)......
+			//..CSS formulation: capillary stress is TRACELESS (deviatoric only)....
+			//...................................................................
+			// Stability: cap momentum before MRT collision (prevents |u|>0.1)
+			{
+				double j_sq = jx*jx + jy*jy + jz*jz;
+				if (j_sq > 0.01 * rho0 * rho0) {
+					double j_scale = 0.1 * rho0 / sqrt(j_sq);
+					jx *= j_scale;
+					jy *= j_scale;
+					jz *= j_scale;
+				}
+			}
 			if (C == 0.0)	nx = ny = nz = 0.0;
 			m1 = m1 + rlx_setA*((19*(jx*jx+jy*jy+jz*jz)/rho0 - 11*rho) - m1);
 			m2 = m2 + rlx_setA*((3*rho - 5.5*(jx*jx+jy*jy+jz*jz)/rho0)- m2);
@@ -1287,6 +1324,15 @@ __global__ void dvc_ScaLBL_D3Q19_AAodd_Color(int *neighborList, int *Map, double
 			Velocity[Np+n] = uy;
 			Velocity[2*Np+n] = uz;
 
+			// Cap velocity for recoloring stability (prevents negative D3Q7 distributions)
+			double u_mag = sqrt(ux*ux + uy*uy + uz*uz);
+			if (u_mag > 0.1) {
+				double u_scale = 0.1 / u_mag;
+				ux *= u_scale;
+				uy *= u_scale;
+				uz *= u_scale;
+			}
+
 			// Instantiate mass transport distributions
 			// Stationary value - distribution 0
 			nAB = 1.0/(nA+nB);
@@ -1413,12 +1459,15 @@ __global__  void dvc_ScaLBL_D3Q7_AAodd_PhaseField(int *neighborList, int *Map, d
 			nB += fq;
 
 			// save the number densities
+			if (!(nA >= 0.0)) nA = 0.0;
+			if (!(nB >= 0.0)) nB = 0.0;
 			Den[n] = nA;
 			Den[Np+n] = nB;
 
 			// save the phase indicator field
 			idx = Map[n];
-			Phi[idx] = (nA-nB)/(nA+nB); 
+			double phi_val = (nA+nB > 0.0) ? (nA-nB)/(nA+nB) : 0.0;
+			Phi[idx] = fmin(1.0, fmax(-1.0, phi_val)); 
 		}
 	}
 }
@@ -1477,12 +1526,15 @@ __global__  void dvc_ScaLBL_D3Q7_AAeven_PhaseField(int *Map, double *Aq, double 
 			nB += fq;
 
 			// save the number densities
+			if (!(nA >= 0.0)) nA = 0.0;
+			if (!(nB >= 0.0)) nB = 0.0;
 			Den[n] = nA;
 			Den[Np+n] = nB;
 
 			// save the phase indicator field
 			idx = Map[n];
-			Phi[idx] = (nA-nB)/(nA+nB); 	
+			double phi_val = (nA+nB > 0.0) ? (nA-nB)/(nA+nB) : 0.0;
+			Phi[idx] = fmin(1.0, fmax(-1.0, phi_val)); 	
 		}
 	}
 }
