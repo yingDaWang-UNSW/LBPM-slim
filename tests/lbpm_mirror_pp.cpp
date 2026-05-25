@@ -154,18 +154,25 @@ static void signedNormalizedDistance(int W, int H,
     }
 }
 
-// Linear-interpolated quantile of `v` at fraction q in [0,1].
+// Linear-interpolated quantile of `v` at fraction q in [0,1].  Uses the
+// MATLAB default (Hyndman-Fan type 5) so that the threshold matches
+// generateInterpPorousMirroring.m bit-for-bit modulo EDT tie-breaks:
+//   data points sit at probabilities (j - 0.5)/n for j = 1..n (1-indexed);
+//   targets outside that range clamp to the extremes.
 static double quantileOf(const vector<double> &v, double q) {
     if (v.empty()) return 0.0;
     vector<double> w(v);
     std::sort(w.begin(), w.end());
-    if (q <= 0.0) return w.front();
-    if (q >= 1.0) return w.back();
-    double pos = q * (w.size() - 1);
+    size_t n = w.size();
+    double pLow  = 0.5 / double(n);
+    double pHigh = (double(n) - 0.5) / double(n);
+    if (q <= pLow)  return w.front();
+    if (q >= pHigh) return w.back();
+    double pos = q * double(n) - 0.5;     // zero-indexed real position
     size_t lo = (size_t)floor(pos);
-    size_t hi = (size_t)ceil(pos);
-    if (lo == hi) return w[lo];
-    double t = pos - (double)lo;
+    size_t hi = lo + 1;
+    if (hi >= n) return w[n - 1];
+    double t = pos - double(lo);
     return w[lo] * (1.0 - t) + w[hi] * t;
 }
 
