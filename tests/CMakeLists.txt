@@ -7,7 +7,8 @@
 #
 # Plus the pre-processors needed to feed them.
 
-# Pre-processors
+# Pre-processors (run in order: mirror -> decomp -> [morphopen for kr/pc])
+ADD_LBPM_EXECUTABLE( lbpm_mirror_pp )             # interporous mirror -> smooth periodic seam
 ADD_LBPM_EXECUTABLE( lbpm_serial_decomp )         # raw -> per-rank ID.xxxxx
 ADD_LBPM_EXECUTABLE( lbpm_serial_uCT_decomp )     # uCT input variant
 ADD_LBPM_EXECUTABLE( lbpm_uCT_pp )                # uCT post-segmentation pp

@@ -19,10 +19,21 @@ those are needed.
 Pre-processors
 --------------
 
-- `lbpm_serial_decomp`     — decompose a raw 8-bit segmented geometry into per-rank `ID.xxxxx` files.
-- `lbpm_serial_uCT_decomp` — decompose a uCT (16-bit) volume.
-- `lbpm_uCT_pp`            — post-segmentation cleanup for uCT volumes.
-- `lbpm_morphopen_pp`      — morphological drainage to a target Sw. Used both
+Run in order:
+
+0. `lbpm_mirror_pp`        — interporous mirror. Appends a thin (typically ~16 slices)
+                             interpolated transition slab to the requested axes so
+                             that the periodic seam (BC=0 wrap-around) is geometrically
+                             continuous and body forces propagate cleanly across it.
+                             Writes `<geom>_mirrored.raw` plus a sibling
+                             `<input>_mirrored.db` with `Filename`/`N`/`n` updated
+                             — chain downstream stages against the mirrored db.
+                             Skip with `Domain.MirrorPad = 0, 0, 0`.
+1. `lbpm_serial_decomp`    — decompose a raw 8-bit segmented geometry into per-rank
+                             `ID.xxxxx` files.
+1a. `lbpm_serial_uCT_decomp` — decompose a uCT (16-bit) volume.
+1b. `lbpm_uCT_pp`           — post-segmentation cleanup for uCT volumes.
+2. `lbpm_morphopen_pp`     — morphological drainage to a target Sw. Used both
                              as an initialiser for `kr` and as a standalone
                              Sw vs critical-radius generator that, via
                              Young–Laplace, yields a morphological `pc(Sw)` curve.
@@ -32,13 +43,15 @@ Typical workflows
 
 **Absolute permeability (k)**:
 
-    mpirun -np 1 lbpm_serial_decomp        inputFile.db
-    mpirun -np N lbpm_permeability_simulator inputFile.db
+    mpirun -np 1 lbpm_mirror_pp            inputFile.db   # writes geopack_mirrored.raw + inputFile_mirrored.db
+    mpirun -np 1 lbpm_serial_decomp        inputFile_mirrored.db
+    mpirun -np N lbpm_permeability_simulator inputFile_mirrored.db
 
 **Capillary pressure (pc)** — colour-model drainage with the pc protocol:
 
-    mpirun -np 1 lbpm_serial_decomp        inputFile.db
-    mpirun -np N lbpm_color_simulator      inputFile.db
+    mpirun -np 1 lbpm_mirror_pp            inputFile.db   # writes geopack_mirrored.raw + inputFile_mirrored.db
+    mpirun -np 1 lbpm_serial_decomp        inputFile_mirrored.db
+    mpirun -np N lbpm_color_simulator      inputFile_mirrored.db
     # (use `lbpm_color_simulator_SI inputFile.db [--dimless]` for SI-unit input)
 
 For a quick `pc(Sw)` proxy without running LBM, sweep `Domain.Sw` over
@@ -47,8 +60,9 @@ Young–Laplace.
 
 **Relative permeability (kr)**:
 
-    mpirun -np 1 lbpm_serial_decomp        inputFile.db
-    mpirun -np N lbpm_morphopen_pp         inputFile.db   # initialise to Sw_init (e.g. 0.9)
+    mpirun -np 1 lbpm_mirror_pp            inputFile.db   # writes geopack_mirrored.raw + inputFile_mirrored.db
+    mpirun -np 1 lbpm_serial_decomp        inputFile_mirrored.db
+    mpirun -np N lbpm_morphopen_pp         inputFile_mirrored.db   # initialise to Sw_init (e.g. 0.9)
     mpirun -np N lbpm_relperm_simulator    inputFile.db   # color + automorph + single-phase BGK per event
 
 `lbpm_relperm_simulator` rides the colour-model automorph loop. Every time a
