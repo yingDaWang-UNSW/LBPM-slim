@@ -57,6 +57,37 @@ extern "C" void ScaLBL_AllocateZeroCopy(void** address, size_t size){
 	}
 }
 
+// Host-pinned allocation for MPI staging buffers (used by SendD3Q7AA /
+// RecvD3Q7AA in common/ScaLBL.cpp). Plain host memory + the cudaMemcpy
+// staging avoids handing MPI a device pointer, which side-steps the
+// mca_btl_self crash on large self-loopback halos.
+extern "C" void ScaLBL_AllocateHostPinned(void** address, size_t size){
+	// Use the cudaMallocHost return value directly rather than cudaGetLastError,
+	// which would surface any *prior* uncaught CUDA error (eg from a kernel
+	// launched earlier) and falsely blame this allocation.
+	cudaError_t err = cudaMallocHost(address, size);
+	if (cudaSuccess != err){
+		printf("Error in cudaMallocHost (ScaLBL_AllocateHostPinned, size=%zu): %s\n", size, cudaGetErrorString(err));
+		*address = nullptr;
+	}
+}
+
+extern "C" void ScaLBL_FreeHostPinned(void* pointer){
+	if (pointer) cudaFreeHost(pointer);
+}
+
+// Sync + check; used to localize silent kernel failures.
+extern "C" int ScaLBL_SyncAndCheck(const char *where){
+	cudaError_t derr = cudaDeviceSynchronize();
+	cudaError_t serr = cudaGetLastError();
+	cudaError_t err = (derr != cudaSuccess) ? derr : serr;
+	if (err != cudaSuccess) {
+		printf("ScaLBL_SyncAndCheck FAIL at %s: %s\n", where, cudaGetErrorString(err));
+		return -1;
+	}
+	return 0;
+}
+
 extern "C" void ScaLBL_CopyToZeroCopy(void* dest, const void* source, size_t size){
         cudaMemcpy(dest,source,size,cudaMemcpyHostToDevice);
         cudaError_t err = cudaGetLastError();

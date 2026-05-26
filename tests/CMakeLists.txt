@@ -1,9 +1,10 @@
 # Petrophysics-only test/exec targets.
 #
-# This branch contains the three petrophysical protocols:
+# This branch contains the petrophysical protocols:
 #   k   -- absolute permeability       (lbpm_permeability_simulator)
 #   pc  -- capillary pressure          (lbpm_color_simulator + lbpm_morphopen_pp)
 #   kr  -- relative permeability       (lbpm_relperm_simulator)
+#   tau -- diffusive tortuosity        (lbpm_tortuosity_simulator)
 #
 # Plus the pre-processors needed to feed them.
 
@@ -16,6 +17,9 @@ ADD_LBPM_EXECUTABLE( lbpm_morphopen_pp )          # morph drainage -> Sw (kr ini
 
 # k -- single-phase absolute permeability (MRT)
 ADD_LBPM_EXECUTABLE( lbpm_permeability_simulator )
+
+# tau -- diffusive tortuosity (D3Q7 LBM Laplace on the pore phase)
+ADD_LBPM_EXECUTABLE( lbpm_tortuosity_simulator )
 
 # pc -- color-model drainage / displacement (pcProtocolFlag, Sw vs pc curve)
 ADD_LBPM_EXECUTABLE( lbpm_color_simulator )

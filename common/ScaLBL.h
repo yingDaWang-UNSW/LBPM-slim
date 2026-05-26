@@ -40,6 +40,12 @@ extern "C" void ScaLBL_AllocateZeroCopy(void** address, size_t size);
 
 extern "C" void ScaLBL_CopyToZeroCopy(void* dest, const void* source, size_t size);
 
+extern "C" void ScaLBL_AllocateHostPinned(void** address, size_t size);
+
+extern "C" void ScaLBL_FreeHostPinned(void* pointer);
+
+extern "C" int ScaLBL_SyncAndCheck(const char *where);
+
 extern "C" void ScaLBL_DeviceBarrier();
 
 extern "C" void ScaLBL_D3Q19_Pack(int q, int *list, int start, int count, double *sendbuf, double *dist, int N);
@@ -148,6 +154,49 @@ extern "C" void ScaLBL_D3Q7_AAeven_FuelCell_Potential(
 extern "C" void ScaLBL_D3Q7_AAodd_FuelCell_Potential(
     int *neighborList, int *Map, double *Pq, double *PotentialField,
     double *Conductivity, int start, int finish, int Np);
+
+// =========================================================================
+// D3Q7 Poisson / Laplace kernels (ported from gaslbm for tortuosity calc)
+// Solves nabla^2 psi = -rho_e/epsilon on fluid voxels with Dirichlet BCs on
+// inlet/outlet and implicit no-flux (bounce-back) on solid voxels. Pass a
+// zeroed ChargeDensity array to recover pure Laplace.
+// =========================================================================
+extern "C" void ScaLBL_D3Q7_AAodd_Poisson_ElectricPotential(int *neighborList,
+    int *Map, double *dist, double *Psi, int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAeven_Poisson_ElectricPotential(int *Map,
+    double *dist, double *Psi, int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAodd_Poisson(int *neighborList, int *Map,
+    double *dist, double *Den_charge, double *Psi, double *ElectricField,
+    double tau, double epsilon_LB, bool EnforceElectroneutrality,
+    int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAeven_Poisson(int *Map, double *dist,
+    double *Den_charge, double *Psi, double *ElectricField,
+    double tau, double epsilon_LB, bool EnforceElectroneutrality,
+    int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q7_Poisson_Init(int *Map, double *dist, double *Psi,
+    int start, int finish, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_z(int *list,
+    double *dist, double Vin, int count, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_Z(int *list,
+    double *dist, double Vout, int count, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAodd_Poisson_Potential_BC_z(int *d_neighborList,
+    int *list, double *dist, double Vin, int count, int Np);
+
+extern "C" void ScaLBL_D3Q7_AAodd_Poisson_Potential_BC_Z(int *d_neighborList,
+    int *list, double *dist, double Vout, int count, int Np);
+
+extern "C" void ScaLBL_Poisson_D3Q7_BC_z(int *list, int *Map, double *Psi,
+    double Vin, int count);
+
+extern "C" void ScaLBL_Poisson_D3Q7_BC_Z(int *list, int *Map, double *Psi,
+    double Vout, int count);
 
 // D3Q7 Thermal transport with source terms
 extern "C" void ScaLBL_D3Q7_AAeven_FuelCell_Thermal(
@@ -308,6 +357,8 @@ public:
 	void RecvD3Q19AA(double *dist);
 //	void BiSendD3Q7(double *A_even, double *A_odd, double *B_even, double *B_odd);
 //	void BiRecvD3Q7(double *A_even, double *A_odd, double *B_even, double *B_odd);
+	void SendD3Q7AA(double *fq, int Component);
+	void RecvD3Q7AA(double *fq, int Component);
 	void BiSendD3Q7AA(double *Aq, double *Bq);
 	void BiRecvD3Q7AA(double *Aq, double *Bq);
 	void TriSendD3Q7AA(double *Aq, double *Bq, double *Cq);
@@ -329,6 +380,10 @@ public:
 	void GreyscaleSC_BC_Z(int *Map, double *DenA, double *DenB, double vA, double vB);
     void GreyscaleSC_Pressure_BC_z(int *neighborList, double *fqA, double *fqB, double dinA, double dinB, int time);
     void GreyscaleSC_Pressure_BC_Z(int *neighborList, double *fqA, double *fqB, double doutA, double doutB, int time);
+    void D3Q7_Poisson_Potential_BC_z(int *neighborList, double *fq, double Vin, int time);
+    void D3Q7_Poisson_Potential_BC_Z(int *neighborList, double *fq, double Vout, int time);
+    void Poisson_D3Q7_BC_z(int *Map, double *Psi, double Vin);
+    void Poisson_D3Q7_BC_Z(int *Map, double *Psi, double Vout);
     //void FDM_Concentration_BC_z(int *neighborList, double *cq, double cin);
 //	void TestSendD3Q19(double *f_even, double *f_odd);
 //	void TestRecvD3Q19(double *f_even, double *f_odd);

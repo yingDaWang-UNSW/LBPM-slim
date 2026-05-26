@@ -18,6 +18,7 @@
 */
 #include "models/MRTModel.h"
 
+#include <algorithm>
 #include <cmath>
 
 using namespace std;
@@ -157,7 +158,17 @@ void ScaLBL_MRTModel::Create() {
 
     Np = Mask->PoreCount();
     porosity = Mask->Porosity();
-    int Npad = (Np / 16 + 2) * 16;
+    // MemoryOptimizedLayoutAA reorders pore voxels and inserts halo / sentinel
+    // entries beyond PoreCount(), so a tight (Np/16+2)*16 buffer can overflow
+    // on multi-node decompositions where a single rank's subdomain has wildly
+    // uneven pore distribution.  Size the scratch buffer to the absolute
+    // worst case = full interior of the subdomain plus a margin.
+    //
+    // Use size_t throughout: at N>=600 the count 18*subdomain_voxels exceeds
+    // 2^31 (e.g. N=600: 18*600^3 = 3.89e9 > INT_MAX) and silently wraps to a
+    // negative int -> std::bad_array_new_length.
+    size_t subdomain_voxels = (size_t)(Nx - 2) * (size_t)(Ny - 2) * (size_t)(Nz - 2);
+    size_t Npad = std::max((size_t)Np, subdomain_voxels) + 16;
     Map.resize(Nx, Ny, Nz);
     auto neighborList = new int[18 * Npad];
     Np = ScaLBL_Comm->MemoryOptimizedLayoutAA(Map, neighborList, Mask->id, Np);

@@ -1711,6 +1711,177 @@ void ScaLBL_Communicator::PrintD3Q19(){
 }
 
 
+// =========================================================================
+// D3Q7 single-distribution halo exchange + Poisson BC dispatchers.
+//
+// Ported from gaslbm/common/ScaLBL.cpp.  We stage the MPI through persistent
+// host-pinned (cudaMallocHost) buffers instead of handing OpenMPI the device
+// pointers in sendbuf_x / recvbuf_x: those device pointers (allocated by
+// ScaLBL_AllocateZeroCopy -> cudaMalloc, see gpu/Extras.cu) trip a crash in
+// mca_btl_self.so's rndv path on ~1+ MB self-loopback halos at 1-rank runs.
+// Staging adds two cudaMemcpyAsync per face and bypasses the bug.  CUDA-aware
+// MPI is unaffected because the existing SendD3Q19AA / BiSendD3Q7AA paths
+// still hand device pointers to MPI directly.
+//
+// The host bufs are file-static so they persist between calls; they're
+// grown lazily as sendCount/recvCount values increase.  Single-threaded.
+// =========================================================================
+
+namespace {
+    static double *h_send_x = nullptr, *h_send_X = nullptr;
+    static double *h_send_y = nullptr, *h_send_Y = nullptr;
+    static double *h_send_z = nullptr, *h_send_Z = nullptr;
+    static double *h_recv_x = nullptr, *h_recv_X = nullptr;
+    static double *h_recv_y = nullptr, *h_recv_Y = nullptr;
+    static double *h_recv_z = nullptr, *h_recv_Z = nullptr;
+    static int h_send_x_cap = 0, h_send_X_cap = 0;
+    static int h_send_y_cap = 0, h_send_Y_cap = 0;
+    static int h_send_z_cap = 0, h_send_Z_cap = 0;
+    static int h_recv_x_cap = 0, h_recv_X_cap = 0;
+    static int h_recv_y_cap = 0, h_recv_Y_cap = 0;
+    static int h_recv_z_cap = 0, h_recv_Z_cap = 0;
+
+    static inline void ensure_host_buf(double **buf, int *cap, int need) {
+        // Always allocate at least 1 slot so the pointer is non-null even when
+        // a face has no fluid voxels (1-rank walled geometries have
+        // sendCount_x == 0 etc.).
+        if (need < 1) need = 1;
+        if (need <= *cap) return;
+        if (*buf) ScaLBL_FreeHostPinned(*buf);
+        ScaLBL_AllocateHostPinned((void **)buf, (size_t)need * sizeof(double));
+        if (*buf == nullptr) {
+            // fall back to plain host if pinned fails for any reason
+            *buf = (double *)std::malloc((size_t)need * sizeof(double));
+        }
+        *cap = need;
+    }
+}
+
+void ScaLBL_Communicator::SendD3Q7AA(double *fq, int Component){
+    if (Lock==true){
+        ERROR("ScaLBL Error (SendD3Q7AA): ScaLBL_Communicator is locked -- did you forget to match Send/Recv calls?");
+    }
+    else{
+        Lock=true;
+    }
+    sendtag = recvtag = 154;
+    // Grow host staging bufs as needed (no-op once sizes settle on call 1).
+    ensure_host_buf(&h_send_x, &h_send_x_cap, sendCount_x);
+    ensure_host_buf(&h_send_X, &h_send_X_cap, sendCount_X);
+    ensure_host_buf(&h_send_y, &h_send_y_cap, sendCount_y);
+    ensure_host_buf(&h_send_Y, &h_send_Y_cap, sendCount_Y);
+    ensure_host_buf(&h_send_z, &h_send_z_cap, sendCount_z);
+    ensure_host_buf(&h_send_Z, &h_send_Z_cap, sendCount_Z);
+    ensure_host_buf(&h_recv_x, &h_recv_x_cap, recvCount_x);
+    ensure_host_buf(&h_recv_X, &h_recv_X_cap, recvCount_X);
+    ensure_host_buf(&h_recv_y, &h_recv_y_cap, recvCount_y);
+    ensure_host_buf(&h_recv_Y, &h_recv_Y_cap, recvCount_Y);
+    ensure_host_buf(&h_recv_z, &h_recv_z_cap, recvCount_z);
+    ensure_host_buf(&h_recv_Z, &h_recv_Z_cap, recvCount_Z);
+
+    ScaLBL_DeviceBarrier();
+    // Pack into the (device) sendbufs, then memcpy device->host so MPI sees
+    // host pointers.  Issue the matching Isend/Irecv immediately after each
+    // face's host copy completes (interleaved pattern, single tag).
+    ScaLBL_D3Q19_Pack(2,dvcSendList_x,0,sendCount_x,sendbuf_x,&fq[Component*7*N],N);
+    ScaLBL_D3Q19_Pack(1,dvcSendList_X,0,sendCount_X,sendbuf_X,&fq[Component*7*N],N);
+    ScaLBL_D3Q19_Pack(4,dvcSendList_y,0,sendCount_y,sendbuf_y,&fq[Component*7*N],N);
+    ScaLBL_D3Q19_Pack(3,dvcSendList_Y,0,sendCount_Y,sendbuf_Y,&fq[Component*7*N],N);
+    ScaLBL_D3Q19_Pack(6,dvcSendList_z,0,sendCount_z,sendbuf_z,&fq[Component*7*N],N);
+    ScaLBL_D3Q19_Pack(5,dvcSendList_Z,0,sendCount_Z,sendbuf_Z,&fq[Component*7*N],N);
+    ScaLBL_DeviceBarrier();
+
+    if (sendCount_x > 0) ScaLBL_CopyToHost(h_send_x, sendbuf_x, (size_t)sendCount_x*sizeof(double));
+    if (sendCount_X > 0) ScaLBL_CopyToHost(h_send_X, sendbuf_X, (size_t)sendCount_X*sizeof(double));
+    if (sendCount_y > 0) ScaLBL_CopyToHost(h_send_y, sendbuf_y, (size_t)sendCount_y*sizeof(double));
+    if (sendCount_Y > 0) ScaLBL_CopyToHost(h_send_Y, sendbuf_Y, (size_t)sendCount_Y*sizeof(double));
+    if (sendCount_z > 0) ScaLBL_CopyToHost(h_send_z, sendbuf_z, (size_t)sendCount_z*sizeof(double));
+    if (sendCount_Z > 0) ScaLBL_CopyToHost(h_send_Z, sendbuf_Z, (size_t)sendCount_Z*sizeof(double));
+
+    MPI_Isend(h_send_x, sendCount_x,MPI_DOUBLE,rank_x,sendtag,MPI_COMM_SCALBL,&req1[0]);
+    MPI_Irecv(h_recv_X, recvCount_X,MPI_DOUBLE,rank_X,recvtag,MPI_COMM_SCALBL,&req2[0]);
+    MPI_Isend(h_send_X, sendCount_X,MPI_DOUBLE,rank_X,sendtag,MPI_COMM_SCALBL,&req1[1]);
+    MPI_Irecv(h_recv_x, recvCount_x,MPI_DOUBLE,rank_x,recvtag,MPI_COMM_SCALBL,&req2[1]);
+    MPI_Isend(h_send_y, sendCount_y,MPI_DOUBLE,rank_y,sendtag,MPI_COMM_SCALBL,&req1[2]);
+    MPI_Irecv(h_recv_Y, recvCount_Y,MPI_DOUBLE,rank_Y,recvtag,MPI_COMM_SCALBL,&req2[2]);
+    MPI_Isend(h_send_Y, sendCount_Y,MPI_DOUBLE,rank_Y,sendtag,MPI_COMM_SCALBL,&req1[3]);
+    MPI_Irecv(h_recv_y, recvCount_y,MPI_DOUBLE,rank_y,recvtag,MPI_COMM_SCALBL,&req2[3]);
+    MPI_Isend(h_send_z, sendCount_z,MPI_DOUBLE,rank_z,sendtag,MPI_COMM_SCALBL,&req1[4]);
+    MPI_Irecv(h_recv_Z, recvCount_Z,MPI_DOUBLE,rank_Z,recvtag,MPI_COMM_SCALBL,&req2[4]);
+    MPI_Isend(h_send_Z, sendCount_Z,MPI_DOUBLE,rank_Z,sendtag,MPI_COMM_SCALBL,&req1[5]);
+    MPI_Irecv(h_recv_z, recvCount_z,MPI_DOUBLE,rank_z,recvtag,MPI_COMM_SCALBL,&req2[5]);
+}
+
+
+void ScaLBL_Communicator::RecvD3Q7AA(double *fq, int Component){
+    MPI_Waitall(6,req1,stat1);
+    MPI_Waitall(6,req2,stat2);
+
+    // Copy host recvbufs back to device recvbufs so the Unpack kernels (which
+    // run on device) can read them via the existing dvcRecvDist lists.
+    if (recvCount_x > 0) ScaLBL_CopyToDevice(recvbuf_x, h_recv_x, (size_t)recvCount_x*sizeof(double));
+    if (recvCount_X > 0) ScaLBL_CopyToDevice(recvbuf_X, h_recv_X, (size_t)recvCount_X*sizeof(double));
+    if (recvCount_y > 0) ScaLBL_CopyToDevice(recvbuf_y, h_recv_y, (size_t)recvCount_y*sizeof(double));
+    if (recvCount_Y > 0) ScaLBL_CopyToDevice(recvbuf_Y, h_recv_Y, (size_t)recvCount_Y*sizeof(double));
+    if (recvCount_z > 0) ScaLBL_CopyToDevice(recvbuf_z, h_recv_z, (size_t)recvCount_z*sizeof(double));
+    if (recvCount_Z > 0) ScaLBL_CopyToDevice(recvbuf_Z, h_recv_Z, (size_t)recvCount_Z*sizeof(double));
+    ScaLBL_DeviceBarrier();
+
+    ScaLBL_D3Q7_Unpack(2,dvcRecvDist_x,0,recvCount_x,recvbuf_x,&fq[Component*7*N],N);
+    ScaLBL_D3Q7_Unpack(1,dvcRecvDist_X,0,recvCount_X,recvbuf_X,&fq[Component*7*N],N);
+    ScaLBL_D3Q7_Unpack(4,dvcRecvDist_y,0,recvCount_y,recvbuf_y,&fq[Component*7*N],N);
+    ScaLBL_D3Q7_Unpack(3,dvcRecvDist_Y,0,recvCount_Y,recvbuf_Y,&fq[Component*7*N],N);
+
+    if (BoundaryCondition > 0){
+        if (kproc != 0){
+            ScaLBL_D3Q7_Unpack(6,dvcRecvDist_z,0,recvCount_z,recvbuf_z,&fq[Component*7*N],N);
+        }
+        if (kproc != nprocz-1){
+            ScaLBL_D3Q7_Unpack(5,dvcRecvDist_Z,0,recvCount_Z,recvbuf_Z,&fq[Component*7*N],N);
+        }
+    }
+    else {
+        ScaLBL_D3Q7_Unpack(6,dvcRecvDist_z,0,recvCount_z,recvbuf_z,&fq[Component*7*N],N);
+        ScaLBL_D3Q7_Unpack(5,dvcRecvDist_Z,0,recvCount_Z,recvbuf_Z,&fq[Component*7*N],N);
+    }
+
+    Lock=false;
+}
+
+void ScaLBL_Communicator::D3Q7_Poisson_Potential_BC_z(int *neighborList, double *fq, double Vin, int time){
+    if (kproc == 0) {
+        if (time%2==0){
+            ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_z(dvcSendList_z, fq, Vin, sendCount_z, N);
+        }
+        else{
+            ScaLBL_D3Q7_AAodd_Poisson_Potential_BC_z(neighborList, dvcSendList_z, fq, Vin, sendCount_z, N);
+        }
+    }
+}
+
+void ScaLBL_Communicator::D3Q7_Poisson_Potential_BC_Z(int *neighborList, double *fq, double Vout, int time){
+    if (kproc == nprocz-1){
+        if (time%2==0){
+            ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_Z(dvcSendList_Z, fq, Vout, sendCount_Z, N);
+        }
+        else{
+            ScaLBL_D3Q7_AAodd_Poisson_Potential_BC_Z(neighborList, dvcSendList_Z, fq, Vout, sendCount_Z, N);
+        }
+    }
+}
+
+void ScaLBL_Communicator::Poisson_D3Q7_BC_z(int *Map, double *Psi, double Vin){
+    if (kproc == 0) {
+        ScaLBL_Poisson_D3Q7_BC_z(dvcSendList_z, Map, Psi, Vin, sendCount_z);
+    }
+}
+
+void ScaLBL_Communicator::Poisson_D3Q7_BC_Z(int *Map, double *Psi, double Vout){
+    if (kproc == nprocz-1){
+        ScaLBL_Poisson_D3Q7_BC_Z(dvcSendList_Z, Map, Psi, Vout, sendCount_Z);
+    }
+}
+
 //void ScaLBL_Communicator::FDM_Concentration_BC_z(int *neighborList, double *cq, double cin) {
 //	if (kproc == 0) {
 //		// Set the concentration at the z inlet and also modify the ghost cells
