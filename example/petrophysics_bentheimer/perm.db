@@ -1,0 +1,35 @@
+// lbpm_permeability_simulator input -- step 3b of the petrophysics pipeline.
+//
+// Single-phase MRT D3Q19 absolute permeability under periodic boundary
+// conditions with a z-axis body force (BC=0).  Reports k_zz in Darcy.
+//
+// The MRT block is the STATIC PROTOCOL -- do not retune per sample.
+// Only the Domain section (Filename/n/nproc) varies between samples.
+// voxel_length is the per-sample image resolution in microns (this
+// Bentheimer CT is 4 um/voxel; k_phys = k_lattice * voxel_length^2 so
+// using the wrong resolution scales the Darcy value by (4/X)^2).
+Domain {
+    nproc        = 1, 1, 1
+    n            = 516, 516, 516
+    L            = 1.0, 1.0, 1.0
+    voxel_length = 4.0
+    BC           = 0
+}
+
+MRT {
+    tau               = 1.0
+    timestepMax       = 200000
+    analysis_interval = 500
+    permTolerance     = 1.0e-5
+    Restart           = false
+    F                 = 0.0, 0.0, 1.0e-5
+    flux              = 0.0
+    din               = 1.0
+    dout              = 1.0
+    visInterval       = 0
+    restart_interval  = 0
+    visTolerance      = false
+    fqFlag            = false
+    restartFq         = false
+    logFile           = false
+}

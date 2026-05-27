@@ -1,0 +1,69 @@
+================================================================
+  step 1/4  mirror_pp   (smooth periodic seam)
+================================================================
+  pad      = (16, 16, 16)
+  output   = bentheimer_mirrored.raw
+================================================================
+[mirror_pp]: extended axis 2 by 16 voxels (porosity 0.7660 -> 0.7825); new dims: 500 x 500 x 516
+[mirror_pp]: extended axis 1 by 16 voxels (porosity 0.7645 -> 0.7568); new dims: 500 x 516 x 516
+[mirror_pp]: extended axis 0 by 16 voxels (porosity 0.7794 -> 0.7664); new dims: 516 x 516 x 516
+
+[mirror_pp]: wrote bentheimer_mirrored.raw  (516 x 516 x 516)
+[mirror_pp]: wrote sibling input db mirror_mirrored.db -- point downstream stages at it
+
+
+================================================================
+  step 2/4  serial_decomp   (halo + relabel into LBPM convention)
+================================================================
+oldvalue=1, newvalue =0 
+Dimensions of segmented image: 516 x 516 x 516 
+Reading 8-bit input data 
+Read segmented data from bentheimer_mirrored.raw 
+Distributing subdomains across 1 processors 
+Process grid: 1 x 1 x 1 
+Subdomain size: 516 x 516 x 516 
+Size of transition region: 0 
+Label=0, Count=31121041
+Label=1, Count=107870791
+
+================================================================
+  step 3/4  tortuosity_simulator   (D3Q7 Laplace, tau_zz)
+================================================================
+ScaLBL_Poisson:   timestep =  89500   MSE = 9.9238e-10
+ScaLBL_Poisson: converged at t = 89500 (MSE = 9.9238e-10 <= tol = 1.000e-09)
+
+================================================================
+  Tortuosity result (z-direction)
+================================================================
+  global domain size      = 516 x 516 x 516
+  fluid voxel count       = 30751795
+  porosity      phi       = 0.223832
+  <E_z>_vol               = 1.389810e-04   [V/lu]
+  imposed E_macro = dV/L  = 1.941748e-03   [V/lu]   (L_eff = 515 lu)
+  D_eff / D_0             = 0.071575
+  tortuosity    tau       = 3.127221
+  formation factor F      = 13.971313
+================================================================
+  wall: 18:09.50
+  rss : 8238228 kB
+
+================================================================
+  step 4/4  permeability_simulator   (D3Q19 MRT, k_zz)
+================================================================
+Timestep: 20000, MLUPS: 70.5, K = 0.188642 D (RMS), 0.188548 D (Z), wall = 1401.40s, dK/K = 3.6935e-05, gradP = 1.0000e-05
+Timestep: 20500, MLUPS: 96.7, K = 0.188635 D (RMS), 0.188541 D (Z), wall = 1560.40s, dK/K = 3.3334e-05, gradP = 1.0000e-05
+Timestep: 21000, MLUPS: 752.2, K = 0.188630 D (RMS), 0.188536 D (Z), wall = 1580.85s, dK/K = 3.0093e-05, gradP = 1.0000e-05
+Timestep: 21500, MLUPS: 756.1, K = 0.188625 D (RMS), 0.188530 D (Z), wall = 1601.18s, dK/K = 2.7174e-05, gradP = 1.0000e-05
+Timestep: 22000, MLUPS: 758.5, K = 0.188620 D (RMS), 0.188526 D (Z), wall = 1621.45s, dK/K = 2.4544e-05, gradP = 1.0000e-05
+Timestep: 22500, MLUPS: 758.5, K = 0.188616 D (RMS), 0.188522 D (Z), wall = 1641.73s, dK/K = 2.2173e-05, gradP = 1.0000e-05
+Timestep: 23000, MLUPS: 754.9, K = 0.188612 D (RMS), 0.188518 D (Z), wall = 1662.09s, dK/K = 2.0036e-05, gradP = 1.0000e-05
+Timestep: 23500, MLUPS: 754.9, K = 0.188609 D (RMS), 0.188514 D (Z), wall = 1682.46s, dK/K = 1.8107e-05, gradP = 1.0000e-05
+Timestep: 24000, MLUPS: 758.2, K = 0.188606 D (RMS), 0.188511 D (Z), wall = 1702.74s, dK/K = 1.6368e-05, gradP = 1.0000e-05
+Timestep: 24500, MLUPS: 759.5, K = 0.188603 D (RMS), 0.188509 D (Z), wall = 1722.99s, dK/K = 1.4797e-05, gradP = 1.0000e-05
+Timestep: 25000, MLUPS: 757.1, K = 0.188600 D (RMS), 0.188506 D (Z), wall = 1743.29s, dK/K = 1.3380e-05, gradP = 1.0000e-05
+Timestep: 25500, MLUPS: 756.4, K = 0.188598 D (RMS), 0.188504 D (Z), wall = 1763.62s, dK/K = 1.2100e-05, gradP = 1.0000e-05
+Timestep: 26000, MLUPS: 759.1, K = 0.188596 D (RMS), 0.188502 D (Z), wall = 1783.88s, dK/K = 1.0943e-05, gradP = 1.0000e-05
+Timestep: 26500, MLUPS: 758.0, K = 0.188594 D (RMS), 0.188500 D (Z), wall = 1804.16s, dK/K = 9.8990e-06, gradP = 1.0000e-05
+Convergence reached (|dK/K| = 9.8990e-06 < 1.0000e-05)
+  wall: 30:13.27
+  rss : 6987228 kB

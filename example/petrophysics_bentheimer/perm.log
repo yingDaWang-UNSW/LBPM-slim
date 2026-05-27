@@ -1,0 +1,78 @@
+********************************************************
+Running Single Phase Permeability Calculation 
+********************************************************
+MPI rank=0 will use GPU ID 0 / 4 
+================================================================
+  ScaLBL_MRTModel: single-phase MRT permeability solver
+================================================================
+  tau           = 1.000000  (mu_LB = 1.666667e-01)
+  F             = (0.0000e+00, 0.0000e+00, 1.0000e-05)
+  BC            = 0
+  timestepMax   = 200000
+  voxel size    = 4.0000 microns
+================================================================
+Cartesian scratch arrays allocated.
+Read input media... 
+Initialize from segmented data: solid=0, NWP=1, WP=2 
+Media porosity = 0.223832 
+Geometry loaded.
+Create ScaLBL_Communicator
+Allocating distributions (Np = 30751808, porosity = 0.2238)
+Initializing fq distribution
+No. of timesteps: 200000, Boundary Condition: 0
+********************************************************
+Timestep: 2, MLUPS: 3941.6, K = 1.088083 D (RMS), 1.088083 D (Z), wall = 3.90s, dK/K = 1.0000e+00, gradP = 1.0000e-05
+Timestep: 500, MLUPS: 750.8, K = 3.342706 D (RMS), 3.340656 D (Z), wall = 24.38s, dK/K = 2.0721e+00, gradP = 1.0000e-05
+Timestep: 1000, MLUPS: 748.4, K = 3.176079 D (RMS), 3.174503 D (Z), wall = 44.93s, dK/K = 4.9848e-02, gradP = 1.0000e-05
+Timestep: 1500, MLUPS: 755.3, K = 3.123642 D (RMS), 3.122130 D (Z), wall = 65.28s, dK/K = 1.6510e-02, gradP = 1.0000e-05
+Timestep: 2000, MLUPS: 763.2, K = 3.096724 D (RMS), 3.095239 D (Z), wall = 85.43s, dK/K = 8.6174e-03, gradP = 1.0000e-05
+Timestep: 2500, MLUPS: 757.8, K = 3.080342 D (RMS), 3.078866 D (Z), wall = 105.72s, dK/K = 5.2902e-03, gradP = 1.0000e-05
+Timestep: 3000, MLUPS: 759.3, K = 3.069135 D (RMS), 3.067660 D (Z), wall = 125.97s, dK/K = 3.6382e-03, gradP = 1.0000e-05
+Timestep: 3500, MLUPS: 758.6, K = 3.060876 D (RMS), 3.059398 D (Z), wall = 146.24s, dK/K = 2.6911e-03, gradP = 1.0000e-05
+Timestep: 4000, MLUPS: 760.8, K = 3.054483 D (RMS), 3.053002 D (Z), wall = 166.45s, dK/K = 2.0884e-03, gradP = 1.0000e-05
+Timestep: 4500, MLUPS: 764.0, K = 3.049367 D (RMS), 3.047881 D (Z), wall = 186.57s, dK/K = 1.6752e-03, gradP = 1.0000e-05
+Timestep: 5000, MLUPS: 762.3, K = 3.045171 D (RMS), 3.043682 D (Z), wall = 206.74s, dK/K = 1.3758e-03, gradP = 1.0000e-05
+Timestep: 5500, MLUPS: 758.9, K = 3.041670 D (RMS), 3.040178 D (Z), wall = 227.01s, dK/K = 1.1497e-03, gradP = 1.0000e-05
+Timestep: 6000, MLUPS: 757.7, K = 3.038710 D (RMS), 3.037214 D (Z), wall = 247.30s, dK/K = 9.7332e-04, gradP = 1.0000e-05
+Timestep: 6500, MLUPS: 758.7, K = 3.036180 D (RMS), 3.034682 D (Z), wall = 267.56s, dK/K = 8.3242e-04, gradP = 1.0000e-05
+Timestep: 7000, MLUPS: 750.5, K = 3.034001 D (RMS), 3.032501 D (Z), wall = 288.05s, dK/K = 7.1765e-04, gradP = 1.0000e-05
+Timestep: 7500, MLUPS: 749.5, K = 3.032112 D (RMS), 3.030610 D (Z), wall = 308.57s, dK/K = 6.2271e-04, gradP = 1.0000e-05
+Timestep: 8000, MLUPS: 752.6, K = 3.030465 D (RMS), 3.028961 D (Z), wall = 329.00s, dK/K = 5.4320e-04, gradP = 1.0000e-05
+Timestep: 8500, MLUPS: 758.9, K = 3.029023 D (RMS), 3.027518 D (Z), wall = 349.26s, dK/K = 4.7594e-04, gradP = 1.0000e-05
+Timestep: 9000, MLUPS: 746.6, K = 3.027755 D (RMS), 3.026249 D (Z), wall = 369.86s, dK/K = 4.1856e-04, gradP = 1.0000e-05
+Timestep: 9500, MLUPS: 749.4, K = 3.026637 D (RMS), 3.025131 D (Z), wall = 390.37s, dK/K = 3.6926e-04, gradP = 1.0000e-05
+Timestep: 10000, MLUPS: 749.7, K = 3.025648 D (RMS), 3.024142 D (Z), wall = 410.88s, dK/K = 3.2667e-04, gradP = 1.0000e-05
+Timestep: 10500, MLUPS: 746.8, K = 3.024772 D (RMS), 3.023265 D (Z), wall = 431.47s, dK/K = 2.8967e-04, gradP = 1.0000e-05
+Timestep: 11000, MLUPS: 750.8, K = 3.023993 D (RMS), 3.022486 D (Z), wall = 451.95s, dK/K = 2.5740e-04, gradP = 1.0000e-05
+Timestep: 11500, MLUPS: 746.1, K = 3.023300 D (RMS), 3.021793 D (Z), wall = 472.56s, dK/K = 2.2914e-04, gradP = 1.0000e-05
+Timestep: 12000, MLUPS: 751.0, K = 3.022683 D (RMS), 3.021175 D (Z), wall = 493.04s, dK/K = 2.0431e-04, gradP = 1.0000e-05
+Timestep: 12500, MLUPS: 746.0, K = 3.022131 D (RMS), 3.020623 D (Z), wall = 513.65s, dK/K = 1.8244e-04, gradP = 1.0000e-05
+Timestep: 13000, MLUPS: 751.7, K = 3.021638 D (RMS), 3.020130 D (Z), wall = 534.10s, dK/K = 1.6312e-04, gradP = 1.0000e-05
+Timestep: 13500, MLUPS: 744.0, K = 3.021197 D (RMS), 3.019689 D (Z), wall = 554.77s, dK/K = 1.4601e-04, gradP = 1.0000e-05
+Timestep: 14000, MLUPS: 750.4, K = 3.020802 D (RMS), 3.019294 D (Z), wall = 575.26s, dK/K = 1.3083e-04, gradP = 1.0000e-05
+Timestep: 14500, MLUPS: 753.8, K = 3.020447 D (RMS), 3.018939 D (Z), wall = 595.66s, dK/K = 1.1734e-04, gradP = 1.0000e-05
+Timestep: 15000, MLUPS: 749.4, K = 3.020129 D (RMS), 3.018621 D (Z), wall = 616.17s, dK/K = 1.0533e-04, gradP = 1.0000e-05
+Timestep: 15500, MLUPS: 753.0, K = 3.019843 D (RMS), 3.018336 D (Z), wall = 636.59s, dK/K = 9.4615e-05, gradP = 1.0000e-05
+Timestep: 16000, MLUPS: 751.7, K = 3.019587 D (RMS), 3.018079 D (Z), wall = 657.05s, dK/K = 8.5052e-05, gradP = 1.0000e-05
+Timestep: 16500, MLUPS: 749.9, K = 3.019356 D (RMS), 3.017848 D (Z), wall = 677.55s, dK/K = 7.6503e-05, gradP = 1.0000e-05
+Timestep: 17000, MLUPS: 749.9, K = 3.019148 D (RMS), 3.017640 D (Z), wall = 698.06s, dK/K = 6.8853e-05, gradP = 1.0000e-05
+Timestep: 17500, MLUPS: 746.8, K = 3.018960 D (RMS), 3.017453 D (Z), wall = 718.64s, dK/K = 6.1999e-05, gradP = 1.0000e-05
+Timestep: 18000, MLUPS: 751.1, K = 3.018792 D (RMS), 3.017284 D (Z), wall = 739.11s, dK/K = 5.5854e-05, gradP = 1.0000e-05
+Timestep: 18500, MLUPS: 747.9, K = 3.018640 D (RMS), 3.017132 D (Z), wall = 759.67s, dK/K = 5.0339e-05, gradP = 1.0000e-05
+Timestep: 19000, MLUPS: 751.8, K = 3.018503 D (RMS), 3.016995 D (Z), wall = 780.13s, dK/K = 4.5387e-05, gradP = 1.0000e-05
+Timestep: 19500, MLUPS: 751.9, K = 3.018379 D (RMS), 3.016872 D (Z), wall = 800.58s, dK/K = 4.0937e-05, gradP = 1.0000e-05
+Timestep: 20000, MLUPS: 744.7, K = 3.018268 D (RMS), 3.016760 D (Z), wall = 821.22s, dK/K = 3.6935e-05, gradP = 1.0000e-05
+Timestep: 20500, MLUPS: 749.7, K = 3.018167 D (RMS), 3.016660 D (Z), wall = 841.73s, dK/K = 3.3334e-05, gradP = 1.0000e-05
+Timestep: 21000, MLUPS: 746.3, K = 3.018076 D (RMS), 3.016569 D (Z), wall = 862.33s, dK/K = 3.0093e-05, gradP = 1.0000e-05
+Timestep: 21500, MLUPS: 746.3, K = 3.017994 D (RMS), 3.016487 D (Z), wall = 882.94s, dK/K = 2.7174e-05, gradP = 1.0000e-05
+Timestep: 22000, MLUPS: 750.7, K = 3.017920 D (RMS), 3.016413 D (Z), wall = 903.42s, dK/K = 2.4544e-05, gradP = 1.0000e-05
+Timestep: 22500, MLUPS: 749.8, K = 3.017853 D (RMS), 3.016346 D (Z), wall = 923.93s, dK/K = 2.2173e-05, gradP = 1.0000e-05
+Timestep: 23000, MLUPS: 748.8, K = 3.017793 D (RMS), 3.016285 D (Z), wall = 944.46s, dK/K = 2.0036e-05, gradP = 1.0000e-05
+Timestep: 23500, MLUPS: 746.7, K = 3.017738 D (RMS), 3.016231 D (Z), wall = 965.05s, dK/K = 1.8107e-05, gradP = 1.0000e-05
+Timestep: 24000, MLUPS: 743.7, K = 3.017689 D (RMS), 3.016181 D (Z), wall = 985.73s, dK/K = 1.6368e-05, gradP = 1.0000e-05
+Timestep: 24500, MLUPS: 750.8, K = 3.017644 D (RMS), 3.016137 D (Z), wall = 1006.21s, dK/K = 1.4797e-05, gradP = 1.0000e-05
+Timestep: 25000, MLUPS: 742.3, K = 3.017604 D (RMS), 3.016096 D (Z), wall = 1026.92s, dK/K = 1.3380e-05, gradP = 1.0000e-05
+Timestep: 25500, MLUPS: 741.6, K = 3.017567 D (RMS), 3.016060 D (Z), wall = 1047.66s, dK/K = 1.2100e-05, gradP = 1.0000e-05
+Timestep: 26000, MLUPS: 741.8, K = 3.017534 D (RMS), 3.016027 D (Z), wall = 1068.38s, dK/K = 1.0943e-05, gradP = 1.0000e-05
+Timestep: 26500, MLUPS: 740.9, K = 3.017504 D (RMS), 3.015997 D (Z), wall = 1089.14s, dK/K = 9.8990e-06, gradP = 1.0000e-05
+Convergence reached (|dK/K| = 9.8990e-06 < 1.0000e-05)

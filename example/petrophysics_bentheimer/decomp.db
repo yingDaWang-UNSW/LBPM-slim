@@ -1,0 +1,20 @@
+// lbpm_serial_decomp input -- step 2 of the petrophysics pipeline.
+//
+// Reads the mirror_pp output and writes per-rank ID.xxxxx files with the
+// 1-voxel halo padding that the simulators expect.  Relabel pore<->solid
+// so the on-disk ID files use the LBPM-internal convention (id > 0 = fluid,
+// id == 0 = solid).  Segmented inputs from CT typically have 0 = pore,
+// 1 = solid; lbpm_mirror_pp passes this convention through unchanged
+// (its docstring claim of 0=solid output is wrong on this build).
+//
+// Per-sample knob: only Filename, N, n, nproc change (n = N/nproc).
+Domain {
+    Filename     = "bentheimer_mirrored.raw"
+    ReadType     = "8bit"
+    L            = 1.0, 1.0, 1.0
+    N            = 516, 516, 516
+    n            = 516, 516, 516
+    nproc        = 1, 1, 1
+    ReadValues   = 0, 1    // input  byte values
+    WriteValues  = 1, 0    // LBPM id values (input pore -> id=1, input solid -> id=0)
+}

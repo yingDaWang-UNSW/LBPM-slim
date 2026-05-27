@@ -1,0 +1,16 @@
+// lbpm_mirror_pp input -- step 1 of the petrophysics pipeline.
+//
+// Mirror-pads each axis with a 16-voxel transition slab so the periodic
+// (BC=0) wrap-around used by the absperm protocol has a smooth seam.
+// Output: bentheimer_mirrored.raw  + sibling bentheimer_mirrored.db
+//         (516^3 from 500^3, convention 0=solid, 1=fluid).
+//
+// Per-sample knob: only Filename and N need to change for a new image.
+// Everything else is part of the static protocol.
+Domain {
+    Filename     = "bentheimer.raw"
+    N            = 500, 500, 500
+    ReadType     = "8bit"
+    MirrorPad    = 16, 16, 16
+    nproc        = 1, 1, 1
+}

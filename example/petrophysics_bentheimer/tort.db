@@ -1,0 +1,26 @@
+// lbpm_tortuosity_simulator input -- step 3a of the petrophysics pipeline.
+//
+// Solves Laplace on the pore phase with Dirichlet psi=1 at z=0 and psi=0
+// at z=L, no-flux on solids, periodic in x and y.  Reports z-direction
+// tortuosity tau = phi * D_0 / D_eff.
+//
+// The Poisson block is the STATIC PROTOCOL -- do not retune per sample.
+// Only the Domain section (Filename/n/nproc) varies between samples.
+Domain {
+    nproc        = 1, 1, 1
+    n            = 516, 516, 516
+    L            = 1.0, 1.0, 1.0
+    voxel_length = 4.0
+    BC           = 1
+}
+
+Poisson {
+    tau               = 0.75
+    timestepMax       = 1000000
+    analysis_interval = 500
+    tolerance         = 1.0e-9
+    Vin               = 1.0
+    Vout              = 0.0
+    BC_Inlet          = 1
+    BC_Outlet         = 1
+}

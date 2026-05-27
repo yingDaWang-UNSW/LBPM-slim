@@ -1,0 +1,216 @@
+********************************************************
+  Running Tortuosity Calculation (D3Q7 LBM Laplace)
+********************************************************
+MPI rank=0 will use GPU ID 0 / 4 
+================================================================
+  ScaLBL_Poisson: D3Q7 LBM Laplace solver
+================================================================
+  tau              = 0.75000
+  tolerance (MSE)  = 1.000e-09
+  timestepMax      = 1000000
+  analysis interv. = 500
+  Vin / Vout       = 1.0000 / 0.0000
+  BC inlet/outlet  = 1 / 1
+================================================================
+Read input media... 
+Initialize from segmented data: solid=0, NWP=1, WP=2 
+Media porosity = 0.223832 
+ScaLBL_Poisson: ID file loaded.
+ScaLBL_Poisson: Create ScaLBL_Communicator
+ScaLBL_Poisson: build memory-efficient layout (Np = 30751795)
+ScaLBL_Poisson: allocate distributions (Np = 30751808)
+ScaLBL_Poisson: initializing D3Q7 distributions
+ScaLBL_Poisson: solving (timestepMax = 1000000, tolerance = 1.000e-09)
+ScaLBL_Poisson:   timestep =    500   MSE = 1.5071e-05
+ScaLBL_Poisson:   timestep =   1000   MSE = 3.2415e-06
+ScaLBL_Poisson:   timestep =   1500   MSE = 1.6097e-06
+ScaLBL_Poisson:   timestep =   2000   MSE = 9.9998e-07
+ScaLBL_Poisson:   timestep =   2500   MSE = 6.9498e-07
+ScaLBL_Poisson:   timestep =   3000   MSE = 5.1683e-07
+ScaLBL_Poisson:   timestep =   3500   MSE = 4.0217e-07
+ScaLBL_Poisson:   timestep =   4000   MSE = 3.2331e-07
+ScaLBL_Poisson:   timestep =   4500   MSE = 2.6637e-07
+ScaLBL_Poisson:   timestep =   5000   MSE = 2.2373e-07
+ScaLBL_Poisson:   timestep =   5500   MSE = 1.9086e-07
+ScaLBL_Poisson:   timestep =   6000   MSE = 1.6492e-07
+ScaLBL_Poisson:   timestep =   6500   MSE = 1.4406e-07
+ScaLBL_Poisson:   timestep =   7000   MSE = 1.2699e-07
+ScaLBL_Poisson:   timestep =   7500   MSE = 1.1284e-07
+ScaLBL_Poisson:   timestep =   8000   MSE = 1.0096e-07
+ScaLBL_Poisson:   timestep =   8500   MSE = 9.0887e-08
+ScaLBL_Poisson:   timestep =   9000   MSE = 8.2260e-08
+ScaLBL_Poisson:   timestep =   9500   MSE = 7.4813e-08
+ScaLBL_Poisson:   timestep =  10000   MSE = 6.8337e-08
+ScaLBL_Poisson:   timestep =  10500   MSE = 6.2668e-08
+ScaLBL_Poisson:   timestep =  11000   MSE = 5.7674e-08
+ScaLBL_Poisson:   timestep =  11500   MSE = 5.3252e-08
+ScaLBL_Poisson:   timestep =  12000   MSE = 4.9317e-08
+ScaLBL_Poisson:   timestep =  12500   MSE = 4.5799e-08
+ScaLBL_Poisson:   timestep =  13000   MSE = 4.2641e-08
+ScaLBL_Poisson:   timestep =  13500   MSE = 3.9795e-08
+ScaLBL_Poisson:   timestep =  14000   MSE = 3.7221e-08
+ScaLBL_Poisson:   timestep =  14500   MSE = 3.4885e-08
+ScaLBL_Poisson:   timestep =  15000   MSE = 3.2759e-08
+ScaLBL_Poisson:   timestep =  15500   MSE = 3.0818e-08
+ScaLBL_Poisson:   timestep =  16000   MSE = 2.9042e-08
+ScaLBL_Poisson:   timestep =  16500   MSE = 2.7412e-08
+ScaLBL_Poisson:   timestep =  17000   MSE = 2.5912e-08
+ScaLBL_Poisson:   timestep =  17500   MSE = 2.4530e-08
+ScaLBL_Poisson:   timestep =  18000   MSE = 2.3253e-08
+ScaLBL_Poisson:   timestep =  18500   MSE = 2.2071e-08
+ScaLBL_Poisson:   timestep =  19000   MSE = 2.0974e-08
+ScaLBL_Poisson:   timestep =  19500   MSE = 1.9956e-08
+ScaLBL_Poisson:   timestep =  20000   MSE = 1.9008e-08
+ScaLBL_Poisson:   timestep =  20500   MSE = 1.8124e-08
+ScaLBL_Poisson:   timestep =  21000   MSE = 1.7299e-08
+ScaLBL_Poisson:   timestep =  21500   MSE = 1.6528e-08
+ScaLBL_Poisson:   timestep =  22000   MSE = 1.5806e-08
+ScaLBL_Poisson:   timestep =  22500   MSE = 1.5129e-08
+ScaLBL_Poisson:   timestep =  23000   MSE = 1.4493e-08
+ScaLBL_Poisson:   timestep =  23500   MSE = 1.3896e-08
+ScaLBL_Poisson:   timestep =  24000   MSE = 1.3334e-08
+ScaLBL_Poisson:   timestep =  24500   MSE = 1.2804e-08
+ScaLBL_Poisson:   timestep =  25000   MSE = 1.2305e-08
+ScaLBL_Poisson:   timestep =  25500   MSE = 1.1833e-08
+ScaLBL_Poisson:   timestep =  26000   MSE = 1.1387e-08
+ScaLBL_Poisson:   timestep =  26500   MSE = 1.0966e-08
+ScaLBL_Poisson:   timestep =  27000   MSE = 1.0567e-08
+ScaLBL_Poisson:   timestep =  27500   MSE = 1.0189e-08
+ScaLBL_Poisson:   timestep =  28000   MSE = 9.8298e-09
+ScaLBL_Poisson:   timestep =  28500   MSE = 9.4892e-09
+ScaLBL_Poisson:   timestep =  29000   MSE = 9.1656e-09
+ScaLBL_Poisson:   timestep =  29500   MSE = 8.8579e-09
+ScaLBL_Poisson:   timestep =  30000   MSE = 8.5652e-09
+ScaLBL_Poisson:   timestep =  30500   MSE = 8.2864e-09
+ScaLBL_Poisson:   timestep =  31000   MSE = 8.0207e-09
+ScaLBL_Poisson:   timestep =  31500   MSE = 7.7673e-09
+ScaLBL_Poisson:   timestep =  32000   MSE = 7.5256e-09
+ScaLBL_Poisson:   timestep =  32500   MSE = 7.2947e-09
+ScaLBL_Poisson:   timestep =  33000   MSE = 7.0741e-09
+ScaLBL_Poisson:   timestep =  33500   MSE = 6.8632e-09
+ScaLBL_Poisson:   timestep =  34000   MSE = 6.6615e-09
+ScaLBL_Poisson:   timestep =  34500   MSE = 6.4683e-09
+ScaLBL_Poisson:   timestep =  35000   MSE = 6.2834e-09
+ScaLBL_Poisson:   timestep =  35500   MSE = 6.1061e-09
+ScaLBL_Poisson:   timestep =  36000   MSE = 5.9361e-09
+ScaLBL_Poisson:   timestep =  36500   MSE = 5.7731e-09
+ScaLBL_Poisson:   timestep =  37000   MSE = 5.6166e-09
+ScaLBL_Poisson:   timestep =  37500   MSE = 5.4663e-09
+ScaLBL_Poisson:   timestep =  38000   MSE = 5.3219e-09
+ScaLBL_Poisson:   timestep =  38500   MSE = 5.1832e-09
+ScaLBL_Poisson:   timestep =  39000   MSE = 5.0497e-09
+ScaLBL_Poisson:   timestep =  39500   MSE = 4.9213e-09
+ScaLBL_Poisson:   timestep =  40000   MSE = 4.7977e-09
+ScaLBL_Poisson:   timestep =  40500   MSE = 4.6787e-09
+ScaLBL_Poisson:   timestep =  41000   MSE = 4.5640e-09
+ScaLBL_Poisson:   timestep =  41500   MSE = 4.4535e-09
+ScaLBL_Poisson:   timestep =  42000   MSE = 4.3469e-09
+ScaLBL_Poisson:   timestep =  42500   MSE = 4.2442e-09
+ScaLBL_Poisson:   timestep =  43000   MSE = 4.1450e-09
+ScaLBL_Poisson:   timestep =  43500   MSE = 4.0493e-09
+ScaLBL_Poisson:   timestep =  44000   MSE = 3.9568e-09
+ScaLBL_Poisson:   timestep =  44500   MSE = 3.8675e-09
+ScaLBL_Poisson:   timestep =  45000   MSE = 3.7812e-09
+ScaLBL_Poisson:   timestep =  45500   MSE = 3.6978e-09
+ScaLBL_Poisson:   timestep =  46000   MSE = 3.6172e-09
+ScaLBL_Poisson:   timestep =  46500   MSE = 3.5391e-09
+ScaLBL_Poisson:   timestep =  47000   MSE = 3.4636e-09
+ScaLBL_Poisson:   timestep =  47500   MSE = 3.3905e-09
+ScaLBL_Poisson:   timestep =  48000   MSE = 3.3198e-09
+ScaLBL_Poisson:   timestep =  48500   MSE = 3.2512e-09
+ScaLBL_Poisson:   timestep =  49000   MSE = 3.1848e-09
+ScaLBL_Poisson:   timestep =  49500   MSE = 3.1204e-09
+ScaLBL_Poisson:   timestep =  50000   MSE = 3.0580e-09
+ScaLBL_Poisson:   timestep =  50500   MSE = 2.9975e-09
+ScaLBL_Poisson:   timestep =  51000   MSE = 2.9388e-09
+ScaLBL_Poisson:   timestep =  51500   MSE = 2.8818e-09
+ScaLBL_Poisson:   timestep =  52000   MSE = 2.8266e-09
+ScaLBL_Poisson:   timestep =  52500   MSE = 2.7729e-09
+ScaLBL_Poisson:   timestep =  53000   MSE = 2.7208e-09
+ScaLBL_Poisson:   timestep =  53500   MSE = 2.6702e-09
+ScaLBL_Poisson:   timestep =  54000   MSE = 2.6210e-09
+ScaLBL_Poisson:   timestep =  54500   MSE = 2.5732e-09
+ScaLBL_Poisson:   timestep =  55000   MSE = 2.5267e-09
+ScaLBL_Poisson:   timestep =  55500   MSE = 2.4816e-09
+ScaLBL_Poisson:   timestep =  56000   MSE = 2.4376e-09
+ScaLBL_Poisson:   timestep =  56500   MSE = 2.3949e-09
+ScaLBL_Poisson:   timestep =  57000   MSE = 2.3533e-09
+ScaLBL_Poisson:   timestep =  57500   MSE = 2.3129e-09
+ScaLBL_Poisson:   timestep =  58000   MSE = 2.2735e-09
+ScaLBL_Poisson:   timestep =  58500   MSE = 2.2351e-09
+ScaLBL_Poisson:   timestep =  59000   MSE = 2.1978e-09
+ScaLBL_Poisson:   timestep =  59500   MSE = 2.1614e-09
+ScaLBL_Poisson:   timestep =  60000   MSE = 2.1260e-09
+ScaLBL_Poisson:   timestep =  60500   MSE = 2.0914e-09
+ScaLBL_Poisson:   timestep =  61000   MSE = 2.0578e-09
+ScaLBL_Poisson:   timestep =  61500   MSE = 2.0249e-09
+ScaLBL_Poisson:   timestep =  62000   MSE = 1.9930e-09
+ScaLBL_Poisson:   timestep =  62500   MSE = 1.9617e-09
+ScaLBL_Poisson:   timestep =  63000   MSE = 1.9313e-09
+ScaLBL_Poisson:   timestep =  63500   MSE = 1.9016e-09
+ScaLBL_Poisson:   timestep =  64000   MSE = 1.8726e-09
+ScaLBL_Poisson:   timestep =  64500   MSE = 1.8444e-09
+ScaLBL_Poisson:   timestep =  65000   MSE = 1.8168e-09
+ScaLBL_Poisson:   timestep =  65500   MSE = 1.7898e-09
+ScaLBL_Poisson:   timestep =  66000   MSE = 1.7635e-09
+ScaLBL_Poisson:   timestep =  66500   MSE = 1.7378e-09
+ScaLBL_Poisson:   timestep =  67000   MSE = 1.7127e-09
+ScaLBL_Poisson:   timestep =  67500   MSE = 1.6881e-09
+ScaLBL_Poisson:   timestep =  68000   MSE = 1.6642e-09
+ScaLBL_Poisson:   timestep =  68500   MSE = 1.6407e-09
+ScaLBL_Poisson:   timestep =  69000   MSE = 1.6178e-09
+ScaLBL_Poisson:   timestep =  69500   MSE = 1.5954e-09
+ScaLBL_Poisson:   timestep =  70000   MSE = 1.5735e-09
+ScaLBL_Poisson:   timestep =  70500   MSE = 1.5521e-09
+ScaLBL_Poisson:   timestep =  71000   MSE = 1.5312e-09
+ScaLBL_Poisson:   timestep =  71500   MSE = 1.5107e-09
+ScaLBL_Poisson:   timestep =  72000   MSE = 1.4906e-09
+ScaLBL_Poisson:   timestep =  72500   MSE = 1.4710e-09
+ScaLBL_Poisson:   timestep =  73000   MSE = 1.4518e-09
+ScaLBL_Poisson:   timestep =  73500   MSE = 1.4330e-09
+ScaLBL_Poisson:   timestep =  74000   MSE = 1.4146e-09
+ScaLBL_Poisson:   timestep =  74500   MSE = 1.3966e-09
+ScaLBL_Poisson:   timestep =  75000   MSE = 1.3789e-09
+ScaLBL_Poisson:   timestep =  75500   MSE = 1.3617e-09
+ScaLBL_Poisson:   timestep =  76000   MSE = 1.3447e-09
+ScaLBL_Poisson:   timestep =  76500   MSE = 1.3281e-09
+ScaLBL_Poisson:   timestep =  77000   MSE = 1.3119e-09
+ScaLBL_Poisson:   timestep =  77500   MSE = 1.2960e-09
+ScaLBL_Poisson:   timestep =  78000   MSE = 1.2803e-09
+ScaLBL_Poisson:   timestep =  78500   MSE = 1.2650e-09
+ScaLBL_Poisson:   timestep =  79000   MSE = 1.2500e-09
+ScaLBL_Poisson:   timestep =  79500   MSE = 1.2353e-09
+ScaLBL_Poisson:   timestep =  80000   MSE = 1.2209e-09
+ScaLBL_Poisson:   timestep =  80500   MSE = 1.2067e-09
+ScaLBL_Poisson:   timestep =  81000   MSE = 1.1929e-09
+ScaLBL_Poisson:   timestep =  81500   MSE = 1.1793e-09
+ScaLBL_Poisson:   timestep =  82000   MSE = 1.1659e-09
+ScaLBL_Poisson:   timestep =  82500   MSE = 1.1528e-09
+ScaLBL_Poisson:   timestep =  83000   MSE = 1.1399e-09
+ScaLBL_Poisson:   timestep =  83500   MSE = 1.1273e-09
+ScaLBL_Poisson:   timestep =  84000   MSE = 1.1149e-09
+ScaLBL_Poisson:   timestep =  84500   MSE = 1.1027e-09
+ScaLBL_Poisson:   timestep =  85000   MSE = 1.0908e-09
+ScaLBL_Poisson:   timestep =  85500   MSE = 1.0791e-09
+ScaLBL_Poisson:   timestep =  86000   MSE = 1.0675e-09
+ScaLBL_Poisson:   timestep =  86500   MSE = 1.0562e-09
+ScaLBL_Poisson:   timestep =  87000   MSE = 1.0451e-09
+ScaLBL_Poisson:   timestep =  87500   MSE = 1.0342e-09
+ScaLBL_Poisson:   timestep =  88000   MSE = 1.0235e-09
+ScaLBL_Poisson:   timestep =  88500   MSE = 1.0129e-09
+ScaLBL_Poisson:   timestep =  89000   MSE = 1.0026e-09
+ScaLBL_Poisson:   timestep =  89500   MSE = 9.9238e-10
+ScaLBL_Poisson: converged at t = 89500 (MSE = 9.9238e-10 <= tol = 1.000e-09)
+
+================================================================
+  Tortuosity result (z-direction)
+================================================================
+  global domain size      = 516 x 516 x 516
+  fluid voxel count       = 30751795
+  porosity      phi       = 0.223832
+  <E_z>_vol               = 1.389810e-04   [V/lu]
+  imposed E_macro = dV/L  = 1.941748e-03   [V/lu]   (L_eff = 515 lu)
+  D_eff / D_0             = 0.071575
+  tortuosity    tau       = 3.127221
+  formation factor F      = 13.971313
+================================================================
