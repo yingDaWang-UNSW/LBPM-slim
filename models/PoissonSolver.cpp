@@ -18,6 +18,8 @@
 */
 #include "models/PoissonSolver.h"
 
+#include <algorithm>   // std::max for the defensive Npad sizing in Create()
+
 using namespace std;
 
 ScaLBL_Poisson::ScaLBL_Poisson(int RANK, int NP, MPI_Comm COMM)
@@ -158,13 +160,14 @@ void ScaLBL_Poisson::Create() {
     if (rank == 0) printf("ScaLBL_Poisson: Create ScaLBL_Communicator\n");
     ScaLBL_Comm = std::make_shared<ScaLBL_Communicator>(Mask);
 
-    // size_t for Npad and the multiplication.  At per-rank Np > ~119 M
-    // (which solidbinder hits in dense pellets like knt-ore @ phi=0.66),
-    // 18*Npad overflows int32 -> new int[] throws std::bad_array_new_length.
-    // Same root cause as the MRTModel.cpp:163 mod and the alloc-size fix
-    // below; just hadn't bitten this line in Bentheimer testing because
-    // Np stayed below the threshold.
-    const size_t Npad_sz = ((size_t)Np / 16 + 2) * 16;
+    // Defensive Npad: MemoryOptimizedLayoutAA's *internal* Np grows up to the
+    // per-rank interior voxel count (not just Mask->PoreCount()), and it writes
+    // to neighborList[q*internal_Np + idx] for q up to 17.  Sizing only for the
+    // input PoreCount lets those writes go OOB on uneven-phase ranks.  Match
+    // the MRTModel.cpp:163 sizing and use size_t throughout to avoid int32
+    // overflow at large per-rank cubes (18 * 159M = 2.87e9 > INT_MAX).
+    const size_t subdomain_voxels = (size_t)(Nx - 2) * (size_t)(Ny - 2) * (size_t)(Nz - 2);
+    const size_t Npad_sz = std::max((size_t)Np, subdomain_voxels) + 16;
     if (rank == 0) printf("ScaLBL_Poisson: build memory-efficient layout (Np = %d)\n", Np);
     Map.resize(Nx, Ny, Nz);
     Map.fill(-2);
