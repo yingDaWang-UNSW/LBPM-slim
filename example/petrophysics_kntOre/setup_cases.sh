@@ -23,16 +23,23 @@ NZ_SRC=1708; NY_SRC=1704; NX_SRC=1704
 # the protocol).
 PAD=16
 
-# Single decomp for every case.  Must divide each mirrored axis.
-# Mirrored dims: NX = 1720, NY = 1720, NZ = 1724.
-# 4 x 4 x 2 -> per-rank 430 x 430 x 862 voxels.
-# 32 ranks total -> 8 V100 gpuvolta nodes.
-NPX=4; NPY=4; NPZ=2
+# Per-case decomp.  Must divide each mirrored axis (1720, 1720, 1724).
+# Why split the two phases: ScaLBL's MemoryOptimizedLayoutAA stores
+# `idx + 18*Np` in int32.  At Np > 119M the value wraps -> garbage
+# neighbor index -> wild GPU read -> SIGSEGV in ScaLBL_Poisson::Create.
+# Sized so per-rank Np stays well under 100M for the worst rank:
+#   solid       (phi~0.55):  4x4x2  -> per-rank 430x430x862 = 159M voxels
+#                                       Np_max ~87M  -> safe.
+#   solidbinder (phi~0.66):  4x4x4  -> per-rank 430x430x431 =  80M voxels
+#                                       Np_max ~53M  -> safe (32 ranks crashed).
+SOLID_NPROC=(4 4 2)         #  32 ranks ->  8 V100 nodes
+SOLIDBIN_NPROC=(4 4 4)      #  64 ranks -> 16 V100 nodes
 
 mkdir -p "$RUN_ROOT"
 
 write_inputs() {
     local case_dir=$1
+    local phase=$2
     mkdir -p "$case_dir"
     cat > "$case_dir/mirror.db" <<EOF
 Domain {
@@ -43,6 +50,12 @@ Domain {
     nproc        = 1, 1, 1
 }
 EOF
+    local NPX NPY NPZ
+    if [ "$phase" = "solid" ]; then
+        NPX=${SOLID_NPROC[0]}; NPY=${SOLID_NPROC[1]}; NPZ=${SOLID_NPROC[2]}
+    else
+        NPX=${SOLIDBIN_NPROC[0]}; NPY=${SOLIDBIN_NPROC[1]}; NPZ=${SOLIDBIN_NPROC[2]}
+    fi
     local Mx=$((NX_SRC + PAD))
     local My=$((NY_SRC + PAD))
     local Mz=$((NZ_SRC + PAD))
@@ -84,7 +97,7 @@ for lot in lot3 lot4; do
     for phase in solid solidbinder; do
         case_dir=${RUN_ROOT}/${lot}_${phase}
         echo "writing $case_dir/{mirror.db, inputFile.db}"
-        write_inputs "$case_dir"
+        write_inputs "$case_dir" "$phase"
     done
 done
 

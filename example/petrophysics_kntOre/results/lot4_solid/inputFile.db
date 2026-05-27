@@ -1,0 +1,23 @@
+Domain {
+    Filename     = "in_mirrored.raw"
+    nproc        = 4, 4, 2
+    n            = 430, 430, 862
+    N            = 1720, 1720, 1724
+    L            = 1.0, 1.0, 1.0
+    voxel_length = 1.0
+    BC           = 1
+    ReadType     = "8bit"
+    ReadValues   = 0, 1
+    WriteValues  = 0, 1
+}
+
+Poisson {
+    tau               = 0.75
+    timestepMax       = 2000000
+    analysis_interval = 500
+    tolerance         = 1.0e-9
+    Vin               = 1.0
+    Vout              = 0.0
+    BC_Inlet          = 1
+    BC_Outlet         = 1
+}

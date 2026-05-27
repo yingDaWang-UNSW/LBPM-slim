@@ -1,0 +1,285 @@
+### head (first 200 lines of tort_lot3_solid.o169396232, 1005M total) ###
+Job is running on node(s):
+gadi-gpu-v100-0069.gadi.nci.org.au
+gadi-gpu-v100-0072.gadi.nci.org.au
+gadi-gpu-v100-0075.gadi.nci.org.au
+gadi-gpu-v100-0122.gadi.nci.org.au
+gadi-gpu-v100-0126.gadi.nci.org.au
+gadi-gpu-v100-0128.gadi.nci.org.au
+gadi-gpu-v100-0129.gadi.nci.org.au
+gadi-gpu-v100-0131.gadi.nci.org.au
+reading /scratch/m65/yw5484/kntOre/FinalSEG_Lot3.tif ...
+  shape=(1708, 1704, 1704) dtype=uint8 uniques=[  0 128 255]
+  transport voxel fraction = 0.547320
+writing in.raw ((1708, 1704, 1704), 4.96 GB) ...
+done.
+[1779849068.140048] [gadi-gpu-v100-0069:1762455:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+================================================================
+  lbpm_mirror_pp: interporous mirror preprocessor
+================================================================
+  input    = in.raw  (1704 x 1704 x 1708, 8bit)
+  pad      = (16, 16, 16)
+  output   = in_mirrored.raw
+================================================================
+[mirror_pp]: extended axis 2 by 16 voxels (porosity 0.6042 -> 0.5594); new dims: 1704 x 1704 x 1724
+[mirror_pp]: extended axis 1 by 16 voxels (porosity 0.5825 -> 0.5280); new dims: 1704 x 1720 x 1724
+[mirror_pp]: extended axis 0 by 16 voxels (porosity 0.5731 -> 0.5358); new dims: 1720 x 1720 x 1724
+
+[mirror_pp]: wrote in_mirrored.raw  (1720 x 1720 x 1724)
+[mirror_pp]: wrote sibling input db mirror_mirrored.db -- point downstream stages at it
+
+Input media: in_mirrored.raw
+Relabeling 2 values
+oldvalue=0, newvalue =0 
+oldvalue=1, newvalue =1 
+Dimensions of segmented image: 1720 x 1720 x 1724 
+Reading 8-bit input data 
+Read segmented data from in_mirrored.raw 
+Distributing subdomains across 32 processors 
+Process grid: 4 x 4 x 2 
+Subdomain size: 430 x 430 x 862 
+Size of transition region: 0 
+Label=0, Count=2333065231
+Label=1, Count=2826715121
+[1779849145.846823] [gadi-gpu-v100-0069:1762498:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.846895] [gadi-gpu-v100-0069:1762499:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.846945] [gadi-gpu-v100-0069:1762500:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.846980] [gadi-gpu-v100-0069:1762501:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.867839] [gadi-gpu-v100-0128:1283196:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.895481] [gadi-gpu-v100-0129:2303493:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.895617] [gadi-gpu-v100-0129:2303494:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.895655] [gadi-gpu-v100-0129:2303495:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.895777] [gadi-gpu-v100-0129:2303496:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.896960] [gadi-gpu-v100-0126:1645743:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.896918] [gadi-gpu-v100-0126:1645744:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.896923] [gadi-gpu-v100-0126:1645745:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.896923] [gadi-gpu-v100-0126:1645746:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.900668] [gadi-gpu-v100-0122:3491213:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.901031] [gadi-gpu-v100-0122:3491216:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.901476] [gadi-gpu-v100-0122:3491214:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.901555] [gadi-gpu-v100-0122:3491215:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.904409] [gadi-gpu-v100-0072:3428391:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.905217] [gadi-gpu-v100-0072:3428393:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.905428] [gadi-gpu-v100-0072:3428392:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.906188] [gadi-gpu-v100-0072:3428394:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.928149] [gadi-gpu-v100-0128:1283197:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.928135] [gadi-gpu-v100-0128:1283198:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.928182] [gadi-gpu-v100-0128:1283199:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.965015] [gadi-gpu-v100-0075:256791:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.965016] [gadi-gpu-v100-0075:256792:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.965012] [gadi-gpu-v100-0075:256794:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.966448] [gadi-gpu-v100-0075:256793:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.968679] [gadi-gpu-v100-0131:2369164:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.968658] [gadi-gpu-v100-0131:2369165:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.968653] [gadi-gpu-v100-0131:2369166:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779849145.968643] [gadi-gpu-v100-0131:2369167:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+********************************************************
+  Running Tortuosity Calculation (D3Q7 LBM Laplace)
+********************************************************
+MPI rank=1 will use GPU ID 1 / 4 
+MPI rank=0 will use GPU ID 0 / 4 
+MPI rank=16 will use GPU ID 0 / 4 
+MPI rank=3 will use GPU ID 3 / 4 
+MPI rank=2 will use GPU ID 2 / 4 
+MPI rank=21 will use GPU ID 1 / 4 
+MPI rank=23 will use GPU ID 3 / 4 
+MPI rank=20 will use GPU ID 0 / 4 
+MPI rank=4 will use GPU ID 0 / 4 
+MPI rank=28 will use GPU ID 0 / 4 
+MPI rank=22 will use GPU ID 2 / 4 
+MPI rank=29 will use GPU ID 1 / 4 
+MPI rank=30 will use GPU ID 2 / 4 
+MPI rank=31 will use GPU ID 3 / 4 
+MPI rank=19 will use GPU ID 3 / 4 
+MPI rank=6 will use GPU ID 2 / 4 
+MPI rank=18 will use GPU ID 2 / 4 
+MPI rank=5 will use GPU ID 1 / 4 
+MPI rank=17 will use GPU ID 1 / 4 
+MPI rank=24 will use GPU ID 0 / 4 
+MPI rank=11 will use GPU ID 3 / 4 
+MPI rank=7 will use GPU ID 3 / 4 
+MPI rank=25 will use GPU ID 1 / 4 
+MPI rank=26 will use GPU ID 2 / 4 
+MPI rank=27 will use GPU ID 3 / 4 
+MPI rank=9 will use GPU ID 1 / 4 
+MPI rank=8 will use GPU ID 0 / 4 
+MPI rank=10 will use GPU ID 2 / 4 
+MPI rank=13 will use GPU ID 1 / 4 
+MPI rank=14 will use GPU ID 2 / 4 
+MPI rank=12 will use GPU ID 0 / 4 
+MPI rank=15 will use GPU ID 3 / 4 
+================================================================
+  ScaLBL_Poisson: D3Q7 LBM Laplace solver
+================================================================
+  tau              = 0.75000
+  tolerance (MSE)  = 1.000e-09
+  timestepMax      = 2000000
+  analysis interv. = 500
+  Vin / Vout       = 1.0000 / 0.0000
+  BC inlet/outlet  = 1 / 1
+================================================================
+Read input media... 
+Initialize from segmented data: solid=0, NWP=1, WP=2 
+Media porosity = 0.547770 
+ScaLBL_Poisson: ID file loaded.
+ScaLBL_Poisson: Create ScaLBL_Communicator
+ScaLBL_Poisson: build memory-efficient layout (Np = 92952683)
+ScaLBL_Poisson: allocate distributions (Np = 92952704)
+ScaLBL_Poisson: initializing D3Q7 distributions
+ScaLBL_Poisson: solving (timestepMax = 2000000, tolerance = 1.000e-09)
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_Z: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_ElectricPotential: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_z: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_ElectricPotential: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_Z: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_ElectricPotential: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_z: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_ElectricPotential: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_z: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_ElectricPotential: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_z: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_ElectricPotential: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_Potential_BC_z: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson_ElectricPotential: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+CUDA error in ScaLBL_D3Q7_AAeven_Poisson: an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+Error in cudaMemcpy (host->device): an illegal memory access was encountered 
+
+### ... (middle elided) ###
+
+### tail (last 80 lines) ###
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+Error in cudaMemcpy (device->host): an illegal memory access was encountered 
+
+================================================================
+  Tortuosity result (z-direction)
+================================================================
+  global domain size      = 1720 x 1720 x 1724
+  fluid voxel count       = 2793783775
+  porosity      phi       = 0.547770
+  <E_z>_vol               = 1.095642e-04   [V/lu]
+  imposed E_macro = dV/L  = 5.803831e-04   [V/lu]   (L_eff = 1723 lu)
+  D_eff / D_0             = 0.188779
+  tortuosity    tau       = 2.901647
+  formation factor F      = 5.297195
+================================================================
+
+======================================================================================
+                  Resource Usage on 2026-05-27 13:30:08:
+   Job Id:             169396232.gadi-pbs
+   Project:            m65
+   Exit Status:        0
+   Service Units:      1168.96
+   NCPUs Requested:    384                 CPU Time Used: 30:43:42        
+   Memory Requested:   2.98TB                Memory Used: 283.22GB        
+   NGPUs Requested:    32                GPU Utilisation: 1564%           
+                                         GPU Memory Used: 478.96GB        
+   Walltime Requested: 05:00:00            Walltime Used: 01:00:53        
+   JobFS Requested:    1.0GB                  JobFS Used: 8.16MB          
+======================================================================================

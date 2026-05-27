@@ -1,0 +1,285 @@
+### head (first 200 lines of tort_lot3_solidbinder.o169405931, 28K total) ###
+Input media: in_mirrored.raw
+Relabeling 2 values
+oldvalue=0, newvalue =0 
+oldvalue=1, newvalue =1 
+Dimensions of segmented image: 1720 x 1720 x 1724 
+Reading 8-bit input data 
+Read segmented data from in_mirrored.raw 
+Distributing subdomains across 64 processors 
+Process grid: 4 x 4 x 4 
+Subdomain size: 430 x 430 x 431 
+Size of transition region: 0 
+Label=0, Count=1771855063
+Label=1, Count=3399869225
+[1779852805.720986] [gadi-gpu-v100-0122:3491899:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.723788] [gadi-gpu-v100-0069:1763302:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.739130] [gadi-gpu-v100-0144:8737 :0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.739114] [gadi-gpu-v100-0144:8740 :0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.739260] [gadi-gpu-v100-0144:8736 :0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.745663] [gadi-gpu-v100-0126:1646420:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.750300] [gadi-gpu-v100-0129:2304183:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.750803] [gadi-gpu-v100-0148:1496873:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.750773] [gadi-gpu-v100-0148:1496876:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.751087] [gadi-gpu-v100-0148:1496874:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.751058] [gadi-gpu-v100-0129:2304185:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.751015] [gadi-gpu-v100-0129:2304186:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.751217] [gadi-gpu-v100-0129:2304184:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.751441] [gadi-gpu-v100-0148:1496875:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.751786] [gadi-gpu-v100-0069:1763305:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.751816] [gadi-gpu-v100-0069:1763304:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.751961] [gadi-gpu-v100-0069:1763303:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.751981] [gadi-gpu-v100-0147:1714139:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.752145] [gadi-gpu-v100-0147:1714141:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.752147] [gadi-gpu-v100-0147:1714140:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.752255] [gadi-gpu-v100-0147:1714142:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.754658] [gadi-gpu-v100-0145:144639:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.761128] [gadi-gpu-v100-0075:257496:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.761254] [gadi-gpu-v100-0075:257498:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.761366] [gadi-gpu-v100-0075:257497:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.761424] [gadi-gpu-v100-0075:257499:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.764257] [gadi-gpu-v100-0072:3429063:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.764430] [gadi-gpu-v100-0072:3429064:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.766571] [gadi-gpu-v100-0134:2310562:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.766612] [gadi-gpu-v100-0134:2310564:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.766766] [gadi-gpu-v100-0134:2310565:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.766836] [gadi-gpu-v100-0134:2310563:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.768163] [gadi-gpu-v100-0142:1916048:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.768180] [gadi-gpu-v100-0142:1916049:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.768173] [gadi-gpu-v100-0142:1916050:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.768229] [gadi-gpu-v100-0142:1916051:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.774465] [gadi-gpu-v100-0126:1646421:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.774486] [gadi-gpu-v100-0126:1646422:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.774464] [gadi-gpu-v100-0126:1646423:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.780622] [gadi-gpu-v100-0122:3491896:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.780673] [gadi-gpu-v100-0122:3491897:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.780715] [gadi-gpu-v100-0122:3491898:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.782566] [gadi-gpu-v100-0145:144638:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.782853] [gadi-gpu-v100-0145:144640:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.783086] [gadi-gpu-v100-0145:144641:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.791400] [gadi-gpu-v100-0149:393823:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.791387] [gadi-gpu-v100-0149:393824:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.791413] [gadi-gpu-v100-0149:393825:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.791462] [gadi-gpu-v100-0149:393826:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.793960] [gadi-gpu-v100-0144:8739 :0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.795051] [gadi-gpu-v100-0131:2369863:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.795674] [gadi-gpu-v100-0131:2369866:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.795953] [gadi-gpu-v100-0131:2369865:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.796010] [gadi-gpu-v100-0131:2369864:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.802960] [gadi-gpu-v100-0128:1283883:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.803156] [gadi-gpu-v100-0128:1283885:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.803115] [gadi-gpu-v100-0128:1283886:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.803200] [gadi-gpu-v100-0128:1283884:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.822632] [gadi-gpu-v100-0072:3429065:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.822652] [gadi-gpu-v100-0072:3429066:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.833215] [gadi-gpu-v100-0146:3533213:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.833477] [gadi-gpu-v100-0146:3533214:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.833620] [gadi-gpu-v100-0146:3533216:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+[1779852805.833670] [gadi-gpu-v100-0146:3533215:0]          parser.c:1909 UCX  WARN  unused env variables: UCX_ROOT,UCX_VERSION,UCX_BASE (set UCX_WARN_UNUSED_ENV_VARS=n to suppress this warning)
+********************************************************
+  Running Tortuosity Calculation (D3Q7 LBM Laplace)
+********************************************************
+MPI rank=62 will use GPU ID 2 / 4 
+MPI rank=36 will use GPU ID 0 / 4 
+MPI rank=50 will use GPU ID 2 / 4 
+MPI rank=40 will use GPU ID 0 / 4 
+MPI rank=57 will use GPU ID 1 / 4 
+MPI rank=63 will use GPU ID 3 / 4 
+MPI rank=39 will use GPU ID 3 / 4 
+MPI rank=51 will use GPU ID 3 / 4 
+MPI rank=41 will use GPU ID 1 / 4 
+MPI rank=52 will use GPU ID 0 / 4 
+MPI rank=59 will use GPU ID 3 / 4 
+MPI rank=61 will use GPU ID 1 / 4 
+MPI rank=37 will use GPU ID 1 / 4 
+MPI rank=49 will use GPU ID 1 / 4 
+MPI rank=42 will use GPU ID 2 / 4 
+MPI rank=55 will use GPU ID 3 / 4 
+MPI rank=58 will use GPU ID 2 / 4 
+MPI rank=60 will use GPU ID 0 / 4 
+MPI rank=38 will use GPU ID 2 / 4 
+MPI rank=48 will use GPU ID 0 / 4 
+MPI rank=43 will use GPU ID 3 / 4 
+MPI rank=54 will use GPU ID 2 / 4 
+MPI rank=56 will use GPU ID 0 / 4 
+MPI rank=53 will use GPU ID 1 / 4 
+MPI rank=44 will use GPU ID 0 / 4 
+MPI rank=46 will use GPU ID 2 / 4 
+MPI rank=45 will use GPU ID 1 / 4 
+MPI rank=47 will use GPU ID 3 / 4 
+MPI rank=27 will use GPU ID 3 / 4 
+MPI rank=12 will use GPU ID 0 / 4 
+MPI rank=24 will use GPU ID 0 / 4 
+MPI rank=13 will use GPU ID 1 / 4 
+MPI rank=31 will use GPU ID 3 / 4 
+MPI rank=26 will use GPU ID 2 / 4 
+MPI rank=14 will use GPU ID 2 / 4 
+MPI rank=28 will use GPU ID 0 / 4 
+MPI rank=25 will use GPU ID 1 / 4 
+MPI rank=15 will use GPU ID 3 / 4 
+MPI rank=29 will use GPU ID 1 / 4 
+MPI rank=30 will use GPU ID 2 / 4 
+MPI rank=34 will use GPU ID 2 / 4 
+MPI rank=32 will use GPU ID 0 / 4 
+MPI rank=5 will use GPU ID 1 / 4 
+MPI rank=4 will use GPU ID 0 / 4 
+MPI rank=2 will use GPU ID 2 / 4 
+MPI rank=6 will use GPU ID 2 / 4 
+MPI rank=7 will use GPU ID 3 / 4 
+MPI rank=35 will use GPU ID 3 / 4 
+MPI rank=0 will use GPU ID 0 / 4 
+MPI rank=3 will use GPU ID 3 / 4 
+MPI rank=1 will use GPU ID 1 / 4 
+MPI rank=23 will use GPU ID 3 / 4 
+MPI rank=33 will use GPU ID 1 / 4 
+MPI rank=22 will use GPU ID 2 / 4 
+MPI rank=21 will use GPU ID 1 / 4 
+MPI rank=20 will use GPU ID 0 / 4 
+MPI rank=16 will use GPU ID 0 / 4 
+MPI rank=18 will use GPU ID 2 / 4 
+MPI rank=19 will use GPU ID 3 / 4 
+MPI rank=17 will use GPU ID 1 / 4 
+MPI rank=9 will use GPU ID 1 / 4 
+MPI rank=11 will use GPU ID 3 / 4 
+MPI rank=8 will use GPU ID 0 / 4 
+MPI rank=10 will use GPU ID 2 / 4 
+================================================================
+  ScaLBL_Poisson: D3Q7 LBM Laplace solver
+================================================================
+  tau              = 0.75000
+  tolerance (MSE)  = 1.000e-09
+  timestepMax      = 2000000
+  analysis interv. = 500
+  Vin / Vout       = 1.0000 / 0.0000
+  BC inlet/outlet  = 1 / 1
+================================================================
+Read input media... 
+Initialize from segmented data: solid=0, NWP=1, WP=2 
+Media porosity = 0.657317 
+ScaLBL_Poisson: ID file loaded.
+ScaLBL_Poisson: Create ScaLBL_Communicator
+ScaLBL_Poisson: build memory-efficient layout (Np = 52957423)
+ScaLBL_Poisson: allocate distributions (Np = 52957440)
+ScaLBL_Poisson: initializing D3Q7 distributions
+ScaLBL_Poisson: solving (timestepMax = 2000000, tolerance = 1.000e-09)
+ScaLBL_Poisson:   timestep =    500   MSE = 2.8291e-07
+ScaLBL_Poisson:   timestep =   1000   MSE = 1.2521e-07
+ScaLBL_Poisson:   timestep =   1500   MSE = 8.5813e-08
+ScaLBL_Poisson:   timestep =   2000   MSE = 6.6068e-08
+ScaLBL_Poisson:   timestep =   2500   MSE = 5.3946e-08
+ScaLBL_Poisson:   timestep =   3000   MSE = 4.5663e-08
+ScaLBL_Poisson:   timestep =   3500   MSE = 3.9610e-08
+ScaLBL_Poisson:   timestep =   4000   MSE = 3.4975e-08
+ScaLBL_Poisson:   timestep =   4500   MSE = 3.1303e-08
+ScaLBL_Poisson:   timestep =   5000   MSE = 2.8318e-08
+ScaLBL_Poisson:   timestep =   5500   MSE = 2.5841e-08
+ScaLBL_Poisson:   timestep =   6000   MSE = 2.3750e-08
+ScaLBL_Poisson:   timestep =   6500   MSE = 2.1961e-08
+ScaLBL_Poisson:   timestep =   7000   MSE = 2.0412e-08
+ScaLBL_Poisson:   timestep =   7500   MSE = 1.9058e-08
+ScaLBL_Poisson:   timestep =   8000   MSE = 1.7863e-08
+ScaLBL_Poisson:   timestep =   8500   MSE = 1.6801e-08
+ScaLBL_Poisson:   timestep =   9000   MSE = 1.5852e-08
+ScaLBL_Poisson:   timestep =   9500   MSE = 1.4997e-08
+ScaLBL_Poisson:   timestep =  10000   MSE = 1.4223e-08
+ScaLBL_Poisson:   timestep =  10500   MSE = 1.3520e-08
+ScaLBL_Poisson:   timestep =  11000   MSE = 1.2879e-08
+ScaLBL_Poisson:   timestep =  11500   MSE = 1.2290e-08
+ScaLBL_Poisson:   timestep =  12000   MSE = 1.1749e-08
+ScaLBL_Poisson:   timestep =  12500   MSE = 1.1250e-08
+ScaLBL_Poisson:   timestep =  13000   MSE = 1.0788e-08
+ScaLBL_Poisson:   timestep =  13500   MSE = 1.0359e-08
+ScaLBL_Poisson:   timestep =  14000   MSE = 9.9601e-09
+ScaLBL_Poisson:   timestep =  14500   MSE = 9.5878e-09
+ScaLBL_Poisson:   timestep =  15000   MSE = 9.2398e-09
+ScaLBL_Poisson:   timestep =  15500   MSE = 8.9138e-09
+ScaLBL_Poisson:   timestep =  16000   MSE = 8.6078e-09
+ScaLBL_Poisson:   timestep =  16500   MSE = 8.3200e-09
+ScaLBL_Poisson:   timestep =  17000   MSE = 8.0490e-09
+ScaLBL_Poisson:   timestep =  17500   MSE = 7.7932e-09
+ScaLBL_Poisson:   timestep =  18000   MSE = 7.5516e-09
+ScaLBL_Poisson:   timestep =  18500   MSE = 7.3229e-09
+
+### ... (middle elided) ###
+
+### tail (last 80 lines) ###
+ScaLBL_Poisson:   timestep =  68000   MSE = 1.5084e-09
+ScaLBL_Poisson:   timestep =  68500   MSE = 1.4942e-09
+ScaLBL_Poisson:   timestep =  69000   MSE = 1.4802e-09
+ScaLBL_Poisson:   timestep =  69500   MSE = 1.4665e-09
+ScaLBL_Poisson:   timestep =  70000   MSE = 1.4529e-09
+ScaLBL_Poisson:   timestep =  70500   MSE = 1.4396e-09
+ScaLBL_Poisson:   timestep =  71000   MSE = 1.4264e-09
+ScaLBL_Poisson:   timestep =  71500   MSE = 1.4135e-09
+ScaLBL_Poisson:   timestep =  72000   MSE = 1.4008e-09
+ScaLBL_Poisson:   timestep =  72500   MSE = 1.3883e-09
+ScaLBL_Poisson:   timestep =  73000   MSE = 1.3759e-09
+ScaLBL_Poisson:   timestep =  73500   MSE = 1.3638e-09
+ScaLBL_Poisson:   timestep =  74000   MSE = 1.3518e-09
+ScaLBL_Poisson:   timestep =  74500   MSE = 1.3400e-09
+ScaLBL_Poisson:   timestep =  75000   MSE = 1.3284e-09
+ScaLBL_Poisson:   timestep =  75500   MSE = 1.3169e-09
+ScaLBL_Poisson:   timestep =  76000   MSE = 1.3056e-09
+ScaLBL_Poisson:   timestep =  76500   MSE = 1.2945e-09
+ScaLBL_Poisson:   timestep =  77000   MSE = 1.2836e-09
+ScaLBL_Poisson:   timestep =  77500   MSE = 1.2728e-09
+ScaLBL_Poisson:   timestep =  78000   MSE = 1.2621e-09
+ScaLBL_Poisson:   timestep =  78500   MSE = 1.2516e-09
+ScaLBL_Poisson:   timestep =  79000   MSE = 1.2413e-09
+ScaLBL_Poisson:   timestep =  79500   MSE = 1.2311e-09
+ScaLBL_Poisson:   timestep =  80000   MSE = 1.2210e-09
+ScaLBL_Poisson:   timestep =  80500   MSE = 1.2111e-09
+ScaLBL_Poisson:   timestep =  81000   MSE = 1.2013e-09
+ScaLBL_Poisson:   timestep =  81500   MSE = 1.1916e-09
+ScaLBL_Poisson:   timestep =  82000   MSE = 1.1821e-09
+ScaLBL_Poisson:   timestep =  82500   MSE = 1.1727e-09
+ScaLBL_Poisson:   timestep =  83000   MSE = 1.1634e-09
+ScaLBL_Poisson:   timestep =  83500   MSE = 1.1543e-09
+ScaLBL_Poisson:   timestep =  84000   MSE = 1.1453e-09
+ScaLBL_Poisson:   timestep =  84500   MSE = 1.1364e-09
+ScaLBL_Poisson:   timestep =  85000   MSE = 1.1276e-09
+ScaLBL_Poisson:   timestep =  85500   MSE = 1.1189e-09
+ScaLBL_Poisson:   timestep =  86000   MSE = 1.1103e-09
+ScaLBL_Poisson:   timestep =  86500   MSE = 1.1019e-09
+ScaLBL_Poisson:   timestep =  87000   MSE = 1.0935e-09
+ScaLBL_Poisson:   timestep =  87500   MSE = 1.0853e-09
+ScaLBL_Poisson:   timestep =  88000   MSE = 1.0772e-09
+ScaLBL_Poisson:   timestep =  88500   MSE = 1.0691e-09
+ScaLBL_Poisson:   timestep =  89000   MSE = 1.0612e-09
+ScaLBL_Poisson:   timestep =  89500   MSE = 1.0534e-09
+ScaLBL_Poisson:   timestep =  90000   MSE = 1.0457e-09
+ScaLBL_Poisson:   timestep =  90500   MSE = 1.0380e-09
+ScaLBL_Poisson:   timestep =  91000   MSE = 1.0305e-09
+ScaLBL_Poisson:   timestep =  91500   MSE = 1.0230e-09
+ScaLBL_Poisson:   timestep =  92000   MSE = 1.0157e-09
+ScaLBL_Poisson:   timestep =  92500   MSE = 1.0084e-09
+ScaLBL_Poisson:   timestep =  93000   MSE = 1.0012e-09
+ScaLBL_Poisson:   timestep =  93500   MSE = 9.9411e-10
+ScaLBL_Poisson: converged at t = 93500 (MSE = 9.9411e-10 <= tol = 1.000e-09)
+
+================================================================
+  Tortuosity result (z-direction)
+================================================================
+  global domain size      = 1720 x 1720 x 1724
+  fluid voxel count       = 3352500857
+  porosity      phi       = 0.657317
+  <E_z>_vol               = 2.723560e-04   [V/lu]
+  imposed E_macro = dV/L  = 5.803831e-04   [V/lu]   (L_eff = 1723 lu)
+  D_eff / D_0             = 0.469269
+  tortuosity    tau       = 1.400724
+  formation factor F      = 2.130972
+================================================================
+
+======================================================================================
+                  Resource Usage on 2026-05-27 14:34:05:
+   Job Id:             169405931.gadi-pbs
+   Project:            m65
+   Exit Status:        0
+   Service Units:      2354.56
+   NCPUs Requested:    768                 CPU Time Used: 64:25:53        
+   Memory Requested:   5.97TB                Memory Used: 320.23GB        
+   NGPUs Requested:    64                GPU Utilisation: 4205%           
+                                         GPU Memory Used: 576.41GB        
+   Walltime Requested: 05:00:00            Walltime Used: 01:01:19        
+   JobFS Requested:    1.0GB                  JobFS Used: 8.16MB          
+======================================================================================

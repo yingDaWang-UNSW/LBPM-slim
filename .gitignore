@@ -4,3 +4,4 @@ example/petrophysics_kntOre/*raw*
 example/petrophysics_kntOre/*ID*
 example/petrophysics_kntOre/lot*_solid*/
 example/petrophysics_kntOre/in.dims
+example/petrophysics_kntOre/results/results_summary.csv

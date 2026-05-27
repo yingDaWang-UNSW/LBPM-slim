@@ -41,18 +41,18 @@ qstat -u $USER             # monitor
 gpuvolta nodes are **4 × V100 (32 GB) per node, 48 cpus, 382 GB RAM**.
 Sizing baked into `setup_cases.sh` + `_mkpbs.sh`:
 
-| case type      | nproc      | ngpus | nodes | mem    | walltime | per-rank GPU mem |
-|----------------|------------|-------|-------|--------|----------|------------------|
-| `solid`        | 1, 1, 8    | 8     | 2     | 764 GB | 24 h     | ~26 GB           |
-| `solidbinder`  | 2, 2, 8    | 32    | 8     | 3056 GB| 5 h      | ~21 GB           |
+| case type      | nproc   | ngpus | nodes | mem     | walltime |
+|----------------|---------|-------|-------|---------|----------|
+| `solid`        | 4, 4, 2 |  32   |   8   | 3056 GB | 5 h      |
+| `solidbinder`  | 4, 4, 4 |  64   |  16   | 6112 GB | 5 h      |
 
-Memory per rank ≈ `164 × Np_local + 8 × Nx_local·Ny_local·Nz_local` bytes;
-for V100 32 GB we want this < ~30 GB. `solidbinder` has ~4× the transport
-fraction of `solid`, so it needs ~4× the rank count to stay in budget.
-
-Walltime tiers (V100, MLUPS ~ 500): both cases are unlikely to use more
-than half their budget at 1722³, but the .m convention gives 5 h to any
-job ≥ 20 GPUs so `solidbinder` lives there.
+Why solidbinder needs more ranks: LBPM's `MemoryOptimizedLayoutAA`
+stores `idx + 18*Np` in int32 — when per-rank `Np` exceeds ~119 M voxels
+the value wraps and the GPU dereferences a garbage neighbor index
+(SIGSEGV in `ScaLBL_Poisson::Create`). For phi ~ 0.66 (solid+binder),
+the 32-rank cube (Np_max ~130 M) crashes; the 4×4×4 split keeps
+Np_max ~ 53 M, well clear. Solid (phi ~ 0.55, Np_max ~ 87 M) is safe
+at 32 ranks.
 
 ## Per-case file layout (after `setup_cases.sh`)
 
