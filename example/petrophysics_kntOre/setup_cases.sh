@@ -1,55 +1,64 @@
 #!/bin/bash
-# Set up four case subdirectories under this folder:
-#   lot3_solid  lot3_solidbinder  lot4_solid  lot4_solidbinder
-# Each case dir gets:
-#   - in.raw           (1704^3 binary mask: 1 = transport phase, 0 = blocking)
-#   - mirror.db        (lbpm_mirror_pp input)
-#   - inputFile.db     (Domain + Poisson; used by BOTH serial_decomp and
-#                       lbpm_tortuosity_simulator -- one-file convention matching
-#                       example/runLBMSinglePhase.m)
+# Set up the four knt-ore tortuosity cases.  Creates per-case subdirs under
+# $RUN_ROOT (default /scratch/m65/yw5484/kntOre_runs) and drops in the static
+# inputs:
 #
-# The per-case decomposition (nproc) is BAKED INTO inputFile.db here, sized to
-# fit the V100 32 GB GPUs on gpuvolta:
-#   solid       (Np ~ 20% * 1720^3 = 1.0e9) -> 8 ranks  (1x1x8)   ~26 GB/rank
-#   solidbinder (Np ~ 80% * 1720^3 = 4.0e9) -> 32 ranks (2x2x8)   ~21 GB/rank
-# Change SOLID_NPROC / SOLIDBINDER_NPROC below to retune.
+#   <RUN_ROOT>/<case>/{ mirror.db, inputFile.db }
+#
+# The actual TIF -> raw conversion (~15 GB peak RAM) happens INSIDE the PBS
+# job because Gadi login nodes will OOM-kill it.  See _mkpbs.sh.
+#
+# All physics parameters in inputFile.db are STATIC across every sample;
+# only the geometry-dependent dims and the per-case nproc are filled in here.
 
 set -eu
-TIF_DIR=/scratch/m65/yw5484/kntOre
-PY=python3
+RUN_ROOT=${RUN_ROOT:-/scratch/m65/yw5484/kntOre_runs}
 
-# (npx, npy, npz) for each case type
-SOLID_NPX=1;       SOLID_NPY=1;       SOLID_NPZ=8
-SOLIDBIN_NPX=2;    SOLIDBIN_NPY=2;    SOLIDBIN_NPZ=8
+# Source TIF dims (1708 x 1704 x 1704 for both lot3 and lot4 -- if a new
+# sample has different dims, edit these three.  axes follow tifffile order:
+# Nz is the slowest = axis 0 = number of slices.)
+NZ_SRC=1708; NY_SRC=1704; NX_SRC=1704
 
-HERE=$(cd "$(dirname "$0")" && pwd)
-cd "$HERE"
+# Pad applied by lbpm_mirror_pp (kept on the static side -- 16 voxels is
+# the protocol).
+PAD=16
 
-declare -A TIFFOR=( [lot3]=FinalSEG_Lot3.tif [lot4]=Finalseg_Lot4.tif )
+# Single decomp for every case.  Must divide each mirrored axis.
+# Mirrored dims: NX = 1720, NY = 1720, NZ = 1724.
+# 4 x 4 x 2 -> per-rank 430 x 430 x 862 voxels.
+# 32 ranks total -> 8 V100 gpuvolta nodes.
+NPX=4; NPY=4; NPZ=2
+
+mkdir -p "$RUN_ROOT"
 
 write_inputs() {
-    local case_dir=$1 N=$2 npx=$3 npy=$4 npz=$5
+    local case_dir=$1
+    mkdir -p "$case_dir"
     cat > "$case_dir/mirror.db" <<EOF
 Domain {
     Filename     = "in.raw"
-    N            = ${N}, ${N}, ${N}
+    N            = ${NX_SRC}, ${NY_SRC}, ${NZ_SRC}
     ReadType     = "8bit"
-    MirrorPad    = 16, 16, 16
+    MirrorPad    = ${PAD}, ${PAD}, ${PAD}
     nproc        = 1, 1, 1
 }
 EOF
-    local Nm=$((N + 16))
-    local nx=$((Nm / npx))
-    local ny=$((Nm / npy))
-    local nz=$((Nm / npz))
-    [ $((nx * npx)) -eq $Nm ] && [ $((ny * npy)) -eq $Nm ] && [ $((nz * npz)) -eq $Nm ] \
-        || { echo "ERROR: nproc=($npx,$npy,$npz) does not divide Nm=$Nm evenly"; return 1; }
+    local Mx=$((NX_SRC + PAD))
+    local My=$((NY_SRC + PAD))
+    local Mz=$((NZ_SRC + PAD))
+    local nx=$((Mx / NPX))
+    local ny=$((My / NPY))
+    local nz=$((Mz / NPZ))
+    if [ $((nx*NPX)) -ne $Mx ] || [ $((ny*NPY)) -ne $My ] || [ $((nz*NPZ)) -ne $Mz ]; then
+        echo "ERROR: nproc=($NPX,$NPY,$NPZ) does not divide mirrored dims ($Mx,$My,$Mz)"
+        return 1
+    fi
     cat > "$case_dir/inputFile.db" <<EOF
 Domain {
     Filename     = "in_mirrored.raw"
-    nproc        = ${npx}, ${npy}, ${npz}
+    nproc        = ${NPX}, ${NPY}, ${NPZ}
     n            = ${nx}, ${ny}, ${nz}
-    N            = ${Nm}, ${Nm}, ${Nm}
+    N            = ${Mx}, ${My}, ${Mz}
     L            = 1.0, 1.0, 1.0
     voxel_length = 1.0
     BC           = 1
@@ -72,34 +81,13 @@ EOF
 }
 
 for lot in lot3 lot4; do
-    tif_name=${TIFFOR[$lot]}
-    tif_path=${TIF_DIR}/${tif_name}
-    [ -f "$tif_path" ] || { echo "missing $tif_path"; exit 1; }
     for phase in solid solidbinder; do
-        case_dir=${lot}_${phase}
-        echo "================================================================"
-        echo "  $case_dir   <- $tif_name  (phase=$phase)"
-        echo "================================================================"
-        mkdir -p "$case_dir"
-        cd "$case_dir"
-        if [ -f in.raw ]; then
-            echo "  in.raw exists -- skipping conversion"
-        else
-            ${PY} ../convert_tif_phase.py "$tif_path" "$phase" in.raw
-        fi
-        Nx=$(awk '/^Nx/{print $2}' in.dims)
-        Ny=$(awk '/^Ny/{print $2}' in.dims)
-        Nz=$(awk '/^Nz/{print $2}' in.dims)
-        [ "$Nx" = "$Ny" ] && [ "$Nx" = "$Nz" ] \
-            || { echo "ERROR: non-cubic input"; exit 1; }
-        cd ..
-        if [ "$phase" = "solid" ]; then
-            write_inputs "$case_dir" "$Nx" "$SOLID_NPX" "$SOLID_NPY" "$SOLID_NPZ"
-        else
-            write_inputs "$case_dir" "$Nx" "$SOLIDBIN_NPX" "$SOLIDBIN_NPY" "$SOLIDBIN_NPZ"
-        fi
+        case_dir=${RUN_ROOT}/${lot}_${phase}
+        echo "writing $case_dir/{mirror.db, inputFile.db}"
+        write_inputs "$case_dir"
     done
 done
 
 echo
-echo "All four cases set up.  Submit with: bash submit_all.sh"
+echo "Cases laid out under $RUN_ROOT"
+echo "Submit with:  bash submit_all.sh"

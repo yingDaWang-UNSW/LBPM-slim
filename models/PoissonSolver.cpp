@@ -158,12 +158,20 @@ void ScaLBL_Poisson::Create() {
     if (rank == 0) printf("ScaLBL_Poisson: Create ScaLBL_Communicator\n");
     ScaLBL_Comm = std::make_shared<ScaLBL_Communicator>(Mask);
 
-    int Npad = (Np / 16 + 2) * 16;
+    // size_t for Npad and the multiplication.  At per-rank Np > ~119 M
+    // (which solidbinder hits in dense pellets like knt-ore @ phi=0.66),
+    // 18*Npad overflows int32 -> new int[] throws std::bad_array_new_length.
+    // Same root cause as the MRTModel.cpp:163 mod and the alloc-size fix
+    // below; just hadn't bitten this line in Bentheimer testing because
+    // Np stayed below the threshold.
+    const size_t Npad_sz = ((size_t)Np / 16 + 2) * 16;
     if (rank == 0) printf("ScaLBL_Poisson: build memory-efficient layout (Np = %d)\n", Np);
     Map.resize(Nx, Ny, Nz);
     Map.fill(-2);
-    auto neighborList = new int[18 * Npad];
-    Np = ScaLBL_Comm->MemoryOptimizedLayoutAA(Map, neighborList, Mask->id, Npad);
+    auto neighborList = new int[18UL * Npad_sz];
+    // MemoryOptimizedLayoutAA still takes the limit as int; bounded by per-rank
+    // interior voxel count which is well under INT_MAX here.
+    Np = ScaLBL_Comm->MemoryOptimizedLayoutAA(Map, neighborList, Mask->id, (int)Npad_sz);
     MPI_Barrier(comm);
 
     if (rank == 0) printf("ScaLBL_Poisson: allocate distributions (Np = %d)\n", Np);

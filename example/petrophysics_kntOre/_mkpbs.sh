@@ -1,18 +1,18 @@
 #!/bin/bash
-# Generate a per-case PBS script matching the example/*.m gpuvolta convention.
-# Internal helper used by submit_all.sh (and re-runnable on demand).
+# Generate a per-case PBS script.  Each case's run.pbs is self-contained:
+# converts TIF -> binary raw with the right phase mask, mirrors, decomposes,
+# then runs the multi-GPU tortuosity simulator.
 #
-# Usage:
-#   bash _mkpbs.sh <case_dir> <npx> <npy> <npz>
+# Usage:  bash _mkpbs.sh <case_dir>  <tif_path>  <phase>  <npx> <npy> <npz>
 #
-# Sizing rules (from runLBMSinglePhase.m):
+# Sizing rules (matching example/runLBMSinglePhase.m gpuvolta tier):
 #   ngpus       = npx*npy*npz
-#   ncpus       = ngpus * 12        (gpuvolta is 12 cpus / gpu)
-#   mem         = ngpus * 382/4 GB  (382 GB per 4-GPU node)
-#   workerspernode = ngpus / (ngpus/4) = 4
+#   ncpus       = ngpus * 12   (gpuvolta has 12 cpus/gpu)
+#   mem         = ngpus * 382/4 GB
+#   workerspernode = 4         (4 V100 / gpuvolta node)
 #   walltime    = 48 if ngpus<=4, 24 if 4<ngpus<20, 5 if ngpus>=20
 set -eu
-CASE=$1; NPX=$2; NPY=$3; NPZ=$4
+CASE_DIR=$1; TIF_PATH=$2; PHASE=$3; NPX=$4; NPY=$5; NPZ=$6
 NGPUS=$((NPX*NPY*NPZ))
 NCPUS=$((NGPUS*12))
 MEM=$((NGPUS*382/4))
@@ -21,8 +21,10 @@ if [ $NGPUS -le 4 ]; then WALL=48
 elif [ $NGPUS -lt 20 ]; then WALL=24
 else                       WALL=5
 fi
+CASE_NAME=$(basename "$CASE_DIR")
+SRC_DIR=$(cd "$(dirname "$0")" && pwd)   # where convert_tif_phase.py lives
 
-cat > "${CASE}/run.pbs" <<EOF
+cat > "${CASE_DIR}/run.pbs" <<EOF
 #!/bin/bash
 #PBS -P m65
 #PBS -q gpuvolta
@@ -34,7 +36,7 @@ cat > "${CASE}/run.pbs" <<EOF
 #PBS -l storage=scratch/m65
 #PBS -l software=my_program
 #PBS -l wd
-#PBS -N tort_${CASE}
+#PBS -N tort_${CASE_NAME}
 cd \$PBS_O_WORKDIR
 echo "Job is running on node(s):"
 cat \$PBS_NODEFILE | sort | uniq
@@ -42,15 +44,24 @@ cat \$PBS_NODEFILE | sort | uniq > nodes.txt
 rm -f nodeList.txt
 for ((i=0; i<${WORKERSPN}; i++)); do cat nodes.txt >> nodeList.txt; done
 export LBPM_DIR=/home/561/yw5484/LBPMYDW/lbpmSlimGPUucxBuild
-module load openmpi/4.1.2 ucx/1.12 cuda/11.4.1
+module load python3/3.10.0 openmpi/4.1.2 ucx/1.12.0 cuda/11.4.1
 export NUMPROCS=${NGPUS}
-# step 1: mirror_pp (single-rank, just adds 16-voxel smoothing slabs)
-mpirun -np 1 \$LBPM_DIR/bin/lbpm_mirror_pp mirror.db
+# step 0: convert TIF -> single-phase raw  (~15 GB peak host RAM; fine on a
+# gpuvolta node which has 382 GB).  Skips if in.raw already exists.
+if [ ! -f in.raw ]; then
+    python3 ${SRC_DIR}/convert_tif_phase.py ${TIF_PATH} ${PHASE} in.raw
+fi
+# step 1: mirror_pp -- adds 16-voxel smoothing slab per axis for periodic seam
+if [ ! -f in_mirrored.raw ]; then
+    mpirun -np 1 \$LBPM_DIR/bin/lbpm_mirror_pp mirror.db
+fi
 # step 2: serial_decomp -> per-rank ID.xxxxx files
-mpirun -np 1 \$LBPM_DIR/bin/lbpm_serial_decomp inputFile.db
-# step 3: tortuosity simulator
+if [ ! -f "ID.\$(printf '%05d' \$((NUMPROCS-1)))" ]; then
+    mpirun -np 1 \$LBPM_DIR/bin/lbpm_serial_decomp inputFile.db
+fi
+# step 3: tortuosity simulator across all ranks
 mpirun -np \$NUMPROCS --mca pml ob1 --machinefile nodeList.txt \\
     \$LBPM_DIR/bin/lbpm_tortuosity_simulator inputFile.db
 EOF
-chmod +x "${CASE}/run.pbs"
-echo "wrote ${CASE}/run.pbs  (ngpus=${NGPUS}, mem=${MEM}GB, walltime=${WALL}h)"
+chmod +x "${CASE_DIR}/run.pbs"
+echo "wrote ${CASE_DIR}/run.pbs  (TIF=$(basename $TIF_PATH) phase=${PHASE}  ngpus=${NGPUS}  mem=${MEM}GB  wall=${WALL}h)"
